@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
-import { ChevronRight, FileText, Component, Clock, Users, Database, Code, PencilRuler, Activity, Bug, Plus } from 'lucide-react';
+import { ChevronRight, FileText, Component, Clock, Users, Database, Code, PencilRuler, Activity, Bug, Plus, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,15 +9,63 @@ import { Button } from "@/components/ui/button";
 export default function CreateProject() {
     const navigate = useNavigate();
     const [methodology, setMethodology] = useState('Waterfall');
-    const [jobs, setJobs] = useState(['Frontend Dev', 'Backend Dev']);
 
-    const handleJobChange = (e) => {
-        const value = e.target.value;
-        setJobs(prev =>
-            prev.includes(value)
-                ? prev.filter(j => j !== value)
-                : [...prev, value]
-        );
+    // Member selection states
+    const [members, setMembers] = useState([]);
+
+    // Per-role manhours for Agile Scrum
+    const [selectedRoles, setSelectedRoles] = useState([]);
+
+    // Master data states
+    const [usersList, setUsersList] = useState([]);
+    const [projectRolesList, setProjectRolesList] = useState([]);
+
+    useEffect(() => {
+        const loadMasterData = async () => {
+            try {
+                const [usersData, rolesData] = await Promise.all([
+                    fetchAPI('/users'),
+                    fetchAPI('/project-roles')
+                ]);
+                setUsersList(usersData.data || []);
+                setProjectRolesList(rolesData.data || []);
+            } catch (error) {
+                console.error("Failed to load users or roles:", error);
+            }
+        };
+        loadMasterData();
+    }, []);
+
+    const handleAddMember = () => {
+        setMembers([...members, { user_id: '', project_role_id: '' }]);
+    };
+
+    const handleRemoveMember = (index) => {
+        setMembers(members.filter((_, i) => i !== index));
+    };
+
+    const handleMemberChange = (index, field, value) => {
+        const newMembers = [...members];
+        newMembers[index][field] = value;
+        setMembers(newMembers);
+    };
+
+    const handleAddRoleQuota = () => {
+        setSelectedRoles([...selectedRoles, { id: Date.now(), project_role_id: '', hours: '' }]);
+    };
+
+    const handleRemoveRoleQuota = (index) => {
+        setSelectedRoles(selectedRoles.filter((_, i) => i !== index));
+    };
+
+    const handleRoleQuotaChange = (index, field, value) => {
+        const newRoles = [...selectedRoles];
+        newRoles[index][field] = value === '' && field === 'hours' ? '' : field === 'hours' ? Number(value) : value;
+        setSelectedRoles(newRoles);
+    };
+
+    const calculateTotalManhours = () => {
+        return selectedRoles.reduce((sum, role) => sum + (Number(role.hours) || 0), 0);
     };
 
     const handleSubmit = async (e) => {
@@ -27,9 +75,22 @@ export default function CreateProject() {
         const name = form.projectName.value;
         const startDate = form['start-date'].value;
         const endDate = form['end-date'].value;
-        const totalManhours = methodology === 'Agile Scrum' ? form['manhours-quota'].value : null;
+
+        let totalManhours = null;
+        let hourlyRate = null;
+        let totalCost = null;
+
+        if (methodology === 'Agile Scrum') {
+            totalManhours = calculateTotalManhours();
+            hourlyRate = form['hourly-rate'].value;
+        } else if (methodology === 'Waterfall') {
+            totalCost = form['total-cost'].value;
+        }
 
         try {
+            // Filter out empty members before submitting
+            const validMembers = members.filter(m => m.user_id && m.project_role_id);
+
             const response = await fetchAPI('/projects', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -38,10 +99,12 @@ export default function CreateProject() {
                     budget_status: 'On Budget',
                     completion: 0,
                     methodology,
-                    jobs,
+                    members: validMembers,
                     start_date: startDate,
                     end_date: endDate,
-                    total_manhours: totalManhours
+                    total_manhours: totalManhours,
+                    hourly_rate: hourlyRate,
+                    total_cost: totalCost
                 })
             });
 
@@ -139,23 +202,92 @@ export default function CreateProject() {
                             </div>
                         </div>
 
-                        {/* Conditional Field for Manhours */}
-                        {methodology === 'Agile Scrum' && (
-                            <div className="pt-4 border-t border-slate-200 dark:border-border-dark">
-                                <label className="flex flex-col gap-2 max-w-md">
+                        {/* Conditional Field for Costs */}
+                        <div className="pt-4 border-t border-slate-200 dark:border-border-dark grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {methodology === 'Agile Scrum' && (
+                                <>
+                                    <div className="flex flex-col gap-4 md:col-span-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                Manhours Quota Per Role
+                                            </span>
+                                            <div className="text-sm text-slate-500 font-medium bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-md">
+                                                Total: <span className="text-slate-900 dark:text-white font-bold">{calculateTotalManhours()} hrs</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col gap-3">
+                                            {selectedRoles.map((roleObj, index) => (
+                                                <div key={roleObj.id} className="flex gap-4 items-end p-3 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-900/50">
+                                                    <label className="flex-1 flex flex-col gap-2">
+                                                        <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Project Role</span>
+                                                        <select
+                                                            value={roleObj.project_role_id}
+                                                            onChange={(e) => handleRoleQuotaChange(index, 'project_role_id', e.target.value)}
+                                                            className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-primary focus:border-primary text-slate-900 dark:text-white h-10"
+                                                            required
+                                                        >
+                                                            <option value="">Select role...</option>
+                                                            {projectRolesList.map(r => (
+                                                                <option key={r.id} value={r.id}>{r.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </label>
+                                                    <label className="w-32 flex flex-col gap-2">
+                                                        <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Hours</span>
+                                                        <div className="relative">
+                                                            <Clock className="absolute left-3 top-3 text-slate-400 dark:text-text-secondary pointer-events-none size-3.5" />
+                                                            <Input
+                                                                type="number"
+                                                                placeholder="0"
+                                                                min="0"
+                                                                value={roleObj.hours}
+                                                                onChange={(e) => handleRoleQuotaChange(index, 'hours', e.target.value)}
+                                                                className="bg-white dark:bg-slate-900 pl-9 h-10"
+                                                                required
+                                                            />
+                                                        </div>
+                                                    </label>
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveRoleQuota(index)} className="h-10 w-10 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 shrink-0">
+                                                        <Trash2 className="size-5" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                            <Button type="button" variant="outline" onClick={handleAddRoleQuota} className="w-full border-dashed py-5 text-slate-500 hover:text-primary hover:border-primary/50 hover:bg-primary/5">
+                                                <Plus className="size-4 mr-2" />
+                                                Add Role Quota
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <label className="flex flex-col gap-2">
+                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                            Hourly Rate (IDR)
+                                        </span>
+                                        <div className="relative">
+                                            <span className="absolute left-4 top-3.5 text-sm text-slate-400 dark:text-text-secondary font-medium">Rp</span>
+                                            <Input type="number" id="hourly-rate" name="hourly-rate" placeholder="0" min="0" required
+                                                className="bg-slate-50 dark:bg-background-dark pl-11 py-6" />
+                                        </div>
+                                        <p className="text-xs text-slate-500 dark:text-text-secondary">Used to calculate total cost from logged manhours.</p>
+                                    </label>
+                                </>
+                            )}
+
+                            {methodology === 'Waterfall' && (
+                                <label className="flex flex-col gap-2 md:col-span-2 max-w-md">
                                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                                        Initial Manhours Quota (For Scrum)
+                                        Total Project Cost (IDR)
                                     </span>
                                     <div className="relative">
-                                        <Clock className="absolute left-3 top-3.5 text-slate-400 dark:text-text-secondary pointer-events-none size-4" />
-                                        <Input type="number" id="manhours-quota" name="manhours-quota" placeholder="0" min="0" required
-                                            className="bg-slate-50 dark:bg-background-dark pl-9 py-6" />
-                                        <span className="absolute right-4 top-3.5 text-sm text-slate-400 dark:text-text-secondary font-medium">hrs</span>
+                                        <span className="absolute left-4 top-3.5 text-sm text-slate-400 dark:text-text-secondary font-medium">Rp</span>
+                                        <Input type="number" id="total-cost" name="total-cost" placeholder="0" min="0" required
+                                            className="bg-slate-50 dark:bg-background-dark pl-11 py-6" />
                                     </div>
-                                    <p className="text-xs text-slate-500 dark:text-text-secondary">Total estimated hours allocated for the initial phase or first sprint.</p>
+                                    <p className="text-xs text-slate-500 dark:text-text-secondary">Fixed rate agreed upon for the entire Waterfall project.</p>
                                 </label>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </CardContent>
                 </Card>
 
@@ -166,25 +298,49 @@ export default function CreateProject() {
                             <Users className="text-primary size-5" />
                             Team Composition
                         </CardTitle>
+                        <CardDescription>Assign team members and their specific roles for this project.</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 block">Required Roles</span>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                            {['UI/UX Designer', 'Frontend Dev', 'Backend Dev', 'System Analyst', 'QA Engineer'].map(role => (
-                                <label key={role} className="cursor-pointer group">
-                                    <input type="checkbox" className="peer sr-only" value={role} checked={jobs.includes(role)} onChange={handleJobChange} />
-                                    <div className="h-full flex flex-col items-center justify-center p-4 rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-background-dark text-center peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary transition-all hover:border-primary/50 text-slate-600 dark:text-slate-400">
-                                        <div className="mb-2 group-hover:scale-110 transition-transform">
-                                            {role === 'UI/UX Designer' ? <PencilRuler className="size-6" /> :
-                                                role === 'Frontend Dev' ? <Code className="size-6" /> :
-                                                    role === 'Backend Dev' ? <Database className="size-6" /> :
-                                                        role === 'System Analyst' ? <Activity className="size-6" /> : <Bug className="size-6" />}
-                                        </div>
-                                        <span className="text-sm font-medium">{role}</span>
-                                    </div>
+                    <CardContent className="flex flex-col gap-4">
+                        {members.map((member, index) => (
+                            <div key={index} className="flex flex-col md:flex-row gap-4 items-end p-4 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-900/50">
+                                <label className="flex-1 flex flex-col gap-2">
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Team Member</span>
+                                    <select
+                                        value={member.user_id}
+                                        onChange={(e) => handleMemberChange(index, 'user_id', e.target.value)}
+                                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary focus:border-primary text-slate-900 dark:text-white"
+                                        required
+                                    >
+                                        <option value="">Select a user...</option>
+                                        {usersList.map(user => (
+                                            <option key={user.id} value={user.id}>{user.name} ({user.role})</option>
+                                        ))}
+                                    </select>
                                 </label>
-                            ))}
-                        </div>
+                                <label className="flex-1 flex flex-col gap-2">
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Project Role</span>
+                                    <select
+                                        value={member.project_role_id}
+                                        onChange={(e) => handleMemberChange(index, 'project_role_id', e.target.value)}
+                                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary focus:border-primary text-slate-900 dark:text-white"
+                                        required
+                                    >
+                                        <option value="">Select a project role...</option>
+                                        {projectRolesList.map(role => (
+                                            <option key={role.id} value={role.id}>{role.name}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveMember(index)} className="mb-1 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 shrink-0">
+                                    <Trash2 className="size-5" />
+                                </Button>
+                            </div>
+                        ))}
+
+                        <Button type="button" variant="outline" onClick={handleAddMember} className="w-full mt-2 border-dashed border-2 py-6 text-slate-500 hover:text-primary hover:border-primary/50 hover:bg-primary/5">
+                            <Plus className="size-4 mr-2" />
+                            Add Team Member
+                        </Button>
                     </CardContent>
                 </Card>
 

@@ -22,6 +22,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 start_date TEXT,
                 end_date TEXT,
                 total_manhours INTEGER,
+                hourly_rate REAL,
+                total_cost REAL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`);
 
@@ -56,6 +58,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 project_id INTEGER,
                 date TEXT NOT NULL,
                 hours REAL NOT NULL,
+                amount_idr REAL,
                 description TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id),
@@ -68,6 +71,24 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`);
 
+            db.run(`CREATE TABLE IF NOT EXISTS project_roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`);
+
+            db.run(`CREATE TABLE IF NOT EXISTS project_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                project_role_id INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (project_role_id) REFERENCES project_roles(id) ON DELETE CASCADE,
+                UNIQUE(project_id, user_id, project_role_id)
+            )`);
+
             // Insert default roles if table is empty
             db.get("SELECT COUNT(*) AS count FROM roles", (err, row) => {
                 if (row && row.count === 0) {
@@ -76,6 +97,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     defaultRoles.forEach(r => insertRole.run(r));
                     insertRole.finalize();
                     console.log("Inserted initial roles.");
+                }
+            });
+
+            // Insert default project roles if table is empty
+            db.get("SELECT COUNT(*) AS count FROM project_roles", (err, row) => {
+                if (row && row.count === 0) {
+                    const insertProjectRole = db.prepare("INSERT INTO project_roles (name) VALUES (?)");
+                    const defaultProjectRoles = ['UI/UX Designer', 'Frontend Dev', 'Backend Dev', 'System Analyst', 'QA Engineer', 'Product Manager'];
+                    defaultProjectRoles.forEach(r => insertProjectRole.run(r));
+                    insertProjectRole.finalize();
+                    console.log("Inserted initial project roles.");
                 }
             });
 

@@ -4,12 +4,14 @@ import { ChevronRight, Download, Plus, Archive, Clock, Hourglass, TrendingUp, In
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export default function ManhoursLedger() {
     const [projects, setProjects] = useState([]);
     const [selectedProject, setSelectedProject] = useState(null);
+    const [projectMembers, setProjectMembers] = useState([]);
 
     const [manhours, setManhours] = useState([]);
     const [stats, setStats] = useState({
@@ -21,7 +23,8 @@ export default function ManhoursLedger() {
     const [formData, setFormData] = useState({
         hours: '',
         date: new Date().toISOString().split('T')[0],
-        description: ''
+        description: '',
+        amount_idr: ''
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -29,7 +32,9 @@ export default function ManhoursLedger() {
         const loadProjects = async () => {
             try {
                 const res = await fetchAPI('/projects');
-                if (res.data) setProjects(res.data);
+                if (res.data) {
+                    setProjects(res.data.filter(p => p.methodology === 'Agile Scrum'));
+                }
             } catch (error) {
                 console.error("Failed to load projects", error);
             }
@@ -42,17 +47,12 @@ export default function ManhoursLedger() {
             const response = await fetchAPI(`/manhours?project_id=${projectId}`);
             const data = response.data || [];
 
-            const userRes = await fetchAPI('/users');
-            const users = userRes.data || [];
-            const userMap = {};
-            users.forEach(u => userMap[u.id] = u.name);
-
             let totalHours = 0;
             const mappedData = data.map(log => {
                 totalHours += parseFloat(log.hours);
                 return {
                     ...log,
-                    userName: userMap[log.user_id] || `User ${log.user_id}`,
+                    amountFormatted: log.amount_idr ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(log.amount_idr) : 'Rp 0',
                     dateStr: new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                 };
             });
@@ -89,9 +89,9 @@ export default function ManhoursLedger() {
                 method: 'POST',
                 body: JSON.stringify({
                     project_id: selectedProject.id,
-                    user_id: 1, // hardcoded Admin for now
                     date: formData.date,
                     hours: formData.hours,
+                    amount_idr: formData.amount_idr,
                     description: formData.description
                 })
             });
@@ -100,7 +100,8 @@ export default function ManhoursLedger() {
             setFormData({
                 hours: '',
                 date: new Date().toISOString().split('T')[0],
-                description: ''
+                description: '',
+                amount_idr: ''
             });
             loadManhours(selectedProject.id);
         } catch (err) {
@@ -115,8 +116,8 @@ export default function ManhoursLedger() {
             <div className="flex-1 p-8 overflow-y-auto w-full bg-slate-50/50 dark:bg-background-dark">
                 <div className="max-w-[1200px] mx-auto">
                     <div className="mb-8">
-                        <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Select Project Ledger</h1>
-                        <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Choose a project to view and manage its manhour logs.</p>
+                        <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Select Project to Top Up</h1>
+                        <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Choose an Agile Scrum project to view and manage its manhour logs.</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -131,7 +132,11 @@ export default function ManhoursLedger() {
                                         <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500">
                                             <Briefcase className="size-6" />
                                         </div>
-                                        <Badge variant="outline" className={project.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' : ''}>
+                                        <Badge variant="outline" className={
+                                            project.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' :
+                                                project.status === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30' :
+                                                    'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-900/30'
+                                        }>
                                             {project.status}
                                         </Badge>
                                     </div>
@@ -170,7 +175,7 @@ export default function ManhoursLedger() {
                         <ChevronRight className="size-4 text-slate-400 dark:text-[#555e6f]" />
                         <span className="text-slate-500 dark:text-[#9da6b9] cursor-pointer transition-colors max-w-[200px] truncate">{selectedProject.name}</span>
                         <ChevronRight className="size-4 text-slate-400 dark:text-[#555e6f]" />
-                        <span className="text-slate-900 dark:text-white font-medium">Manhours Ledger</span>
+                        <span className="text-slate-900 dark:text-white font-medium">Top Up Manhours</span>
                     </div>
 
                     {/* Page Title & Actions */}
@@ -180,7 +185,7 @@ export default function ManhoursLedger() {
                                 <Button variant="ghost" size="icon" className="-ml-3 shrink-0" onClick={() => setSelectedProject(null)}>
                                     <ArrowLeft className="size-5 text-slate-500" />
                                 </Button>
-                                <h1 className="text-slate-900 dark:text-white text-3xl md:text-4xl font-black leading-tight tracking-[-0.033em]">Manhours Ledger</h1>
+                                <h1 className="text-slate-900 dark:text-white text-3xl md:text-4xl font-black leading-tight tracking-[-0.033em]">Top Up Manhours</h1>
                             </div>
                             <p className="text-slate-500 dark:text-[#9da6b9] text-base font-normal">Track and manage allocated hours for {selectedProject.name}</p>
                         </div>
@@ -263,7 +268,7 @@ export default function ManhoursLedger() {
                                         <th className="p-4 pl-6 text-xs font-semibold tracking-wide text-slate-500 dark:text-[#9da6b9] uppercase">Date</th>
                                         <th className="p-4 text-xs font-semibold tracking-wide text-slate-500 dark:text-[#9da6b9] uppercase">Activity Type</th>
                                         <th className="p-4 text-xs font-semibold tracking-wide text-slate-500 dark:text-[#9da6b9] uppercase w-1/3">Description / Note</th>
-                                        <th className="p-4 text-xs font-semibold tracking-wide text-slate-500 dark:text-[#9da6b9] uppercase">Inputted By</th>
+                                        <th className="p-4 text-xs font-semibold tracking-wide text-slate-500 dark:text-[#9da6b9] uppercase">Amount (IDR)</th>
                                         <th className="p-4 pr-6 text-xs font-semibold tracking-wide text-slate-500 dark:text-[#9da6b9] uppercase text-right">Hours Added</th>
                                     </tr>
                                 </thead>
@@ -278,12 +283,7 @@ export default function ManhoursLedger() {
                                             </td>
                                             <td className="p-4 text-sm text-slate-600 dark:text-slate-300">{log.description}</td>
                                             <td className="p-4">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="size-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs text-slate-500 border-2 border-white dark:border-slate-700 shadow-sm">
-                                                        {log.userName.charAt(0)}
-                                                    </div>
-                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{log.userName}</span>
-                                                </div>
+                                                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{log.amountFormatted}</span>
                                             </td>
                                             <td className={`p-4 pr-6 text-sm font-bold ${log.hours >= 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-400'} text-right`}>
                                                 {log.hours >= 0 ? '+' : ''}{log.hours}
@@ -304,6 +304,13 @@ export default function ManhoursLedger() {
                         <DialogTitle>Top-Up Manhours</DialogTitle>
                     </DialogHeader>
                     <form className="flex flex-col gap-5 py-4" onSubmit={handleAddManhours}>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Cost Amount (IDR)</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">Rp</span>
+                                <Input type="number" id="manhour-amount_idr" value={formData.amount_idr} onChange={handleInputChange} placeholder="0" min="0" required className="pl-9" />
+                            </div>
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Hours to Add</label>
                             <div className="relative">

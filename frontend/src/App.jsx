@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import CreateProject from './pages/CreateProject';
 import ProjectBoard from './pages/ProjectBoard';
 import TeamUsers from './pages/TeamUsers';
+import ProjectRoles from './pages/ProjectRoles';
 import ManhoursLedger from './pages/ManhoursLedger';
 import Reports from './pages/Reports';
 
@@ -16,6 +17,7 @@ function App() {
           <Route path="create-project" element={<CreateProject />} />
           <Route path="board" element={<ProjectBoard />} />
           <Route path="users" element={<TeamUsers />} />
+          <Route path="project-roles" element={<ProjectRoles />} />
           <Route path="manhours" element={<ManhoursLedger />} />
           <Route path="reports" element={<Reports />} />
         </Route>

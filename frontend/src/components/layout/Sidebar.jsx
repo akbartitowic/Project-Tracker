@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
-import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Clock, BarChart3, Settings, Moon, Sun, Activity } from "lucide-react";
+import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity } from "lucide-react";
 
 export default function Sidebar() {
     const { toggleTheme } = useTheme();
@@ -38,10 +38,15 @@ export default function Sidebar() {
                     <Users className="size-5" />
                     <span className="text-sm">Team & Users</span>
                 </NavLink>
+                <NavLink to="/project-roles"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <Shield className="size-5" />
+                    <span className="text-sm">Project Roles</span>
+                </NavLink>
                 <NavLink to="/manhours"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Clock className="size-5" />
-                    <span className="text-sm">Manhours Ledger</span>
+                    <span className="text-sm">Top Up Manhours</span>
                 </NavLink>
                 <NavLink to="/reports"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>

@@ -9,28 +9,44 @@ import { Badge } from "@/components/ui/badge";
 
 export default function TeamUsers() {
     const [users, setUsers] = useState([]);
+    const [projectRoles, setProjectRoles] = useState([]);
+
+    // Create User Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    // Edit User Modal State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingUserId, setEditingUserId] = useState(null);
+
     const [formData, setFormData] = useState({
         name: '',
         email: '',
         phone_number: '',
-        role: 'Project Manager'
+        role: '',
+        status: 'Active'
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const loadUsers = async () => {
+    const loadData = async () => {
         try {
-            const response = await fetchAPI('/users');
-            if (response.data) {
-                setUsers(response.data);
+            const [usersData, rolesData] = await Promise.all([
+                fetchAPI('/users'),
+                fetchAPI('/project-roles')
+            ]);
+
+            if (usersData.data) {
+                setUsers(usersData.data);
+            }
+            if (rolesData.data) {
+                setProjectRoles(rolesData.data);
             }
         } catch (err) {
-            console.error("Failed to fetch users", err);
+            console.error("Failed to fetch data", err);
         }
     };
 
     useEffect(() => {
-        loadUsers();
+        loadData();
     }, []);
 
     const handleInputChange = (e) => {
@@ -47,10 +63,41 @@ export default function TeamUsers() {
                 body: JSON.stringify({ ...formData, status: 'Active' })
             });
             setIsModalOpen(false);
-            setFormData({ name: '', email: '', phone_number: '', role: 'Project Manager' });
-            loadUsers();
+            setFormData({ name: '', email: '', phone_number: '', role: '', status: 'Active' });
+            loadData();
         } catch (err) {
             alert("Error adding user: " + err.message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const openEditModal = (user) => {
+        setEditingUserId(user.id);
+        setFormData({
+            name: user.name,
+            email: user.email,
+            phone_number: user.phone_number || '',
+            role: user.role,
+            status: user.status
+        });
+        setIsEditModalOpen(true);
+    };
+
+    const handleEditUser = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        try {
+            await fetchAPI(`/users/${editingUserId}`, {
+                method: 'PUT',
+                body: JSON.stringify(formData)
+            });
+            setIsEditModalOpen(false);
+            setEditingUserId(null);
+            setFormData({ name: '', email: '', phone_number: '', role: '', status: 'Active' });
+            loadData();
+        } catch (err) {
+            alert("Error updating user: " + err.message);
         } finally {
             setIsSubmitting(false);
         }
@@ -60,7 +107,7 @@ export default function TeamUsers() {
         if (!window.confirm('Are you sure you want to delete this user?')) return;
         try {
             await fetchAPI(`/users/${id}`, { method: 'DELETE' });
-            loadUsers();
+            loadData();
         } catch (err) {
             alert("Error deleting user: " + err.message);
         }
@@ -145,7 +192,7 @@ export default function TeamUsers() {
                                             </td>
                                             <td className="p-5 pr-6 text-right">
                                                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary" onClick={() => openEditModal(user)}>
                                                         <Edit className="size-4" />
                                                     </Button>
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-500" onClick={() => handleDeleteUser(user.id)}>
@@ -200,10 +247,9 @@ export default function TeamUsers() {
                                     <SelectValue placeholder="Select role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Project Manager">Project Manager (PM)</SelectItem>
-                                    <SelectItem value="QA">Quality Assurance (QA)</SelectItem>
-                                    <SelectItem value="Developer">Developer (DEV)</SelectItem>
-                                    <SelectItem value="Admin">Administrator (Admin)</SelectItem>
+                                    {projectRoles.map(role => (
+                                        <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -214,6 +260,73 @@ export default function TeamUsers() {
                             <Button type="submit" disabled={isSubmitting} className="bg-gradient-to-r from-primary to-blue-500 hover:from-blue-600 hover:to-primary shadow-lg shadow-blue-500/30 transition-all transform hover:-translate-y-0.5">
                                 {isSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
                                 Save User
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+            {/* Edit User Modal */}
+            <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-xl">
+                            <span className="bg-primary/10 p-1.5 rounded-lg text-primary">
+                                <Edit className="size-5" />
+                            </span>
+                            Edit User Profile
+                        </DialogTitle>
+                    </DialogHeader>
+                    <form className="flex flex-col gap-6 py-4" onSubmit={handleEditUser}>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Full Name</label>
+                            <Input type="text" id="user-name" value={formData.name} onChange={handleInputChange} placeholder="John Doe" required className="py-6" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Email Address</label>
+                            <Input type="email" id="user-email" value={formData.email} onChange={handleInputChange} placeholder="john.doe@executrack.io" required className="py-6" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                                WhatsApp Number
+                                <MessageSquare className="size-3.5 text-green-500" />
+                            </label>
+                            <Input type="tel" id="user-phone_number" value={formData.phone_number} onChange={handleInputChange} placeholder="+62 812 3456 7890" className="py-6 focus-visible:ring-green-500" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">System Role</label>
+                                <Select value={formData.role} onValueChange={(value) => setFormData(prev => ({ ...prev, role: value }))} required>
+                                    <SelectTrigger className="h-12">
+                                        <SelectValue placeholder="Select role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {projectRoles.map(role => (
+                                            <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Account Status</label>
+                                <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))} required>
+                                    <SelectTrigger className="h-12">
+                                        <SelectValue placeholder="Select status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Active">Active</SelectItem>
+                                        <SelectItem value="Inactive">Inactive</SelectItem>
+                                        <SelectItem value="Suspended">Suspended</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <DialogFooter className="mt-4 border-t border-slate-200/50 dark:border-slate-700/50 pt-4">
+                            <DialogClose asChild>
+                                <Button type="button" variant="ghost">Cancel</Button>
+                            </DialogClose>
+                            <Button type="submit" disabled={isSubmitting} className="bg-gradient-to-r from-primary to-blue-500 hover:from-blue-600 hover:to-primary shadow-lg shadow-blue-500/30 transition-all transform hover:-translate-y-0.5">
+                                {isSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                                Update User
                             </Button>
                         </DialogFooter>
                     </form>

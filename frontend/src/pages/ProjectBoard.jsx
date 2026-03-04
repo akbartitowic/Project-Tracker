@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { fetchAPI } from '../services/api';
-import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText } from 'lucide-react';
+import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DndContext, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -98,6 +99,10 @@ function BoardColumn({ title, color, count, children, onAddTask }) {
 export default function ProjectBoard() {
     const [projects, setProjects] = useState([]);
     const [selectedProject, setSelectedProject] = useState(null);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [selectedProjectIds, setSelectedProjectIds] = useState([]);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const [stats, setStats] = useState({
         total_manhours: null,
@@ -106,7 +111,9 @@ export default function ProjectBoard() {
         perc: 0
     });
     const [users, setUsers] = useState([]);
+    const [projectMembers, setProjectMembers] = useState([]);
     const [tasks, setTasks] = useState([]);
+    const [viewMode, setViewMode] = useState('kanban');
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -116,6 +123,7 @@ export default function ProjectBoard() {
     const [newTaskDescription, setNewTaskDescription] = useState('');
     const [newTaskStatus, setNewTaskStatus] = useState('To Do');
     const [newTaskPriority, setNewTaskPriority] = useState('Medium');
+    const [newTaskRoleFilter, setNewTaskRoleFilter] = useState('All');
     const [newTaskAssignee, setNewTaskAssignee] = useState('Unassigned');
     const [newTaskEstimate, setNewTaskEstimate] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -126,15 +134,16 @@ export default function ProjectBoard() {
         })
     );
 
+    const loadProjects = async () => {
+        try {
+            const res = await fetchAPI('/projects');
+            if (res.data) setProjects(res.data);
+        } catch (error) {
+            console.error("Failed to load projects", error);
+        }
+    };
+
     useEffect(() => {
-        const loadProjects = async () => {
-            try {
-                const res = await fetchAPI('/projects');
-                if (res.data) setProjects(res.data);
-            } catch (error) {
-                console.error("Failed to load projects", error);
-            }
-        };
         loadProjects();
     }, []);
 
@@ -163,6 +172,12 @@ export default function ProjectBoard() {
                 setUsers(usersRes.data);
             }
 
+            // Load project members
+            const membersRes = await fetchAPI(`/projects/${projectId}/members`);
+            if (membersRes.data) {
+                setProjectMembers(membersRes.data);
+            }
+
             // Load tasks
             const tasksRes = await fetchAPI(`/tasks?project_id=${projectId}`);
             if (tasksRes.data) {
@@ -187,6 +202,15 @@ export default function ProjectBoard() {
             setNewTaskDescription(taskToEdit.description || '');
             setNewTaskStatus(taskToEdit.status);
             setNewTaskPriority(taskToEdit.priority);
+
+            // Set role filter based on the assignee's role in the project
+            if (taskToEdit.assignee_id) {
+                const memberInfo = projectMembers.find(m => m.user_id === taskToEdit.assignee_id);
+                setNewTaskRoleFilter(memberInfo ? memberInfo.role_name : 'All');
+            } else {
+                setNewTaskRoleFilter('All');
+            }
+
             setNewTaskAssignee(taskToEdit.assignee_id ? taskToEdit.assignee_id.toString() : 'Unassigned');
             setNewTaskEstimate(taskToEdit.estimated_hours || '');
         } else {
@@ -196,6 +220,7 @@ export default function ProjectBoard() {
             setNewTaskFeatureTitle('');
             setNewTaskDescription('');
             setNewTaskPriority('Medium');
+            setNewTaskRoleFilter('All');
             setNewTaskAssignee('Unassigned');
             setNewTaskEstimate('');
         }
@@ -260,6 +285,40 @@ export default function ProjectBoard() {
 
     const getTasksByStatus = (status) => tasks.filter(t => t.status === status);
 
+    const toggleProjectSelection = (projectId) => {
+        setSelectedProjectIds(prev =>
+            prev.includes(projectId)
+                ? prev.filter(id => id !== projectId)
+                : [...prev, projectId]
+        );
+    };
+
+    const toggleAllProjects = () => {
+        if (selectedProjectIds.length === projects.length) {
+            setSelectedProjectIds([]);
+        } else {
+            setSelectedProjectIds(projects.map(p => p.id));
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        setIsDeleting(true);
+        try {
+            await fetchAPI('/projects', {
+                method: 'DELETE',
+                body: JSON.stringify({ ids: selectedProjectIds })
+            });
+            setIsDeleteModalOpen(false);
+            setSelectedProjectIds([]);
+            setIsEditMode(false);
+            loadProjects(); // Reload list
+        } catch (error) {
+            alert(error.message || 'Failed to delete projects.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     const COLUMNS = [
         { title: 'To Do', color: 'bg-slate-400' },
         { title: 'In Progress', color: 'bg-primary' },
@@ -271,24 +330,77 @@ export default function ProjectBoard() {
         return (
             <div className="flex-1 p-8 overflow-y-auto w-full bg-slate-50/50 dark:bg-background-dark">
                 <div className="max-w-[1200px] mx-auto">
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Select Project Board</h1>
-                        <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Choose a project to view its kanban board and manage tasks.</p>
+                    <div className="mb-8 flex justify-between items-start">
+                        <div>
+                            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Select Project Board</h1>
+                            <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Choose a project to view its kanban board and manage tasks.</p>
+                        </div>
+                        <div className="flex gap-3 items-center">
+                            {isEditMode && projects.length > 0 && (
+                                <Button
+                                    variant="secondary"
+                                    className="border border-slate-200 dark:border-slate-800"
+                                    onClick={toggleAllProjects}
+                                >
+                                    {selectedProjectIds.length === projects.length ? "Deselect All" : "Select All"}
+                                </Button>
+                            )}
+                            {isEditMode && selectedProjectIds.length > 0 && (
+                                <Button
+                                    variant="destructive"
+                                    className="shadow-lg shadow-red-500/20"
+                                    onClick={() => setIsDeleteModalOpen(true)}
+                                >
+                                    Delete Selected ({selectedProjectIds.length})
+                                </Button>
+                            )}
+                            <Button
+                                variant={isEditMode ? "default" : "outline"}
+                                onClick={() => {
+                                    setIsEditMode(!isEditMode);
+                                    if (isEditMode) setSelectedProjectIds([]); // clear when exiting
+                                }}
+                            >
+                                {isEditMode ? "Done Managing" : "Manage Projects"}
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {projects.map(project => (
                             <Card
                                 key={project.id}
-                                className="cursor-pointer hover:shadow-xl hover:border-primary/50 transition-all hover:-translate-y-1 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md"
-                                onClick={() => setSelectedProject(project)}
+                                className={`cursor-pointer transition-all hover:-translate-y-1 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md relative
+                                    ${isEditMode && selectedProjectIds.includes(project.id) ? 'border-red-500 shadow-md shadow-red-500/10' : 'hover:shadow-xl hover:border-primary/50'}
+                                `}
+                                onClick={() => {
+                                    if (isEditMode) {
+                                        toggleProjectSelection(project.id);
+                                    } else {
+                                        setSelectedProject(project);
+                                    }
+                                }}
                             >
+                                {isEditMode && (
+                                    <div className="absolute top-4 right-4 z-20 pointer-events-none">
+                                        <Checkbox
+                                            checked={selectedProjectIds.includes(project.id)}
+                                            // The card onClick handles the actual toggling. 
+                                            // pointer-events-none makes clicks fall through to the Card.
+                                            tabIndex={-1}
+                                        />
+                                    </div>
+                                )}
                                 <CardContent className="p-6">
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="p-3 rounded-xl bg-primary/10 text-primary">
                                             <Briefcase className="size-6" />
                                         </div>
-                                        <Badge variant="outline" className={project.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' : ''}>
+                                        <Badge variant="outline" className={
+                                            project.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' :
+                                                project.status === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30' :
+                                                    'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-900/30'
+                                        }>
                                             {project.status}
                                         </Badge>
                                     </div>
@@ -328,7 +440,13 @@ export default function ProjectBoard() {
                         </Button>
                         <div className="flex items-center gap-3">
                             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{selectedProject.name}</h1>
-                            <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">{selectedProject.status}</Badge>
+                            <Badge variant="outline" className={
+                                selectedProject.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' :
+                                    selectedProject.status === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30' :
+                                        'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-900/30'
+                            }>
+                                {selectedProject.status}
+                            </Badge>
                         </div>
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{selectedProject.methodology} Board</p>
                     </div>
@@ -339,6 +457,24 @@ export default function ProjectBoard() {
                             <div className="flex items-center justify-center size-8 rounded-full ring-2 ring-white dark:ring-[#151b28] bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300">
                                 +4
                             </div>
+                        </div>
+                        <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg mr-2">
+                            <Button
+                                variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                className={`px-2 h-8 ${viewMode === 'kanban' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                                onClick={() => setViewMode('kanban')}
+                            >
+                                <LayoutGrid className="size-4" />
+                            </Button>
+                            <Button
+                                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                className={`px-2 h-8 ${viewMode === 'list' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                                onClick={() => setViewMode('list')}
+                            >
+                                <List className="size-4" />
+                            </Button>
                         </div>
                         <Button className="flex items-center gap-2 shadow-lg shadow-primary/20" onClick={() => handleOpenModal('To Do')}>
                             <Plus className="size-5" />
@@ -367,7 +503,7 @@ export default function ProjectBoard() {
                             <CardContent className="p-4 flex flex-col justify-center gap-2">
                                 <div className="flex justify-between items-end">
                                     <div>
-                                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Allocated Manhours</p>
+                                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Consumed Manhours</p>
                                         <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
                                             <span>{stats.used_hours}</span> <span className="text-sm font-normal text-slate-400">/ <span>{stats.total_manhours}</span> hrs</span>
                                         </p>
@@ -399,26 +535,95 @@ export default function ProjectBoard() {
                 )}
             </div>
 
-            {/* Kanban Board */}
-            <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 absolute inset-x-0 bottom-0 top-[300px]">
-                <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-                    <div className="flex h-full gap-6 min-w-max pb-6">
-                        {COLUMNS.map(col => (
-                            <BoardColumn
-                                key={col.title}
-                                title={col.title}
-                                color={col.color}
-                                count={getTasksByStatus(col.title).length}
-                                onAddTask={() => handleOpenModal('To Do')}
-                            >
-                                {getTasksByStatus(col.title).map(task => (
-                                    <DraggableTaskCard key={task.id} task={task} onClick={(t) => handleOpenModal(t.status, t)} />
+            {/* Board / List View */}
+            {viewMode === 'kanban' ? (
+                <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 absolute inset-x-0 bottom-0 top-[300px]">
+                    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+                        <div className="flex h-full gap-6 min-w-max pb-6">
+                            {COLUMNS.map(col => (
+                                <BoardColumn
+                                    key={col.title}
+                                    title={col.title}
+                                    color={col.color}
+                                    count={getTasksByStatus(col.title).length}
+                                    onAddTask={() => handleOpenModal('To Do')}
+                                >
+                                    {getTasksByStatus(col.title).map(task => (
+                                        <DraggableTaskCard key={task.id} task={task} onClick={(t) => handleOpenModal(t.status, t)} />
+                                    ))}
+                                </BoardColumn>
+                            ))}
+                        </div>
+                    </DndContext>
+                </div>
+            ) : (
+                <div className="flex-1 overflow-auto p-6 absolute inset-x-0 bottom-0 top-[300px]">
+                    <div className="bg-white dark:bg-[#151b28] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                            <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th className="px-6 py-4 font-medium">Task</th>
+                                    <th className="px-6 py-4 font-medium">Status</th>
+                                    <th className="px-6 py-4 font-medium">Priority</th>
+                                    <th className="px-6 py-4 font-medium">Assignee</th>
+                                    <th className="px-6 py-4 font-medium text-right">Est. Hours</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                                {tasks.map(task => (
+                                    <tr key={task.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors" onClick={() => handleOpenModal(task.status, task)}>
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-slate-900 dark:text-slate-100">{task.title}</span>
+                                                {task.feature_title && <span className="text-[10px] text-primary mt-1 font-bold uppercase tracking-wide">{task.feature_title}</span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <Badge variant="outline" className={
+                                                task.status === 'Done' ? 'bg-green-50 text-green-600 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20' :
+                                                    task.status === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
+                                                        task.status === 'Review' ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
+                                                            'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20'
+                                            }>{task.status}</Badge>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-bold tracking-wider ${task.priority === 'High' ? 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
+                                                task.priority === 'Medium' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400' :
+                                                    'bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'
+                                                }`}>{task.priority}</span>
+                                        </td>
+                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400">
+                                            <div className="flex items-center gap-2">
+                                                {task.assignee_id ? (
+                                                    <div className="size-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-medium text-slate-600 dark:text-slate-300">
+                                                        {users.find(u => u.id === task.assignee_id)?.name?.charAt(0) || '?'}
+                                                    </div>
+                                                ) : (
+                                                    <div className="size-6 rounded-full border border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center"></div>
+                                                )}
+                                                <span className="text-sm font-medium">
+                                                    {task.assignee_id ? users.find(u => u.id === task.assignee_id)?.name || `Assignee ${task.assignee_id}` : 'Unassigned'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-right text-slate-500 dark:text-slate-400">
+                                            <div className="flex items-center justify-end gap-1.5 font-medium text-sm">
+                                                <Clock className="size-3.5" />
+                                                {task.estimated_hours || 0} hrs
+                                            </div>
+                                        </td>
+                                    </tr>
                                 ))}
-                            </BoardColumn>
-                        ))}
+                                {tasks.length === 0 && (
+                                    <tr>
+                                        <td colSpan="5" className="px-6 py-8 text-center text-slate-500">No tasks found. Create one first!</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
-                </DndContext>
-            </div>
+                </div>
+            )}
 
             {/* Modal */}
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -470,6 +675,23 @@ export default function ProjectBoard() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter Assignee Role</label>
+                                <Select value={newTaskRoleFilter} onValueChange={(val) => {
+                                    setNewTaskRoleFilter(val);
+                                    setNewTaskAssignee('Unassigned'); // Reset assignee when role chances
+                                }}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="All Roles" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="All">All Roles</SelectItem>
+                                        {Array.from(new Set(projectMembers.map(m => m.role_name))).map(role => (
+                                            <SelectItem key={role} value={role}>{role}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-col gap-2">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Assignee</label>
                                 <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
                                     <SelectTrigger>
@@ -477,13 +699,17 @@ export default function ProjectBoard() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="Unassigned">Unassigned</SelectItem>
-                                        {users.map(u => (
-                                            <SelectItem key={u.id} value={u.id.toString()}>{u.name}</SelectItem>
-                                        ))}
+                                        {projectMembers
+                                            .filter(m => newTaskRoleFilter === 'All' || m.role_name === newTaskRoleFilter)
+                                            .map(m => (
+                                                <SelectItem key={m.user_id} value={m.user_id.toString()}>
+                                                    {m.user_name} ({m.role_name})
+                                                </SelectItem>
+                                            ))}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-col gap-2 col-span-2">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estimated Manhours</label>
                                 <Input type="number" value={newTaskEstimate} onChange={e => setNewTaskEstimate(e.target.value)} min="0" step="0.5" placeholder="0" />
                             </div>
@@ -496,6 +722,25 @@ export default function ProjectBoard() {
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Bulk Delete Confirm Modal */}
+            <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-red-600">Delete Projects</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete {selectedProjectIds.length} projected(s)? This action is permanent and will delete all associated tasks, manhours, and team assignments.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="mt-4">
+                        <Button type="button" variant="outline" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+                        <Button type="button" variant="destructive" onClick={handleBulkDelete} disabled={isDeleting}>
+                            {isDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                            Confirm Delete
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

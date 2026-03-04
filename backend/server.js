@@ -19,20 +19,75 @@ app.use(bodyParser.json());
 
 // 1. Projects Routes
 app.get('/api/projects', (req, res) => {
-    db.all("SELECT * FROM projects", [], (err, rows) => {
+    const query = `
+        SELECT p.*,
+            CASE
+                WHEN (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND status IN ('In Progress', 'Review', 'Reopen')) > 0 THEN 'In Progress'
+                WHEN (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) > 0 AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND status != 'Done') = 0 THEN 'Done'
+                ELSE 'Planning'
+            END as status
+        FROM projects p
+    `;
+    db.all(query, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ data: rows });
     });
 });
 
+app.delete('/api/projects', (req, res) => {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "Please provide an array of project IDs to delete." });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+
+        // Delete dependencies first (though FK cascade usually handles project_members, it's safer)
+        db.run(`DELETE FROM project_members WHERE project_id IN (${placeholders})`, ids);
+        db.run(`DELETE FROM tasks WHERE project_id IN (${placeholders})`, ids);
+        db.run(`DELETE FROM manhours WHERE project_id IN (${placeholders})`, ids);
+
+        // Delete the projects themselves
+        db.run(`DELETE FROM projects WHERE id IN (${placeholders})`, ids, function (err) {
+            if (err) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: err.message });
+            }
+            db.run('COMMIT');
+            res.json({ message: "Projects deleted successfully", deletedProjects: this.changes });
+        });
+    });
+});
+
 app.post('/api/projects', (req, res) => {
-    const { name, status, budget_status, completion, methodology, jobs, start_date, end_date, total_manhours } = req.body;
+    const { name, status, budget_status, completion, methodology, jobs, start_date, end_date, total_manhours, hourly_rate, total_cost, members } = req.body;
+
+    // Convert old jobs structure to an empty array for backward compatibility
+    const jobsString = JSON.stringify(jobs || []);
+
     db.run(
-        `INSERT INTO projects (name, status, budget_status, completion, methodology, jobs, start_date, end_date, total_manhours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [name, status, budget_status, completion, methodology, JSON.stringify(jobs || []), start_date, end_date, total_manhours],
+        `INSERT INTO projects (name, status, budget_status, completion, methodology, jobs, start_date, end_date, total_manhours, hourly_rate, total_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [name, status, budget_status, completion, methodology, jobsString, start_date, end_date, total_manhours, hourly_rate || null, total_cost || null],
         function (err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID });
+
+            const projectId = this.lastID;
+
+            // If members are provided, insert them
+            if (members && Array.isArray(members) && members.length > 0) {
+                const insertMember = db.prepare(`INSERT INTO project_members (project_id, user_id, project_role_id) VALUES (?, ?, ?)`);
+
+                members.forEach(member => {
+                    insertMember.run(projectId, member.user_id, member.project_role_id);
+                });
+
+                insertMember.finalize();
+            }
+
+            res.json({ id: projectId });
         }
     );
 });
@@ -42,7 +97,7 @@ app.get('/api/projects/:id/balance', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!project) return res.status(404).json({ error: "Project not found" });
 
-        db.get("SELECT SUM(estimated_hours) as used_hours FROM tasks WHERE project_id = ?", [req.params.id], (err, row) => {
+        db.get("SELECT SUM(hours) as used_hours FROM manhours WHERE project_id = ?", [req.params.id], (err, row) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({
                 data: {
@@ -55,6 +110,21 @@ app.get('/api/projects/:id/balance', (req, res) => {
         });
     });
 });
+
+app.get('/api/projects/:id/members', (req, res) => {
+    const query = `
+        SELECT pm.id, pm.project_id, pm.user_id, pm.project_role_id, u.name as user_name, pr.name as role_name 
+        FROM project_members pm
+        JOIN users u ON pm.user_id = u.id
+        JOIN project_roles pr ON pm.project_role_id = pr.id
+        WHERE pm.project_id = ?
+    `;
+    db.all(query, [req.params.id], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
 
 // 2. Users Routes
 app.get('/api/users', (req, res) => {
@@ -141,6 +211,50 @@ app.delete('/api/roles/:id', (req, res) => {
         }
     );
 });
+
+// 3.5 Project Roles Routes
+app.get('/api/project-roles', (req, res) => {
+    db.all("SELECT * FROM project_roles ORDER BY name ASC", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ data: rows });
+    });
+});
+
+app.post('/api/project-roles', (req, res) => {
+    const { name } = req.body;
+    db.run(
+        `INSERT INTO project_roles (name) VALUES (?)`,
+        [name],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+app.put('/api/project-roles/:id', (req, res) => {
+    const { name } = req.body;
+    db.run(
+        `UPDATE project_roles SET name = ? WHERE id = ?`,
+        [name, req.params.id],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ changes: this.changes });
+        }
+    );
+});
+
+app.delete('/api/project-roles/:id', (req, res) => {
+    db.run(
+        `DELETE FROM project_roles WHERE id = ?`,
+        req.params.id,
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ deleted: this.changes });
+        }
+    );
+});
+
 
 // 4. Tasks Routes (Kanban)
 app.get('/api/tasks', (req, res) => {
@@ -247,10 +361,10 @@ app.get('/api/manhours', (req, res) => {
 });
 
 app.post('/api/manhours', (req, res) => {
-    const { user_id, project_id, date, hours, description } = req.body;
+    const { user_id, project_id, date, hours, amount_idr, description } = req.body;
     db.run(
-        `INSERT INTO manhours (user_id, project_id, date, hours, description) VALUES (?, ?, ?, ?, ?)`,
-        [user_id, project_id, date, hours, description],
+        `INSERT INTO manhours (user_id, project_id, date, hours, amount_idr, description) VALUES (?, ?, ?, ?, ?, ?)`,
+        [user_id || null, project_id, date, hours, amount_idr || null, description],
         function (err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ id: this.lastID });
