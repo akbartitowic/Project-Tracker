@@ -3,9 +3,16 @@
     "functions": {
         "api/index.php": {
             "runtime": "vercel-php@0.9.0"
+        },
+        "api/phpinfo.php": {
+            "runtime": "vercel-php@0.9.0"
         }
     },
     "routes": [
+        {
+            "src": "/_debug",
+            "dest": "/api/phpinfo.php"
+        },
         {
             "src": "/build/(.*)",
             "dest": "/public/build/$1"
