@@ -22,9 +22,8 @@ export default function Dashboard() {
         return new Intl.NumberFormat('id-ID', {
             style: 'currency',
             currency: 'IDR',
-            notation: 'compact',
-            maximumFractionDigits: 1
-        }).format(val);
+            maximumFractionDigits: 0
+        }).format(val || 0);
     };
 
     const [efficiencyData, setEfficiencyData] = useState([]);
@@ -173,7 +172,7 @@ export default function Dashboard() {
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 uppercase font-bold tracking-tight">
-                                            <Clock className="size-3.5" /> {Math.max(0, proj.estimated_hours - proj.actual_hours).toFixed(1)}h remaining
+                                            <Clock className="size-3.5" /> {Math.max(0, proj.estimated_hours - proj.allocated_hours).toFixed(1)}h remaining
                                         </div>
                                     </div>
                                 ))

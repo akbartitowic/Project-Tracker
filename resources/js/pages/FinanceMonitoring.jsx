@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchAPI } from '../services/api';
-import { Wallet, Plus, Trash2, PieChart, Info, ArrowUpRight, DollarSign, ListFilter, Search, Clock } from 'lucide-react';
+import { Wallet, Plus, Trash2, PieChart, Info, ArrowUpRight, Banknote, ListFilter, Search, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -237,7 +237,7 @@ export default function FinanceMonitoring() {
                                             <div>
                                                 <CardDescription className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Manhour Quota Status</CardDescription>
                                                 <CardTitle className="text-xl mt-1">
-                                                    {summary.used_hours}/{summary.total_manhours} <span className="text-sm font-normal text-slate-500 uppercase ml-1">Hours</span>
+                                                    {summary.allocated_hours}/{summary.total_manhours} <span className="text-sm font-normal text-slate-500 uppercase ml-1">Hours</span>
                                                 </CardTitle>
                                             </div>
                                             <div className="text-right">
@@ -247,7 +247,7 @@ export default function FinanceMonitoring() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <Progress value={(summary.used_hours / (summary.total_manhours || 1)) * 100} className="h-1.5 mt-3" />
+                                        <Progress value={(summary.allocated_hours / (summary.total_manhours || 1)) * 100} className="h-1.5 mt-3" />
                                     </CardHeader>
                                 </Card>
                                 <Card className="flex items-center justify-center p-6 border-dashed border-2 hover:bg-slate-50 dark:hover:bg-slate-900/50 cursor-pointer transition-colors group"
@@ -338,7 +338,7 @@ export default function FinanceMonitoring() {
                                             <div className="flex flex-col gap-2 md:col-span-1">
                                                 <span className="text-xs font-bold text-slate-400 uppercase">Amount</span>
                                                 <div className="relative">
-                                                    <DollarSign className="absolute left-3 top-3 size-3.5 text-slate-400" />
+                                                    <Banknote className="absolute left-3 top-3 size-3.5 text-slate-400" />
                                                     <Input
                                                         type="number"
                                                         value={newAllocation.amount}
@@ -484,8 +484,8 @@ export default function FinanceMonitoring() {
                                                 </tr>
                                             ) : (
                                                 quotaBreakdown.map(item => {
-                                                    const remaining = item.quota_hours - item.actual_used_hours;
-                                                    const percentUsed = (item.actual_used_hours / (item.quota_hours || 1)) * 100;
+                                                    const remaining = item.quota_hours - item.allocated_hours;
+                                                    const percentUsed = (item.allocated_hours / (item.quota_hours || 1)) * 100;
                                                     
                                                     return (
                                                         <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
@@ -498,7 +498,12 @@ export default function FinanceMonitoring() {
                                                                 </div>
                                                             </td>
                                                             <td className="py-4 px-2 text-right font-medium text-slate-600 dark:text-slate-400">{item.quota_hours} <span className="text-[10px]">HRS</span></td>
-                                                            <td className="py-4 px-2 text-right font-bold text-slate-900 dark:text-white">{item.actual_used_hours} <span className="text-[10px]">HRS</span></td>
+                                                            <td className="py-4 px-2 text-right font-bold text-slate-900 dark:text-white">
+                                                                <div className="flex flex-col items-end">
+                                                                    <span>{item.allocated_hours} <span className="text-[10px]">ALLC</span></span>
+                                                                    <span className="text-[9px] text-slate-400">ACT: {item.actual_hours}h</span>
+                                                                </div>
+                                                            </td>
                                                             <td className={`py-4 px-2 text-right font-bold ${remaining < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
                                                                 {remaining.toFixed(1)} <span className="text-[10px]">HRS</span>
                                                             </td>

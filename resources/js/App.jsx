@@ -13,6 +13,7 @@ import Reports from './pages/Reports';
 import Presales from './pages/Presales';
 import FinanceMonitoring from './pages/FinanceMonitoring';
 import FinanceCategories from './pages/FinanceCategories';
+import SystemLogs from './pages/SystemLogs';
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
@@ -40,7 +41,7 @@ function App() {
 
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
-          <Route path="presales" element={<Presales />} />
+          <Route path="presales/:view?" element={<Presales />} />
           <Route path="create-project" element={<CreateProject />} />
           <Route path="board/:projectId?" element={<ProjectBoard />} />
           <Route path="users" element={<TeamUsers />} />
@@ -52,6 +53,7 @@ function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="finance-monitoring" element={<FinanceMonitoring />} />
           <Route path="finance-categories" element={<FinanceCategories />} />
+          <Route path="system-logs" element={<SystemLogs />} />
         </Route>
       </Routes>
     </Router>

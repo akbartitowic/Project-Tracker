@@ -44,9 +44,8 @@ export default function Reports() {
         return new Intl.NumberFormat('id-ID', {
             style: 'currency',
             currency: 'IDR',
-            notation: 'compact',
-            maximumFractionDigits: 1
-        }).format(val || 0);
+            maximumFractionDigits: 0
+        }).format(val);
     };
 
     return (

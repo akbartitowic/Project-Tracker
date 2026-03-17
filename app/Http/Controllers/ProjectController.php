@@ -9,9 +9,11 @@ use App\Models\Task;
 use App\Models\Manhour;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Traits\LogActivity;
 
 class ProjectController extends Controller
 {
+    use LogActivity;
     public function index()
     {
         $projects = Project::select('projects.*')
@@ -36,6 +38,11 @@ class ProjectController extends Controller
         $ids = $request->input('ids');
         if (!$ids || !is_array($ids) || empty($ids)) {
             return response()->json(['error' => 'Please provide an array of project IDs to delete.'], 400);
+        }
+
+        $projects = Project::whereIn('id', $ids)->get();
+        foreach ($projects as $project) {
+            $this->log('Project', 'Deleted Project', "Removed project: {$project->name}");
         }
 
         $deletedCount = Project::whereIn('id', $ids)->delete();
@@ -69,27 +76,47 @@ class ProjectController extends Controller
         try {
             $project = Project::create($validated);
 
-            foreach ($members as $member) {
-                ProjectMember::create([
-                    'project_id' => $project->id,
-                    'user_id' => $member['user_id'],
-                    'project_role_id' => $member['project_role_id']
-                ]);
+            if (!empty($members)) {
+                foreach ($members as $member) {
+                    if (isset($member['user_id']) && isset($member['project_role_id'])) {
+                        ProjectMember::create([
+                            'project_id' => $project->id,
+                            'user_id' => $member['user_id'],
+                            'project_role_id' => $member['project_role_id']
+                        ]);
+                    }
+                }
             }
 
-            foreach ($roleQuotas as $quota) {
-                ProjectRoleQuota::create([
-                    'project_id' => $project->id,
-                    'project_role_id' => $quota['project_role_id'],
-                    'quota_hours' => $quota['quota_hours']
-                ]);
+            if (!empty($roleQuotas)) {
+                foreach ($roleQuotas as $quota) {
+                    if (isset($quota['project_role_id']) && isset($quota['quota_hours'])) {
+                        ProjectRoleQuota::create([
+                            'project_id' => $project->id,
+                            'project_role_id' => $quota['project_role_id'],
+                            'quota_hours' => $quota['quota_hours']
+                        ]);
+                    }
+                }
             }
 
             DB::commit();
-            return response()->json(['id' => $project->id]);
+            
+            // Log after commit to ensure project_id is stable, though here it's already created
+            $this->log('Project', 'Created Project', "Started new project: {$project->name}");
+            
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Project created successfully',
+                'id' => $project->id
+            ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => $e->getMessage()], 500);
+            \Log::error("Project creation failed: " . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to create project: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -98,7 +125,8 @@ class ProjectController extends Controller
         $quotas = DB::table('project_role_quotas as pq')
             ->join('project_roles as pr', 'pq.project_role_id', '=', 'pr.id')
             ->select('pq.*', 'pr.name as role_name')
-            ->selectRaw("(SELECT CAST(COALESCE(SUM(hours), 0) AS FLOAT) FROM manhours WHERE project_id = pq.project_id AND project_role_id = pq.project_role_id) as actual_used_hours")
+            ->selectRaw("(SELECT CAST(COALESCE(SUM(estimated_hours), 0) AS FLOAT) FROM tasks WHERE project_id = pq.project_id AND project_role_id = pq.project_role_id) as allocated_hours")
+            ->selectRaw("(SELECT CAST(COALESCE(SUM(hours), 0) AS FLOAT) FROM manhours WHERE project_id = pq.project_id AND project_role_id = pq.project_role_id) as actual_hours")
             ->where('pq.project_id', $id)
             ->get();
 
@@ -110,18 +138,20 @@ class ProjectController extends Controller
         $project = Project::find($id);
         if (!$project) return response()->json(['error' => 'Project not found'], 404);
 
-        $usedHours = Manhour::where('project_id', $id)->sum('hours');
+        $allocatedHours = Task::where('project_id', $id)->sum('estimated_hours');
+        $actualHours = Manhour::where('project_id', $id)->sum('hours');
         
         $remaining = null;
         if ($project->total_manhours !== null) {
-            $remaining = $project->total_manhours - $usedHours;
+            $remaining = $project->total_manhours - $allocatedHours;
         }
 
         return response()->json([
             'data' => [
                 'total_manhours' => $project->total_manhours,
                 'methodology' => $project->methodology,
-                'used_hours' => $usedHours,
+                'allocated_hours' => $allocatedHours,
+                'actual_hours' => $actualHours,
                 'remaining' => $remaining
             ]
         ]);

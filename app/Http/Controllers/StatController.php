@@ -56,13 +56,16 @@ class StatController extends Controller
     public function efficiency()
     {
         $efficiency = DB::table('projects as p')
-            ->leftJoin('manhours as m', 'p.id', '=', 'm.project_id')
             ->select('p.id', 'p.name', 'p.total_manhours as estimated_hours')
-            ->selectRaw('CAST(COALESCE(SUM(m.hours), 0) AS FLOAT) as actual_hours')
-            ->selectRaw('CASE WHEN p.total_manhours > 0 THEN (COALESCE(SUM(m.hours), 0) * 100.0 / p.total_manhours) ELSE 0 END as burn_percentage')
-            ->groupBy('p.id', 'p.name', 'p.total_manhours')
-            ->orderBy('burn_percentage', 'desc')
+            ->selectRaw('(SELECT CAST(COALESCE(SUM(estimated_hours), 0) AS FLOAT) FROM tasks WHERE project_id = p.id) as allocated_hours')
+            ->selectRaw('(SELECT CAST(COALESCE(SUM(hours), 0) AS FLOAT) FROM manhours WHERE project_id = p.id) as actual_hours')
             ->get();
+
+        foreach ($efficiency as $e) {
+            $e->burn_percentage = $e->estimated_hours > 0 ? ($e->allocated_hours * 100.0 / $e->estimated_hours) : 0;
+        }
+
+        $efficiency = collect($efficiency)->sortByDesc('burn_percentage')->values();
 
         return response()->json(['data' => $efficiency]);
     }

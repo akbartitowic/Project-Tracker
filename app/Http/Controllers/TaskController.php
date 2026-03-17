@@ -6,9 +6,11 @@ use App\Models\Task;
 use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Traits\LogActivity;
 
 class TaskController extends Controller
 {
+    use LogActivity;
     public function index(Request $request)
     {
         $query = Task::query();
@@ -72,6 +74,7 @@ class TaskController extends Controller
         }
 
         $task = Task::create($validated);
+        $this->log('Project', 'Created Task', "Added task '{$task->title}' to project ID: {$task->project_id}");
         return response()->json(['id' => $task->id]);
     }
 
@@ -81,7 +84,11 @@ class TaskController extends Controller
             'status' => 'required|string'
         ]);
         $task = Task::findOrFail($id);
+        $oldStatus = $task->status;
         $changes = $task->update($validated) ? 1 : 0;
+        
+        $this->log('Project', 'Updated Task Status', "Changed task '{$task->title}' from {$oldStatus} to {$validated['status']}");
+        
         return response()->json(['changes' => $changes]);
     }
 

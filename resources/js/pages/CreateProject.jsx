@@ -153,7 +153,7 @@ export default function CreateProject() {
                 // If we have a selected lead, we can optionally mark it as "Processed" or similar
                 // For now, let's just show success
                 alert('Project initiated successfully!');
-                navigate('/board');
+                navigate(`/board/${response.id}`);
             }
         } catch (error) {
             alert('Failed to initiate project: ' + error.message);
@@ -355,7 +355,7 @@ export default function CreateProject() {
                                     <select value={member.user_id} onChange={(e) => handleMemberChange(index, 'user_id', e.target.value)}
                                         className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-sm text-slate-900 dark:text-white" required>
                                         <option value="">Select a user...</option>
-                                        {usersList.map(user => <option key={user.id} value={user.id}>{user.name} ({user.role})</option>)}
+                                        {usersList.map(user => <option key={user.id} value={user.id}>{user.name} ({user.role?.name || user.role})</option>)}
                                     </select>
                                 </label>
                                 <label className="flex-1 flex flex-col gap-2">

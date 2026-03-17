@@ -103,7 +103,8 @@ class ProjectAllocationController extends Controller
         $totalAllocated = $allocations->where('is_topup', false)->sum('amount');
         $quotationValue = $project->quotation_value ?? 0;
 
-        $usedHours = Manhour::where('project_id', $id)->sum('hours');
+        $allocatedHours = DB::table('tasks')->where('project_id', $id)->sum('estimated_hours');
+        $actualHours = Manhour::where('project_id', $id)->sum('hours');
         $totalManhours = $project->total_manhours ?? 0;
 
         return response()->json([
@@ -113,8 +114,9 @@ class ProjectAllocationController extends Controller
                 'total_allocated' => $totalAllocated,
                 'remaining_margin' => $quotationValue - $totalAllocated,
                 'total_manhours' => $totalManhours,
-                'used_hours' => $usedHours,
-                'remaining_hours' => $totalManhours - $usedHours,
+                'allocated_hours' => $allocatedHours,
+                'actual_hours' => $actualHours,
+                'remaining_hours' => $totalManhours - $allocatedHours,
                 'allocations' => $allocations
             ]
         ]);

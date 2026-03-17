@@ -110,7 +110,8 @@ export default function ProjectBoard() {
     const [roleQuotas, setRoleQuotas] = useState([]);
     const [stats, setStats] = useState({
         total_manhours: null,
-        used_hours: 0,
+        allocated_hours: 0,
+        actual_hours: 0,
         remaining: 0,
         perc: 0
     });
@@ -161,12 +162,13 @@ export default function ProjectBoard() {
                 const s = balanceRes.data;
                 let perc = 0;
                 if (s.total_manhours) {
-                    perc = Math.round((s.used_hours / s.total_manhours) * 100);
+                    perc = Math.round((s.allocated_hours / s.total_manhours) * 100);
                     if (perc > 100) perc = 100;
                 }
                 setStats({
                     total_manhours: s.total_manhours,
-                    used_hours: s.total_manhours ? Math.round(s.used_hours * 10) / 10 : 0,
+                    allocated_hours: s.total_manhours ? Math.round(s.allocated_hours * 10) / 10 : 0,
+                    actual_hours: s.total_manhours ? Math.round(s.actual_hours * 10) / 10 : 0,
                     remaining: s.total_manhours ? Math.round(s.remaining * 10) / 10 : 0,
                     perc
                 });
@@ -640,7 +642,7 @@ export default function ProjectBoard() {
                 {roleQuotas.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {roleQuotas.map(quota => {
-                            const p = Math.min(100, Math.round(((quota.used_hours || 0) / quota.quota_hours) * 100));
+                            const p = Math.min(100, Math.round(((quota.allocated_hours || 0) / quota.quota_hours) * 100));
                             return (
                                 <Card key={quota.id} className="bg-slate-50 dark:bg-[#1e2532] border-none shadow-none">
                                     <CardContent className="p-4">
@@ -650,7 +652,7 @@ export default function ProjectBoard() {
                                         </div>
                                         <div className="flex items-end justify-between gap-2">
                                             <p className="text-lg font-bold text-slate-900 dark:text-white">
-                                                {quota.used_hours || 0} <span className="text-[10px] font-normal text-slate-400">/ {quota.quota_hours} hrs</span>
+                                                {quota.allocated_hours || 0} <span className="text-[10px] font-normal text-slate-400">/ {quota.quota_hours} hrs</span>
                                             </p>
                                         </div>
                                         <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-2">
@@ -816,7 +818,7 @@ export default function ProjectBoard() {
                                         <SelectItem value="All">General Quota</SelectItem>
                                         {roleQuotas.map(q => (
                                             <SelectItem key={q.project_role_id} value={q.project_role_id.toString()}>
-                                                {q.role_name} (Rem: {q.quota_hours - (q.used_hours || 0)}h)
+                                                {q.role_name} (Rem: {q.quota_hours - (q.allocated_hours || 0)}h)
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

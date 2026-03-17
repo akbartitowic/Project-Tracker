@@ -8,9 +8,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use App\Traits\LogActivity;
 
 class AuthController extends Controller
 {
+    use LogActivity;
     public function signup(Request $request)
     {
         $request->validate([
@@ -99,6 +101,7 @@ class AuthController extends Controller
         }
 
         $user->save();
+        $this->log('Auth', 'Updated Profile', "User name: {$user->name}, Email: {$user->email}");
 
         return response()->json([
             'status' => 'success',
