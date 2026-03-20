@@ -47,7 +47,14 @@ function DraggableTaskCard({ task, onClick }) {
                     </div>
                 </div>
                 {task.feature_title && (
-                    <div className="text-[10px] font-bold text-primary mb-1 uppercase tracking-wide">{task.feature_title}</div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="text-[10px] font-bold text-primary uppercase tracking-wide">{task.feature_title}</div>
+                        {task.category && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-tighter">
+                                {task.category}
+                            </span>
+                        )}
+                    </div>
                 )}
                 <h4 className="text-slate-900 dark:text-slate-100 font-medium leading-snug">{task.title}</h4>
 
@@ -133,6 +140,7 @@ export default function ProjectBoard() {
     const [newTaskRoleFilter, setNewTaskRoleFilter] = useState('All');
     const [newTaskAssignee, setNewTaskAssignee] = useState('Unassigned');
     const [newTaskEstimate, setNewTaskEstimate] = useState('');
+    const [newTaskCategory, setNewTaskCategory] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const sensors = useSensors(
@@ -236,6 +244,7 @@ export default function ProjectBoard() {
 
             setNewTaskAssignee(taskToEdit.assignee_id ? taskToEdit.assignee_id.toString() : 'Unassigned');
             setNewTaskEstimate(taskToEdit.estimated_hours || '');
+            setNewTaskCategory(taskToEdit.category || '');
             setNewTaskRoleFilter(taskToEdit.project_role_id ? taskToEdit.project_role_id.toString() : 'All');
         } else {
             setEditingTaskId(null);
@@ -247,6 +256,7 @@ export default function ProjectBoard() {
             setNewTaskRoleFilter('All');
             setNewTaskAssignee('Unassigned');
             setNewTaskEstimate('');
+            setNewTaskCategory('');
         }
         setIsModalOpen(true);
     };
@@ -264,7 +274,8 @@ export default function ProjectBoard() {
                 assignee_id: newTaskAssignee !== 'Unassigned' ? parseInt(newTaskAssignee) : null,
                 estimated_hours: newTaskEstimate || 0,
                 project_id: selectedProject.id,
-                project_role_id: newTaskRoleFilter !== 'All' ? parseInt(newTaskRoleFilter) : null
+                project_role_id: newTaskRoleFilter !== 'All' ? parseInt(newTaskRoleFilter) : null,
+                category: newTaskCategory || null
             };
 
             if (editingTaskId) {
@@ -697,6 +708,7 @@ export default function ProjectBoard() {
                                     <th className="px-6 py-4 font-medium">Status</th>
                                     <th className="px-6 py-4 font-medium">Priority</th>
                                     <th className="px-6 py-4 font-medium">Assignee</th>
+                                    <th className="px-6 py-4 font-medium text-center">Category</th>
                                     <th className="px-6 py-4 font-medium text-right">Est. Hours</th>
                                 </tr>
                             </thead>
@@ -737,6 +749,13 @@ export default function ProjectBoard() {
                                                 </span>
                                             </div>
                                         </td>
+                                        <td className="px-6 py-4 text-center">
+                                            {task.category ? (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">
+                                                    {task.category}
+                                                </span>
+                                            ) : '-'}
+                                        </td>
                                         <td className="px-6 py-4 text-right text-slate-500 dark:text-slate-400">
                                             <div className="flex items-center justify-end gap-1.5 font-medium text-sm">
                                                 <Clock className="size-3.5" />
@@ -774,6 +793,21 @@ export default function ProjectBoard() {
                         <div className="flex flex-col gap-2">
                             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Task Title</label>
                             <Input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} required placeholder="E.g., Design Homepage" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</label>
+                            <Select value={newTaskCategory} onValueChange={setNewTaskCategory}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Analisa">Analisa</SelectItem>
+                                    <SelectItem value="Desain">Desain</SelectItem>
+                                    <SelectItem value="Development">Development</SelectItem>
+                                    <SelectItem value="Testing">Testing</SelectItem>
+                                    <SelectItem value="Production">Production</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">

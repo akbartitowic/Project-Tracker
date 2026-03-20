@@ -31,7 +31,8 @@ class TaskController extends Controller
             'project_id' => 'required|exists:projects,id',
             'assignee_id' => 'nullable|exists:users,id',
             'estimated_hours' => 'nullable|numeric',
-            'project_role_id' => 'nullable|exists:project_roles,id'
+            'project_role_id' => 'nullable|exists:project_roles,id',
+            'category' => 'nullable|string'
         ]);
 
         $est = (float)($validated['estimated_hours'] ?? 0);
@@ -103,7 +104,8 @@ class TaskController extends Controller
             'priority' => 'required|string',
             'assignee_id' => 'nullable|exists:users,id',
             'estimated_hours' => 'nullable|numeric',
-            'project_role_id' => 'nullable|exists:project_roles,id'
+            'project_role_id' => 'nullable|exists:project_roles,id',
+            'category' => 'nullable|string'
         ]);
         
         $changes = $task->update($validated) ? 1 : 0;
