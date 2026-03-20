@@ -1,4 +1,5 @@
-const API_BASE = '/api';
+export const API_BASE = '/api';
+export const getApiUrl = () => API_BASE;
 
 export async function fetchAPI(endpoint, options = {}) {
     const token = localStorage.getItem('auth_token');

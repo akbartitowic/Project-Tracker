@@ -14,6 +14,7 @@ import Presales from './pages/Presales';
 import FinanceMonitoring from './pages/FinanceMonitoring';
 import FinanceCategories from './pages/FinanceCategories';
 import SystemLogs from './pages/SystemLogs';
+import GenerateReport from './pages/GenerateReport';
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
@@ -51,6 +52,7 @@ function App() {
           <Route path="profile" element={<Profile />} />
 
           <Route path="reports" element={<Reports />} />
+          <Route path="generate-report" element={<GenerateReport />} />
           <Route path="finance-monitoring" element={<FinanceMonitoring />} />
           <Route path="finance-categories" element={<FinanceCategories />} />
           <Route path="system-logs" element={<SystemLogs />} />

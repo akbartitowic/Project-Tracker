@@ -17,6 +17,8 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\SystemController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SettingController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/signup', [AuthController::class, 'signup']);
@@ -75,10 +77,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/stats/recent', [StatController::class, 'recentLogs']);
     Route::get('/reports/efficiency', [StatController::class, 'efficiency']);
     Route::get('/reports/revenue-trend', [StatController::class, 'revenueTrend']);
+    Route::get('/reports/projects', [ReportController::class, 'getProjects']);
+    Route::post('/reports/generate', [ReportController::class, 'generate']);
+    Route::post('/reports/send-email', [ReportController::class, 'sendEmail']);
 
     // 9. Roles & Permissions (Deprecated duplication, keeping for safety if referenced)
     Route::get('/permissions', [PermissionController::class, 'index']);
 
     // 10. System Management
+    Route::get('/settings/all', [SettingController::class, 'getSettings']);
+    Route::post('/settings/update', [SettingController::class, 'updateSettings']);
+    Route::post('/settings/test-smtp', [SettingController::class, 'testSmtp']);
     Route::post('/system/reset', [SystemController::class, 'resetData']);
 });

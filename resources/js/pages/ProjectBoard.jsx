@@ -69,8 +69,9 @@ function DraggableTaskCard({ task, onClick }) {
     );
 }
 
-function BoardColumn({ title, color, count, children, onAddTask }) {
+function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
     const { isOver, setNodeRef } = useDroppable({ id: title });
+    const perc = totalCount > 0 ? Math.round((count / totalCount) * 100) : 0;
 
     return (
         <div
@@ -81,7 +82,10 @@ function BoardColumn({ title, color, count, children, onAddTask }) {
                 <div className="flex items-center gap-2">
                     <span className={`size-2 rounded-full ${color}`}></span>
                     <h3 className="font-semibold text-slate-700 dark:text-slate-200">{title}</h3>
-                    <Badge variant="secondary" className="px-1.5 py-0 h-5 grid place-items-center">{count}</Badge>
+                    <div className="flex items-center gap-1.5 ml-1">
+                        <Badge variant="secondary" className="px-1.5 py-0 h-5 grid place-items-center">{count}</Badge>
+                        <span className="text-[10px] font-black text-slate-400">{perc}%</span>
+                    </div>
                 </div>
                 {title === 'To Do' && (
                     <button className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -379,6 +383,7 @@ export default function ProjectBoard() {
         { title: 'To Do', color: 'bg-slate-400' },
         { title: 'In Progress', color: 'bg-primary' },
         { title: 'Review', color: 'bg-purple-500' },
+        { title: 'Re-open', color: 'bg-rose-500' },
         { title: 'Done', color: 'bg-green-500' }
     ];
 
@@ -688,6 +693,7 @@ export default function ProjectBoard() {
                                     title={col.title}
                                     color={col.color}
                                     count={getTasksByStatus(col.title).length}
+                                    totalCount={tasks.length}
                                     onAddTask={() => handleOpenModal('To Do')}
                                 >
                                     {getTasksByStatus(col.title).map(task => (
@@ -726,7 +732,8 @@ export default function ProjectBoard() {
                                                 task.status === 'Done' ? 'bg-green-50 text-green-600 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20' :
                                                     task.status === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
                                                         task.status === 'Review' ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
-                                                            'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20'
+                                                            task.status === 'Re-open' ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20' :
+                                                                'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20'
                                             }>{task.status}</Badge>
                                         </td>
                                         <td className="px-6 py-4">
@@ -833,6 +840,7 @@ export default function ProjectBoard() {
                                         <SelectItem value="To Do">To Do</SelectItem>
                                         <SelectItem value="In Progress">In Progress</SelectItem>
                                         <SelectItem value="Review">Review</SelectItem>
+                                        <SelectItem value="Re-open">Re-open</SelectItem>
                                         <SelectItem value="Done">Done</SelectItem>
                                     </SelectContent>
                                 </Select>
