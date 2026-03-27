@@ -19,6 +19,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingController;
+use App\Http\Controllers\FinancialReportController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/signup', [AuthController::class, 'signup']);
@@ -89,4 +90,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/settings/update', [SettingController::class, 'updateSettings']);
     Route::post('/settings/test-smtp', [SettingController::class, 'testSmtp']);
     Route::post('/system/reset', [SystemController::class, 'resetData']);
+
+    // 11. Financial Reports
+    Route::get('/financial-reports/summary', [FinancialReportController::class, 'getSummary']);
+    Route::post('/financial-reports/records', [FinancialReportController::class, 'storeRecord']);
+    Route::delete('/financial-reports/records/{id}', [FinancialReportController::class, 'destroyRecord']);
 });

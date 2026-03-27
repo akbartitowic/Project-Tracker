@@ -1,14 +1,14 @@
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText } from "lucide-react";
+import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, TrendingUp } from "lucide-react";
 
 export default function Sidebar() {
     const { toggleTheme } = useTheme();
     const { user, logout } = useAuth();
 
     return (
-        <aside className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col transition-colors duration-200">
+        <aside className="w-64 h-screen overflow-y-auto border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col transition-colors duration-200">
             <div className="p-6 flex items-center gap-3">
                 <div className="size-11 rounded-xl flex items-center justify-center p-1.5 bg-slate-50 dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-800">
                     <img src="/logo.png" alt="Noohtify Logo" className="size-full object-contain" />
@@ -63,6 +63,11 @@ export default function Sidebar() {
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Tag className="size-5" />
                     <span className="text-sm">Categories</span>
+                </NavLink>
+                <NavLink to="/finance-report"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <TrendingUp className="size-5" />
+                    <span className="text-sm">Finance Report</span>
                 </NavLink>
 
                 <div className="pt-4 pb-2 px-3">

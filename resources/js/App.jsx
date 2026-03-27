@@ -15,6 +15,7 @@ import FinanceMonitoring from './pages/FinanceMonitoring';
 import FinanceCategories from './pages/FinanceCategories';
 import SystemLogs from './pages/SystemLogs';
 import GenerateReport from './pages/GenerateReport';
+import FinanceReport from './pages/FinanceReport';
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
@@ -55,6 +56,7 @@ function App() {
           <Route path="generate-report" element={<GenerateReport />} />
           <Route path="finance-monitoring" element={<FinanceMonitoring />} />
           <Route path="finance-categories" element={<FinanceCategories />} />
+          <Route path="finance-report" element={<FinanceReport />} />
           <Route path="system-logs" element={<SystemLogs />} />
         </Route>
       </Routes>
