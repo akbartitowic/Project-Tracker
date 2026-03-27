@@ -26,13 +26,16 @@ class FinancialReportController extends Controller
 
         $incomeAfterProjectExpenses = $grossIncome - $projectExpenses;
 
-        // 3. OPEX and CAPEX
+        // 3. OPEX and CAPEX (Calculated per Year as requested)
+        $yearStart = Carbon::parse($startDate)->startOfYear()->toDateString();
+        $yearEnd = Carbon::parse($startDate)->endOfYear()->toDateString();
+
         $opexTotal = FinancialRecord::where('type', 'OPEX')
-            ->whereBetween('date', [$startDate, $endDate])
+            ->whereBetween('date', [$yearStart, $yearEnd])
             ->sum('amount');
 
         $capexTotal = FinancialRecord::where('type', 'CAPEX')
-            ->whereBetween('date', [$startDate, $endDate])
+            ->whereBetween('date', [$yearStart, $yearEnd])
             ->sum('amount');
 
         $netRevenue = $incomeAfterProjectExpenses - ($opexTotal + $capexTotal);

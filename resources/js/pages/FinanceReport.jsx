@@ -38,7 +38,7 @@ export default function FinanceReport() {
 
     const [newRecord, setNewRecord] = useState({
         type: 'OPEX',
-        frequency: 'one-time', // 'one-time', 'monthly', 'yearly'
+        duration: 1, // 1 to 12 months
         amount: '',
         monthly_amount: '',
         yearly_amount: '',
@@ -73,8 +73,8 @@ export default function FinanceReport() {
                 amount: parseFloat(newRecord.amount)
             };
 
-            if (newRecord.type === 'OPEX' && newRecord.frequency !== 'one-time') {
-                payload.recurring_months = 12;
+            if (newRecord.type === 'OPEX') {
+                payload.recurring_months = parseInt(newRecord.duration);
             }
 
             await fetchAPI('/financial-reports/records', {
@@ -90,9 +90,7 @@ export default function FinanceReport() {
 
     const handleAmountChange = (val, source) => {
         const num = parseFloat(val) || 0;
-        if (source === 'amount') {
-            setNewRecord({ ...newRecord, amount: val });
-        } else if (source === 'monthly') {
+        if (source === 'amount' || source === 'monthly') {
             setNewRecord({ 
                 ...newRecord, 
                 monthly_amount: val, 
@@ -237,7 +235,7 @@ export default function FinanceReport() {
                         <CardTitle className="text-3xl font-black text-slate-900 dark:text-white text-rose-500">
                             {formatCurrency(summary.opex_total)}
                         </CardTitle>
-                        <CardDescription className="text-xs font-bold text-slate-400">Operating Expenses</CardDescription>
+                        <CardDescription className="text-xs font-bold text-slate-400">Total for current year</CardDescription>
                     </CardHeader>
                 </Card>
 
@@ -254,7 +252,7 @@ export default function FinanceReport() {
                         <CardTitle className="text-3xl font-black text-slate-900 dark:text-white text-indigo-500">
                             {formatCurrency(summary.capex_total)}
                         </CardTitle>
-                        <CardDescription className="text-xs font-bold text-slate-400">Capital Expenditure</CardDescription>
+                        <CardDescription className="text-xs font-bold text-slate-400">Total for current year</CardDescription>
                     </CardHeader>
                 </Card>
 
@@ -376,25 +374,32 @@ export default function FinanceReport() {
                                 </div>
 
                                 {newRecord.type === 'OPEX' && (
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black italic tracking-widest text-slate-400 dark:text-slate-500 uppercase">Frequency</label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {['one-time', 'monthly', 'yearly'].map((freq) => (
-                                                <button
-                                                    key={freq}
-                                                    type="button"
-                                                    onClick={() => setNewRecord({...newRecord, frequency: freq})}
-                                                    className={`py-2 rounded-lg font-bold text-[10px] uppercase tracking-tighter transition-all ${newRecord.frequency === freq ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-md' : 'bg-slate-50 dark:bg-slate-800 text-slate-400'}`}
-                                                >
-                                                    {freq}
-                                                </button>
-                                            ))}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-black italic tracking-widest text-slate-400 dark:text-slate-500 uppercase">Input Duration</label>
+                                            <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-lg border border-primary/20">{newRecord.duration} {newRecord.duration > 1 ? 'Months' : 'Month'}</span>
+                                        </div>
+                                        <div className="px-1">
+                                            <input 
+                                                type="range"
+                                                min="1"
+                                                max="12"
+                                                step="1"
+                                                value={newRecord.duration}
+                                                onChange={(e) => setNewRecord({...newRecord, duration: e.target.value})}
+                                                className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                                            />
+                                            <div className="flex justify-between text-[8px] font-black text-slate-400 uppercase tracking-tighter mt-1 opacity-50">
+                                                <span>1 MO</span>
+                                                <span>6 MO</span>
+                                                <span>12 MO</span>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
 
                                 <div className="space-y-4">
-                                    {newRecord.frequency === 'one-time' ? (
+                                    {newRecord.duration == 1 ? (
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black italic tracking-widest text-slate-400 dark:text-slate-500 uppercase">Amount (IDR)</label>
                                             <Input 
