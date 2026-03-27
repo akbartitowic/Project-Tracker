@@ -15,7 +15,10 @@ class StatController extends Controller
         $totalRevenue = DB::table('projects')->sum('quotation_value');
         $totalAllocated = DB::table('project_allocations')->sum('amount');
         
-        $totalMargin = $totalRevenue - $totalAllocated;
+        $opexTotal = DB::table('financial_records')->where('type', 'OPEX')->sum('amount');
+        $capexTotal = DB::table('financial_records')->where('type', 'CAPEX')->sum('amount');
+
+        $totalMargin = $totalRevenue - $totalAllocated - $opexTotal - $capexTotal;
         $marginPercentage = $totalRevenue > 0 ? ($totalMargin / $totalRevenue) * 100 : 0;
 
         return response()->json([
@@ -73,18 +76,24 @@ class StatController extends Controller
     public function revenueTrend()
     {
         $months = DB::table('projects')
-            ->selectRaw("to_char(created_at, 'YYYY-MM') as month")
+            ->selectRaw("strftime('%Y-%m', created_at) as month")
             ->selectRaw('SUM(quotation_value) as billed')
-            ->groupByRaw("to_char(created_at, 'YYYY-MM')")
-            ->orderByRaw("to_char(created_at, 'YYYY-MM') ASC")
+            ->groupByRaw("strftime('%Y-%m', created_at)")
+            ->orderByRaw("strftime('%Y-%m', created_at) ASC")
             ->limit(6)
             ->get();
 
         foreach ($months as $m) {
-            $m->cost = DB::table('project_allocations')
+            $projectCost = DB::table('project_allocations')
                 ->join('projects', 'project_allocations.project_id', '=', 'projects.id')
-                ->whereRaw("to_char(projects.created_at, 'YYYY-MM') = ?", [$m->month])
+                ->whereRaw("strftime('%Y-%m', projects.created_at) = ?", [$m->month])
                 ->sum('amount');
+            
+            $opexCapex = DB::table('financial_records')
+                ->whereRaw("strftime('%Y-%m', date) = ?", [$m->month])
+                ->sum('amount');
+
+            $m->cost = $projectCost + $opexCapex;
         }
 
         return response()->json(['data' => $months]);
