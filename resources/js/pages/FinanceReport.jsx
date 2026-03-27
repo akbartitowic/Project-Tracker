@@ -296,14 +296,15 @@ export default function FinanceReport() {
                                             <th className="px-6 py-4 text-left">Date</th>
                                             <th className="px-6 py-4 text-left">Type</th>
                                             <th className="px-6 py-4 text-left">Description</th>
-                                            <th className="px-6 py-4 text-right">Amount</th>
+                                            <th className="px-6 py-4 text-right">Monthly</th>
+                                            <th className="px-6 py-4 text-right">Yearly</th>
                                             <th className="px-6 py-4 text-center">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                                         {summary.records.length === 0 ? (
                                             <tr>
-                                                <td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic font-medium">No records found for this period. Use the form to add one.</td>
+                                                <td colSpan="6" className="px-6 py-12 text-center text-slate-400 italic font-medium">No records found for this period. Use the form to add one.</td>
                                             </tr>
                                         ) : (
                                             summary.records.map((record) => (
@@ -320,7 +321,10 @@ export default function FinanceReport() {
                                                         {record.description}
                                                     </td>
                                                     <td className="px-6 py-4 text-right text-sm font-black text-slate-900 dark:text-white tabular-nums">
-                                                        {formatCurrency(record.amount)}
+                                                        {record.type === 'OPEX' ? formatCurrency(record.amount) : '-'}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right text-sm font-black text-slate-900 dark:text-white tabular-nums">
+                                                        {record.type === 'OPEX' ? formatCurrency(record.amount * 12) : '-'}
                                                     </td>
                                                     <td className="px-6 py-4 text-center">
                                                         <button 
