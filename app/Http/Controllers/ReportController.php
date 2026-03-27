@@ -111,25 +111,42 @@ class ReportController extends Controller
 
         // 4. Category Progress Breakdown
         $categories = ['Analisa', 'Desain', 'Development', 'Testing', 'Production'];
-        $statuses = ['To Do', 'In Progress', 'Review', 'Done'];
+        $weights = [
+            'To Do' => 0,
+            'In Progress' => 25,
+            'Re-open' => 50,
+            'Review' => 75,
+            'Done' => 100
+        ];
         $categoryProgress = [];
 
         foreach ($categories as $cat) {
-            $totalCatTasks = Task::where('project_id', $project->id)->where('category', $cat)->count();
-            $catStats = [];
-            foreach ($statuses as $stat) {
-                $query = Task::where('project_id', $project->id)->where('category', $cat);
-                if ($stat === 'In Progress') {
-                    $query->whereIn('status', ['In Progress', 'Re-open']);
-                } else {
-                    $query->where('status', $stat);
+            $tasks = Task::where('project_id', $project->id)->where('category', $cat)->get();
+            $totalCatTasks = $tasks->count();
+            
+            $weightedSum = 0;
+            $statusCounts = [
+                'To Do' => 0,
+                'In Progress' => 0,
+                'Re-open' => 0,
+                'Review' => 0,
+                'Done' => 0
+            ];
+
+            foreach ($tasks as $task) {
+                $weight = $weights[$task->status] ?? 0;
+                $weightedSum += $weight;
+                if (isset($statusCounts[$task->status])) {
+                    $statusCounts[$task->status]++;
                 }
-                $count = $query->count();
-                $catStats[$stat] = $totalCatTasks > 0 ? round(($count / $totalCatTasks) * 100) : 0;
             }
+
+            $weightedTotal = $totalCatTasks > 0 ? round($weightedSum / $totalCatTasks) : 0;
+
             $categoryProgress[$cat] = [
-                'stats' => $catStats,
-                'total' => $totalCatTasks
+                'weighted_total' => $weightedTotal,
+                'total' => $totalCatTasks,
+                'counts' => $statusCounts
             ];
         }
 

@@ -27,15 +27,17 @@
         .badge-done { background-color: #f0fdf4; color: #15803d; }
         
         .progress-bar-container { background-color: #f1f5f9; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 5px; border: 1px solid #e2e8f0; }
-        .progress-bar { height: 100%; display: inline-block; }
-        .pb-todo { background-color: #cbd5e1; }
-        .pb-progress { background-color: #3b82f6; }
-        .pb-review { background-color: #a855f7; }
-        .pb-done { background-color: #22c55e; }
+        .progress-bar { height: 100%; display: block; border-radius: 6px; }
+        
+        /* New Progress Colors */
+        .pb-low { background-color: #e11d48; }    /* Rose 600 */
+        .pb-mid { background-color: #f59e0b; }    /* Amber 500 */
+        .pb-high { background-color: #10b981; }   /* Emerald 500 */
 
-        .cat-row { margin-bottom: 15px; padding: 10px; background-color: #fcfcfc; border: 1px solid #f1f5f9; border-radius: 6px; }
-        .cat-name { font-weight: bold; font-size: 14px; margin-bottom: 5px; display: inline-block; width: 150px; }
-        .cat-perc-text { font-size: 11px; color: #64748b; float: right; }
+        .cat-row { margin-bottom: 20px; padding: 12px; background-color: #fff; border: 1px solid #e2e8f0; border-radius: 8px; }
+        .cat-name { font-weight: bold; font-size: 14px; margin-bottom: 5px; display: inline-block; color: #1e293b; }
+        .cat-perc-text { font-size: 12px; font-weight: bold; color: #1e293b; float: right; }
+        .cat-subtitle { font-size: 10px; color: #64748b; margin-bottom: 8px; }
 
         .footer { position: fixed; bottom: 0; left: 0; width: 100%; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; }
     </style>
@@ -68,27 +70,32 @@
 
     <div class="section">
         <div class="section-title">Category Progress Breakdown</div>
+        <div style="margin-bottom: 15px; font-size: 9px; color: #64748b; background: #f8fafc; padding: 10px; border-radius: 6px;">
+            <strong>Status Progress:</strong> To Do (0%) | In Progress (25%) | Re-open (50%) | Review (75%) | Done (100%)
+        </div>
+        
         @foreach($categoryProgress as $cat => $p)
         <div class="cat-row">
             <div>
                 <span class="cat-name">{{ $cat }}</span>
-                <span class="cat-perc-text">
-                    Total: {{ $p['total'] }} tasks | 
-                    Done: {{ $p['stats']['Done'] }}% | 
-                    In Progress: {{ $p['stats']['In Progress'] }}%
-                </span>
+                <span class="cat-perc-text">{{ $p['weighted_total'] }}% Progress</span>
+            </div>
+            <div class="cat-subtitle">
+                Total Tasks: {{ $p['total'] }} (
+                Done: {{ $p['counts']['Done'] }} | 
+                Review: {{ $p['counts']['Review'] }} | 
+                In Progress: {{ $p['counts']['In Progress'] + $p['counts']['Re-open'] }} | 
+                To Do: {{ $p['counts']['To Do'] }}
+                )
             </div>
             <div class="progress-bar-container">
-                <div class="progress-bar pb-done" style="width: {{ $p['stats']['Done'] }}%"></div>
-                <div class="progress-bar pb-review" style="width: {{ $p['stats']['Review'] }}%"></div>
-                <div class="progress-bar pb-progress" style="width: {{ $p['stats']['In Progress'] }}%"></div>
-                <div class="progress-bar pb-todo" style="width: {{ $p['stats']['To Do'] }}%"></div>
+                @php
+                    $colorClass = $p['weighted_total'] < 30 ? 'pb-low' : ($p['weighted_total'] < 70 ? 'pb-mid' : 'pb-high');
+                @endphp
+                <div class="progress-bar {{ $colorClass }}" style="width: {{ $p['weighted_total'] }}%"></div>
             </div>
         </div>
         @endforeach
-        <div style="font-size: 10px; color: #64748b; margin-top: 10px;">
-            *Catatan: Status <strong>Re-open</strong> dikelompokkan ke dalam status <strong>In Progress</strong>.
-        </div>
     </div>
 
     <div class="section">
