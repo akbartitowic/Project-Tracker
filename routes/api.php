@@ -75,6 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 8. Analytics
     Route::get('/stats', [StatController::class, 'stats']);
+    Route::get('/dashboard/overview', [StatController::class, 'dashboardOverview']);
     Route::get('/stats/recent', [StatController::class, 'recentLogs']);
     Route::get('/reports/efficiency', [StatController::class, 'efficiency']);
     Route::get('/reports/revenue-trend', [StatController::class, 'revenueTrend']);

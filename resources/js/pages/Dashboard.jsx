@@ -31,17 +31,11 @@ export default function Dashboard() {
     useEffect(() => {
         const loadStats = async () => {
             try {
-                const [statsRes, effRes, logsRes, trendRes] = await Promise.all([
-                    fetchAPI('/stats'),
-                    fetchAPI('/reports/efficiency'),
-                    fetchAPI('/stats/recent'),
-                    fetchAPI('/reports/revenue-trend')
-                ]);
-
-                if (statsRes.data) setStats(statsRes.data);
-                if (effRes.data) setEfficiencyData(effRes.data.slice(0, 5));
-                if (logsRes.data) setRecentLogs(logsRes.data);
-                if (trendRes.data) setRevenueTrend(trendRes.data);
+                const res = await fetchAPI('/dashboard/overview');
+                if (res.stats) setStats(res.stats);
+                if (res.efficiency) setEfficiencyData(res.efficiency.slice(0, 5));
+                if (res.recentLogs) setRecentLogs(res.recentLogs);
+                if (res.revenueTrend) setRevenueTrend(res.revenueTrend);
             } catch (err) {
                 console.error("Failed to load dashboard data", err);
             }
