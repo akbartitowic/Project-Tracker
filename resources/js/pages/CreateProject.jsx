@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
-import { ChevronRight, FileText, Component, Clock, Users, Activity, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, FileText, Component, Clock, Users, Activity, Plus, Trash2, Link2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/button";
 export default function CreateProject() {
     const navigate = useNavigate();
     const location = useLocation();
-    const fromLead = location.state?.fromLead;
+    const fromLead = location.state?.fromLead || null;
 
     const [methodology, setMethodology] = useState('Agile Scrum');
-    const [projectName, setProjectName] = useState(fromLead?.name || '');
-    const [quotationValue, setQuotationValue] = useState(fromLead?.quotation_value || '');
+    const [projectName, setProjectName] = useState('');
+    const [quotationValue, setQuotationValue] = useState('');
 
     // Member selection states
     const [members, setMembers] = useState([]);
@@ -25,8 +25,57 @@ export default function CreateProject() {
     // Master data states
     const [usersList, setUsersList] = useState([]);
     const [projectRolesList, setProjectRolesList] = useState([]);
-    const [wonLeads, setWonLeads] = useState([]);
-    const [selectedLead, setSelectedLead] = useState(fromLead || null);
+    const [presalesOptions, setPresalesOptions] = useState([]);
+    const [selectedLead, setSelectedLead] = useState(null);
+
+    const isLinkedFromPresales = !!selectedLead;
+
+    const readyPresales = useMemo(() => {
+        return presalesOptions.filter((p) =>
+            p.business_acknowledged_at &&
+            p.development_acknowledged_at &&
+            p.operation_acknowledged_at &&
+            !p.converted_project_id
+        );
+    }, [presalesOptions]);
+
+    const prefillFromPresale = (lead) => {
+        if (!lead) {
+            setSelectedLead(null);
+            setProjectName('');
+            setQuotationValue('');
+            setMethodology('Agile Scrum');
+            setSelectedRoles([]);
+            setMembers([]);
+            setHourlyRate('');
+            return;
+        }
+
+        setSelectedLead(lead);
+        setProjectName(lead.project_name || lead.name || '');
+        setQuotationValue(lead.estimated_budget || lead.quotation_value || lead.estimated_value || '');
+        setMethodology(lead.methodology || 'Agile Scrum');
+
+        const roleRequirements = lead.role_requirements || [];
+        const mappedRoles = roleRequirements.map((item, idx) => ({
+            id: Date.now() + idx,
+            project_role_id: item.project_role_id?.toString() || '',
+            hours: item.development_mh ?? item.business_mh ?? '',
+        }));
+        setSelectedRoles(mappedRoles);
+
+        const uniqueMemberMap = new Map();
+        (lead.operation_assignments || []).forEach((assignment) => {
+            const key = `${assignment.user_id}-${assignment.project_role_id}`;
+            if (!uniqueMemberMap.has(key)) {
+                uniqueMemberMap.set(key, {
+                    user_id: assignment.user_id?.toString(),
+                    project_role_id: assignment.project_role_id?.toString(),
+                });
+            }
+        });
+        setMembers(Array.from(uniqueMemberMap.values()));
+    };
 
     useEffect(() => {
         if (methodology === 'Agile Scrum' && quotationValue) {
@@ -50,7 +99,13 @@ export default function CreateProject() {
                 ]);
                 setUsersList(usersData.data || []);
                 setProjectRolesList(rolesData.data || []);
-                setWonLeads((presalesData.data || []).filter(l => l.status === 'Won'));
+                const allPresales = presalesData.data || [];
+                setPresalesOptions(allPresales);
+
+                if (fromLead?.id) {
+                    const matched = allPresales.find((p) => p.id?.toString() === fromLead.id?.toString());
+                    prefillFromPresale(matched || fromLead);
+                }
             } catch (error) {
                 console.error("Failed to load master data:", error);
             }
@@ -59,16 +114,8 @@ export default function CreateProject() {
     }, []);
 
     const handleSelectLead = (leadId) => {
-        const lead = wonLeads.find(l => l.id.toString() === leadId);
-        if (lead) {
-            setSelectedLead(lead);
-            setProjectName(lead.name);
-            setQuotationValue(lead.quotation_value || '');
-        } else {
-            setSelectedLead(null);
-            setProjectName('');
-            setQuotationValue('');
-        }
+        const lead = presalesOptions.find(l => l.id.toString() === leadId);
+        prefillFromPresale(lead || null);
     };
 
     const handleAddMember = () => {
@@ -128,6 +175,12 @@ export default function CreateProject() {
         }
 
         try {
+            if (selectedLead?.converted_project_id) {
+                alert('Opportunity ini sudah pernah diproses ke project board.');
+                navigate(`/board/${selectedLead.converted_project_id}`);
+                return;
+            }
+
             const validMembers = members.filter(m => m.user_id && m.project_role_id);
 
             const response = await fetchAPI('/projects', {
@@ -172,7 +225,7 @@ export default function CreateProject() {
                     {fromLead ? 'Initiate Project' : 'Create New Project'}
                 </h1>
                 <p className="text-slate-500 dark:text-text-secondary text-base">
-                    {fromLead ? `Converting lead ${fromLead.name} into an active project.` : 'Initiate a new software development project workflow and resource allocation.'}
+                    {fromLead ? `Converting presales ${fromLead.project_name || fromLead.name} into an active project.` : 'Initiate a new software development project workflow and resource allocation.'}
                 </p>
             </div>
 
@@ -189,13 +242,23 @@ export default function CreateProject() {
                             value={selectedLead?.id || ''}
                             onChange={(e) => handleSelectLead(e.target.value)}
                         >
-                            <option value="">-- Select a Won Lead (Optional) --</option>
-                            {wonLeads.map(l => (
-                                <option key={l.id} value={l.id}>{l.name} ({l.sector})</option>
+                            <option value="">-- Select Presales Opportunity (Optional) --</option>
+                            {readyPresales.map(l => (
+                                <option key={l.id} value={l.id}>
+                                    {l.project_name || l.name} ({l.company?.name || 'No Company'})
+                                </option>
                             ))}
                         </select>
                         {selectedLead && (
-                            <p className="mt-2 text-xs text-slate-500 italic">Pre-filling details from {selectedLead.name}</p>
+                            <div className="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                                <p className="text-xs text-slate-600 italic flex items-center gap-2">
+                                    <Link2 className="size-3.5 text-primary" />
+                                    Data project, methodology, role quota, dan team diprefill dari Presales.
+                                </p>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Jika butuh ubah struktur resource, update di menu Presales terlebih dahulu.
+                                </p>
+                            </div>
                         )}
                     </CardContent>
                 </Card>
@@ -253,7 +316,8 @@ export default function CreateProject() {
                                     <input type="radio" name="methodology" value="Waterfall"
                                         checked={methodology === 'Waterfall'}
                                         onChange={(e) => setMethodology(e.target.value)}
-                                        className="peer sr-only" />
+                                        className="peer sr-only"
+                                        disabled={isLinkedFromPresales} />
                                     <div className="p-4 rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-background-dark peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:ring-1 peer-checked:ring-primary transition-all flex items-start gap-3">
                                         <div className="text-primary mt-1 size-5 shrink-0 flex items-center justify-center">↓</div>
                                         <div>
@@ -266,7 +330,8 @@ export default function CreateProject() {
                                     <input type="radio" name="methodology" value="Agile Scrum"
                                         checked={methodology === 'Agile Scrum'}
                                         onChange={(e) => setMethodology(e.target.value)}
-                                        className="peer sr-only" />
+                                        className="peer sr-only"
+                                        disabled={isLinkedFromPresales} />
                                     <div className="p-4 rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-background-dark peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:ring-1 peer-checked:ring-primary transition-all flex items-start gap-3">
                                         <Activity className="text-primary mt-1 size-5 shrink-0" />
                                         <div>
@@ -304,15 +369,15 @@ export default function CreateProject() {
                                                         <div className="relative">
                                                             <Clock className="absolute left-3 top-3 text-slate-400 size-3.5" />
                                                             <Input type="number" placeholder="0" min="0" value={roleObj.hours} onChange={(e) => handleRoleQuotaChange(index, 'hours', e.target.value)}
-                                                                className="bg-white dark:bg-slate-900 pl-9 h-10" required />
+                                                                className="bg-white dark:bg-slate-900 pl-9 h-10" required disabled={isLinkedFromPresales} />
                                                         </div>
                                                     </label>
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveRoleQuota(index)} className="h-10 w-10 text-slate-400 hover:text-red-500 shrink-0">
+                                                    <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveRoleQuota(index)} className="h-10 w-10 text-slate-400 hover:text-red-500 shrink-0" disabled={isLinkedFromPresales}>
                                                         <Trash2 className="size-5" />
                                                     </Button>
                                                 </div>
                                             ))}
-                                            <Button type="button" variant="outline" onClick={handleAddRoleQuota} className="w-full border-dashed py-5">
+                                            <Button type="button" variant="outline" onClick={handleAddRoleQuota} className="w-full border-dashed py-5" disabled={isLinkedFromPresales}>
                                                 <Plus className="size-4 mr-2" /> Add Role Quota
                                             </Button>
                                         </div>
@@ -322,7 +387,7 @@ export default function CreateProject() {
                                         <div className="relative">
                                             <span className="absolute left-4 top-3.5 text-sm text-slate-400 font-medium">Rp</span>
                                             <Input type="number" id="hourly-rate" name="hourly-rate" placeholder="0" min="0" required
-                                                value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)}
+                                                value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} disabled={isLinkedFromPresales}
                                                 className="bg-slate-50 dark:bg-background-dark pl-11 py-6" />
                                         </div>
                                     </label>
@@ -334,7 +399,7 @@ export default function CreateProject() {
                                     <div className="relative">
                                         <span className="absolute left-4 top-3.5 text-sm text-slate-400 font-medium">Rp</span>
                                         <Input type="number" id="total-cost" name="total-cost" placeholder="0" min="0" required
-                                            className="bg-slate-50 dark:bg-background-dark pl-11 py-6" />
+                                            className="bg-slate-50 dark:bg-background-dark pl-11 py-6" disabled={isLinkedFromPresales} />
                                     </div>
                                 </label>
                             )}
@@ -374,12 +439,12 @@ export default function CreateProject() {
                                         }
                                     </select>
                                 </label>
-                                <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveMember(index)} className="mb-1 text-slate-400 hover:text-red-500 shrink-0">
+                                <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveMember(index)} className="mb-1 text-slate-400 hover:text-red-500 shrink-0" disabled={isLinkedFromPresales}>
                                     <Trash2 className="size-5" />
                                 </Button>
                             </div>
                         ))}
-                        <Button type="button" variant="outline" onClick={handleAddMember} className="w-full mt-2 border-dashed border-2 py-6">
+                        <Button type="button" variant="outline" onClick={handleAddMember} className="w-full mt-2 border-dashed border-2 py-6" disabled={isLinkedFromPresales}>
                             <Plus className="size-4 mr-2" /> Add Team Member
                         </Button>
                     </CardContent>

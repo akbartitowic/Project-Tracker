@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
-import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2 } from 'lucide-react';
+import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -146,6 +146,18 @@ export default function ProjectBoard() {
     const [newTaskEstimate, setNewTaskEstimate] = useState('');
     const [newTaskCategory, setNewTaskCategory] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
+    const [importFile, setImportFile] = useState(null);
+    const [importResult, setImportResult] = useState(null);
+
+    // Bulk Edit Tasks State
+    const [isTaskBulkEditMode, setIsTaskBulkEditMode] = useState(false);
+    const [selectedTaskIds, setSelectedTaskIds] = useState([]);
+    const [isBulkEditTaskModalOpen, setIsBulkEditTaskModalOpen] = useState(false);
+    const [bulkEditEstimate, setBulkEditEstimate] = useState('');
+    const [bulkEditRoleFilter, setBulkEditRoleFilter] = useState('All');
+    const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -257,7 +269,16 @@ export default function ProjectBoard() {
             setNewTaskFeatureTitle('');
             setNewTaskDescription('');
             setNewTaskPriority('Medium');
-            setNewTaskRoleFilter('All');
+            
+            // Default to 'All' if general quota is defined, else first role quota, else 'All' as fallback
+            if (selectedProject?.total_manhours > 0) {
+                setNewTaskRoleFilter('All');
+            } else if (roleQuotas.length > 0) {
+                setNewTaskRoleFilter(roleQuotas[0].project_role_id.toString());
+            } else {
+                setNewTaskRoleFilter('All');
+            }
+            
             setNewTaskAssignee('Unassigned');
             setNewTaskEstimate('');
             setNewTaskCategory('');
@@ -265,10 +286,36 @@ export default function ProjectBoard() {
         setIsModalOpen(true);
     };
 
+    const categoryOptions = Array.from(
+        new Set(
+            roleQuotas
+                .map((q) => q.role_name)
+                .filter(Boolean)
+        )
+    );
+
+    const categoryBasedRoleQuotas = roleQuotas.filter((quota) =>
+        newTaskCategory ? quota.role_name === newTaskCategory : true
+    );
+
+    const formatHours = (value) => {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return '0';
+        return Number.isInteger(num) ? `${num}` : num.toFixed(1);
+    };
+
+    const mappedRoleQuotaHours = roleQuotas.reduce((sum, quota) => sum + (Number(quota.quota_hours) || 0), 0);
+    const generalQuotaFromPresales = Math.max(0, (Number(selectedProject?.total_manhours) || 0) - mappedRoleQuotaHours);
+    const generalAllocatedHours = tasks
+        .filter((task) => !task.project_role_id)
+        .reduce((sum, task) => sum + (Number(task.estimated_hours) || 0), 0);
+    const generalQuotaRemaining = Math.max(0, generalQuotaFromPresales - generalAllocatedHours);
+
     const handleSubmitTask = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
         try {
+            const isWaterfall = selectedProject?.methodology === 'Waterfall';
             const payload = {
                 title: newTaskTitle,
                 feature_title: newTaskFeatureTitle,
@@ -276,9 +323,9 @@ export default function ProjectBoard() {
                 priority: newTaskPriority,
                 status: newTaskStatus,
                 assignee_id: newTaskAssignee !== 'Unassigned' ? parseInt(newTaskAssignee) : null,
-                estimated_hours: newTaskEstimate || 0,
+                estimated_hours: isWaterfall ? null : (newTaskEstimate || 0),
                 project_id: selectedProject.id,
-                project_role_id: newTaskRoleFilter !== 'All' ? parseInt(newTaskRoleFilter) : null,
+                project_role_id: isWaterfall ? null : (newTaskRoleFilter !== 'All' ? parseInt(newTaskRoleFilter) : null),
                 category: newTaskCategory || null
             };
 
@@ -294,6 +341,47 @@ export default function ProjectBoard() {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleImportTasks = async (e) => {
+        e.preventDefault();
+        if (!importFile) return;
+
+        setIsImporting(true);
+        setImportResult(null);
+        try {
+            const formData = new FormData();
+            formData.append('file', importFile);
+            formData.append('project_id', selectedProject.id);
+
+            // Use the correct token key 'auth_token' as defined in resources/js/services/api.js
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/tasks/import`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    // Browser sets correct boundary for FormData, do NOT set Content-Type
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Import failed');
+
+            setImportResult(data);
+            if (data.success > 0) {
+                loadBoard(selectedProject.id);
+            }
+        } catch (error) {
+            alert(error.message);
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
+    const handleDownloadTemplate = () => {
+        window.open(`${import.meta.env.VITE_API_URL || '/api'}/tasks/template`, '_blank');
     };
 
     const handleDragEnd = async (event) => {
@@ -324,6 +412,55 @@ export default function ProjectBoard() {
     };
 
     const getTasksByStatus = (status) => tasks.filter(t => t.status === status);
+
+    const toggleTaskSelection = (taskId) => {
+        setSelectedTaskIds(prev => 
+            prev.includes(taskId) 
+                ? prev.filter(id => id !== taskId) 
+                : [...prev, taskId]
+        );
+    };
+
+    const toggleAllTasks = () => {
+        if (selectedTaskIds.length === tasks.length) {
+            setSelectedTaskIds([]);
+        } else {
+            setSelectedTaskIds(tasks.map(t => t.id));
+        }
+    };
+
+    const handleBulkEditSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmittingBulk(true);
+        try {
+            const payload = {
+                task_ids: selectedTaskIds,
+            };
+            if (bulkEditEstimate !== '') {
+                payload.estimated_hours = parseFloat(bulkEditEstimate);
+            }
+            if (bulkEditRoleFilter !== 'All') {
+                payload.project_role_id = parseInt(bulkEditRoleFilter);
+            }
+
+            if (Object.keys(payload).length > 1) {
+                await fetchAPI('/tasks/bulk-edit', { method: 'PUT', body: JSON.stringify(payload) });
+            }
+            setIsBulkEditTaskModalOpen(false);
+            setSelectedTaskIds([]);
+            setIsTaskBulkEditMode(false);
+            
+            // clear form
+            setBulkEditEstimate('');
+            setBulkEditRoleFilter('All');
+            
+            loadBoard(selectedProject.id);
+        } catch (error) {
+            alert(error.message || 'Failed to bulk edit tasks.');
+        } finally {
+            setIsSubmittingBulk(false);
+        }
+    };
 
     const toggleProjectSelection = (projectId) => {
         setSelectedProjectIds(prev =>
@@ -386,6 +523,16 @@ export default function ProjectBoard() {
         { title: 'Re-open', color: 'bg-rose-500' },
         { title: 'Done', color: 'bg-green-500' }
     ];
+
+    const waterfallProgressCards = useMemo(() => {
+        const total = tasks.length;
+        const statuses = ['Done', 'In Progress', 'To Do', 'Review', 'Re-open'];
+        return statuses.map((status) => {
+            const count = tasks.filter((task) => task.status === status).length;
+            const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+            return { status, count, percentage };
+        });
+    }, [tasks]);
 
     if (!selectedProject) {
         return (
@@ -498,12 +645,22 @@ export default function ProjectBoard() {
                                         <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{project.name}</h3>
                                         <p className="text-sm font-medium text-slate-500 line-clamp-2">{project.methodology} • {project.budget_status}</p>
 
-                                        {project.total_manhours && (
+                                        {project.methodology === 'Agile Scrum' && project.total_manhours ? (
+                                            <div className="mt-4 space-y-1 text-sm text-slate-600 dark:text-slate-400">
+                                                <div className="flex items-center gap-2">
+                                                    <Clock className="size-4" />
+                                                    <span>Remaining: {formatHours(project.remaining_manhours)} hrs</span>
+                                                </div>
+                                                <div className="text-xs font-semibold text-primary">
+                                                    Usage: {Number(project.usage_percentage || 0).toFixed(1)}%
+                                                </div>
+                                            </div>
+                                        ) : project.total_manhours ? (
                                             <div className="mt-4 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                                                 <Clock className="size-4" />
                                                 <span>{project.total_manhours} hrs total quota</span>
                                             </div>
-                                        )}
+                                        ) : null}
                                     </CardContent>
                                 </Card>
                             ))}
@@ -560,7 +717,14 @@ export default function ProjectBoard() {
                                                 {project.methodology}
                                             </td>
                                             <td className="px-6 py-4">
-                                                {project.total_manhours ? (
+                                                {project.methodology === 'Agile Scrum' && project.total_manhours ? (
+                                                    <div className="flex flex-col text-slate-600 dark:text-slate-400">
+                                                        <span className="text-sm">Rem: {formatHours(project.remaining_manhours)} hrs</span>
+                                                        <span className="text-[11px] font-semibold text-primary">
+                                                            Usage: {Number(project.usage_percentage || 0).toFixed(1)}%
+                                                        </span>
+                                                    </div>
+                                                ) : project.total_manhours ? (
                                                     <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                                                         <Clock className="size-4" />
                                                         <span>{project.total_manhours} hrs</span>
@@ -629,6 +793,28 @@ export default function ProjectBoard() {
                                 +4
                             </div>
                         </div>
+                        <div className="flex gap-2 mr-2 border-r border-slate-200 dark:border-slate-800 pr-4">
+                            {isTaskBulkEditMode && selectedTaskIds.length > 0 && (
+                                <Button
+                                    variant="default"
+                                    className="shadow-lg shadow-primary/20"
+                                    onClick={() => setIsBulkEditTaskModalOpen(true)}
+                                >
+                                    Edit Selected ({selectedTaskIds.length})
+                                </Button>
+                            )}
+                            <Button
+                                variant={isTaskBulkEditMode ? "secondary" : "outline"}
+                                className={isTaskBulkEditMode ? "bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700" : ""}
+                                onClick={() => {
+                                    if (!isTaskBulkEditMode && viewMode !== 'list') setViewMode('list');
+                                    setIsTaskBulkEditMode(!isTaskBulkEditMode);
+                                    if (isTaskBulkEditMode) setSelectedTaskIds([]);
+                                }}
+                            >
+                                {isTaskBulkEditMode ? "Cancel" : "Manage Tasks"}
+                            </Button>
+                        </div>
                         <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg mr-2">
                             <Button
                                 variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
@@ -647,6 +833,14 @@ export default function ProjectBoard() {
                                 <List className="size-4" />
                             </Button>
                         </div>
+                        <Button variant="outline" className="flex items-center gap-2" onClick={() => {
+                            setImportFile(null);
+                            setImportResult(null);
+                            setIsImportModalOpen(true);
+                        }}>
+                            <Upload className="size-4" />
+                            <span>Import</span>
+                        </Button>
                         <Button className="flex items-center gap-2 shadow-lg shadow-primary/20" onClick={() => handleOpenModal('To Do')}>
                             <Plus className="size-5" />
                             <span>Add Task</span>
@@ -655,29 +849,81 @@ export default function ProjectBoard() {
                 </div>
 
                 {/* Stats Cards */}
-                {roleQuotas.length > 0 && (
+                {selectedProject?.methodology === 'Waterfall' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        {waterfallProgressCards.map((item) => (
+                            <Card key={item.status} className="bg-slate-50 dark:bg-[#1e2532] border-none shadow-none">
+                                <CardContent className="p-4">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{item.status}</p>
+                                    <div className="mt-2 flex items-end justify-between">
+                                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{item.percentage}%</p>
+                                        <p className="text-xs text-slate-500">{item.count} task</p>
+                                    </div>
+                                    <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-3">
+                                        <div
+                                            className="h-1.5 rounded-full bg-primary transition-all"
+                                            style={{ width: `${item.percentage}%` }}
+                                        ></div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                ) : (roleQuotas.length > 0 || generalQuotaFromPresales > 0 || generalAllocatedHours > 0) && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {roleQuotas.map(quota => {
-                            const p = Math.min(100, Math.round(((quota.allocated_hours || 0) / quota.quota_hours) * 100));
+                            const alloc = Number(quota.allocated_hours) || 0;
+                            const qh = Number(quota.quota_hours) || 0;
+                            const realP = qh > 0 ? Math.round((alloc / qh) * 100) : 0;
+                            const p = Math.min(100, realP);
+                            const isOver = alloc > qh;
                             return (
                                 <Card key={quota.id} className="bg-slate-50 dark:bg-[#1e2532] border-none shadow-none">
                                     <CardContent className="p-4">
                                         <div className="flex justify-between items-start mb-2">
                                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{quota.role_name}</p>
-                                            <span className={`text-xs font-bold ${p > 80 ? 'text-rose-500' : 'text-primary'}`}>{p}%</span>
+                                            <span className={`text-xs font-bold ${realP > 80 ? 'text-rose-500' : 'text-primary'}`}>{realP}%</span>
                                         </div>
-                                        <div className="flex items-end justify-between gap-2">
+                                        <div className="flex items-center justify-between gap-2">
                                             <p className="text-lg font-bold text-slate-900 dark:text-white">
-                                                {quota.allocated_hours || 0} <span className="text-[10px] font-normal text-slate-400">/ {quota.quota_hours} hrs</span>
+                                                <span>{formatHours(alloc)} <span className="text-[10px] font-normal text-slate-400">/ {formatHours(qh)} hrs</span></span>
                                             </p>
+                                            {isOver && (
+                                                <div className="px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-[10px] font-bold tracking-tight">
+                                                    Minus {(alloc - qh).toFixed(1)}h
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-2">
-                                            <div className={`h-1.5 rounded-full transition-all ${p > 90 ? 'bg-rose-500' : p > 70 ? 'bg-orange-500' : 'bg-primary'}`} style={{ width: `${p}%` }}></div>
+                                            <div className={`h-1.5 rounded-full transition-all ${realP > 90 ? 'bg-rose-500' : realP > 70 ? 'bg-orange-500' : 'bg-primary'}`} style={{ width: `${p}%` }}></div>
                                         </div>
                                     </CardContent>
                                 </Card>
                             )
                         })}
+                        {(generalQuotaFromPresales > 0 || generalAllocatedHours > 0) && (
+                            <Card key="general-quota" className="bg-slate-50 dark:bg-[#1e2532] border-none shadow-none">
+                                <CardContent className="p-4">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">General Quota</p>
+                                        <span className={`text-xs font-bold ${(generalQuotaFromPresales > 0 && (generalAllocatedHours / generalQuotaFromPresales) * 100 > 80) ? 'text-rose-500' : 'text-primary'}`}>
+                                            {generalQuotaFromPresales > 0 ? `${Math.round((generalAllocatedHours / generalQuotaFromPresales) * 100)}%` : '0%'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-lg font-bold text-slate-900 dark:text-white">
+                                            <span>{formatHours(generalAllocatedHours)} <span className="text-[10px] font-normal text-slate-400">/ {formatHours(generalQuotaFromPresales)} hrs</span></span>
+                                        </p>
+                                    </div>
+                                    <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-2">
+                                        <div
+                                            className={`h-1.5 rounded-full transition-all ${generalQuotaFromPresales > 0 && (generalAllocatedHours / generalQuotaFromPresales) * 100 > 90 ? 'bg-rose-500' : generalQuotaFromPresales > 0 && (generalAllocatedHours / generalQuotaFromPresales) * 100 > 70 ? 'bg-orange-500' : 'bg-primary'}`}
+                                            style={{ width: `${generalQuotaFromPresales > 0 ? Math.min(100, (generalAllocatedHours / generalQuotaFromPresales) * 100) : 0}%` }}
+                                        ></div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
                 )}
             </div>
@@ -710,17 +956,30 @@ export default function ProjectBoard() {
                         <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                                 <tr>
+                                    {isTaskBulkEditMode && <th className="px-6 py-4 w-10"><Checkbox checked={tasks.length > 0 && selectedTaskIds.length === tasks.length} onCheckedChange={toggleAllTasks} aria-label="Select all" /></th>}
                                     <th className="px-6 py-4 font-medium">Task</th>
                                     <th className="px-6 py-4 font-medium">Status</th>
                                     <th className="px-6 py-4 font-medium">Priority</th>
                                     <th className="px-6 py-4 font-medium">Assignee</th>
                                     <th className="px-6 py-4 font-medium text-center">Category</th>
+                                    <th className="px-6 py-4 font-medium text-center">Role Quota</th>
                                     <th className="px-6 py-4 font-medium text-right">Est. Hours</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                 {tasks.map(task => (
-                                    <tr key={task.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors" onClick={() => handleOpenModal(task.status, task)}>
+                                    <tr key={task.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedTaskIds.includes(task.id) ? 'bg-primary/5 dark:bg-primary/10' : ''}`} onClick={(e) => {
+                                        if (isTaskBulkEditMode) {
+                                            toggleTaskSelection(task.id);
+                                        } else {
+                                            handleOpenModal(task.status, task);
+                                        }
+                                    }}>
+                                        {isTaskBulkEditMode && (
+                                            <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                                                <Checkbox checked={selectedTaskIds.includes(task.id)} onCheckedChange={() => toggleTaskSelection(task.id)} />
+                                            </td>
+                                        )}
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col">
                                                 <span className="font-medium text-slate-900 dark:text-slate-100">{task.title}</span>
@@ -763,6 +1022,13 @@ export default function ProjectBoard() {
                                                 </span>
                                             ) : '-'}
                                         </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                                {task.project_role_id 
+                                                    ? (roleQuotas.find(q => q.project_role_id === task.project_role_id)?.role_name || `Role ${task.project_role_id}`) 
+                                                    : 'General'}
+                                            </span>
+                                        </td>
                                         <td className="px-6 py-4 text-right text-slate-500 dark:text-slate-400">
                                             <div className="flex items-center justify-end gap-1.5 font-medium text-sm">
                                                 <Clock className="size-3.5" />
@@ -773,7 +1039,7 @@ export default function ProjectBoard() {
                                 ))}
                                 {tasks.length === 0 && (
                                     <tr>
-                                        <td colSpan="5" className="px-6 py-8 text-center text-slate-500">No tasks found. Create one first!</td>
+                                        <td colSpan={isTaskBulkEditMode ? "8" : "7"} className="px-6 py-8 text-center text-slate-500">No tasks found. Create one first!</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -784,43 +1050,47 @@ export default function ProjectBoard() {
 
             {/* Modal */}
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-[560px]">
                     <DialogHeader>
                         <DialogTitle>{editingTaskId ? 'Edit Task' : 'Add New Task'}</DialogTitle>
                     </DialogHeader>
                     <form className="flex flex-col gap-4 py-4 max-h-[70vh] overflow-y-auto px-1" onSubmit={handleSubmitTask}>
                         <div className="flex flex-col gap-2">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Feature Title <span className="text-slate-400 font-normal">(Optional)</span></label>
-                            <Input type="text" value={newTaskFeatureTitle} onChange={e => setNewTaskFeatureTitle(e.target.value)} placeholder="E.g., Authentication" />
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Feature Title <span className="text-rose-500">*</span></label>
+                            <Input type="text" value={newTaskFeatureTitle} onChange={e => setNewTaskFeatureTitle(e.target.value)} placeholder="E.g., Authentication" required />
                         </div>
                         <div className="flex flex-col gap-2">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Description / Sub-task</label>
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Description / Sub-task <span className="text-slate-400 font-normal">(Optional)</span></label>
                             <Textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} placeholder="Enter detailed description..." className="min-h-[80px]" />
                         </div>
                         <div className="flex flex-col gap-2">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Task Title</label>
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Task Title <span className="text-rose-500">*</span></label>
                             <Input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} required placeholder="E.g., Design Homepage" />
                         </div>
                         <div className="flex flex-col gap-2">
                             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</label>
-                            <Select value={newTaskCategory} onValueChange={setNewTaskCategory}>
+                            <Select value={newTaskCategory} onValueChange={(val) => {
+                                setNewTaskCategory(val);
+                                const matchedQuota = roleQuotas.find((q) => q.role_name === val);
+                                if (matchedQuota) {
+                                    setNewTaskRoleFilter(matchedQuota.project_role_id.toString());
+                                }
+                            }}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select category" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Analisa">Analisa</SelectItem>
-                                    <SelectItem value="Desain">Desain</SelectItem>
-                                    <SelectItem value="Development">Development</SelectItem>
-                                    <SelectItem value="Testing">Testing</SelectItem>
-                                    <SelectItem value="Production">Production</SelectItem>
+                                    {categoryOptions.map((categoryName) => (
+                                        <SelectItem key={categoryName} value={categoryName}>{categoryName}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Priority</label>
                                 <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
-                                    <SelectTrigger>
+                                    <SelectTrigger className="w-full">
                                         <SelectValue placeholder="Select priority" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -833,7 +1103,7 @@ export default function ProjectBoard() {
                             <div className="flex flex-col gap-2">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Status</label>
                                 <Select value={newTaskStatus} onValueChange={setNewTaskStatus}>
-                                    <SelectTrigger>
+                                    <SelectTrigger className="w-full">
                                         <SelectValue placeholder="Select status" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -846,51 +1116,60 @@ export default function ProjectBoard() {
                                 </Select>
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {selectedProject?.methodology !== 'Waterfall' && (
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Project Role Quota</label>
+                                    <Select value={newTaskRoleFilter} onValueChange={(val) => {
+                                        setNewTaskRoleFilter(val);
+                                        setNewTaskAssignee('Unassigned');
+                                    }}>
+                                        <SelectTrigger className="w-full min-w-0">
+                                            <SelectValue
+                                                placeholder={newTaskCategory ? "Select Role..." : "Select category first"}
+                                                className="truncate"
+                                            />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {selectedProject?.total_manhours > 0 && (
+                                                <SelectItem value="All">
+                                                    {`General Quota (Rem: ${formatHours(generalQuotaRemaining)}h)`}
+                                                </SelectItem>
+                                            )}
+                                            {categoryBasedRoleQuotas
+                                                .filter(q => q.quota_hours > 0)
+                                                .map(q => (
+                                                    <SelectItem key={q.project_role_id} value={q.project_role_id.toString()}>
+                                                        {q.role_name} (Rem: {q.quota_hours - (q.allocated_hours || 0)}h)
+                                                    </SelectItem>
+                                                ))
+                                            }
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
                             <div className="flex flex-col gap-2">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Project Role Quota</label>
-                                <Select value={newTaskRoleFilter} onValueChange={(val) => {
-                                    setNewTaskRoleFilter(val);
-                                    setNewTaskAssignee('Unassigned');
-                                }}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Role..." />
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Assignee</label>
+                                <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
+                                    <SelectTrigger className="w-full min-w-0">
+                                        <SelectValue placeholder="Unassigned" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="All">General Quota</SelectItem>
-                                        {roleQuotas.map(q => (
-                                            <SelectItem key={q.project_role_id} value={q.project_role_id.toString()}>
-                                                {q.role_name} (Rem: {q.quota_hours - (q.allocated_hours || 0)}h)
+                                        <SelectItem value="Unassigned">Unassigned</SelectItem>
+                                        {users.map(user => (
+                                            <SelectItem key={user.id} value={user.id.toString()}>
+                                                {user.name} ({user.role?.name || user.role || 'Member'})
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="flex flex-col gap-2">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Assignee</label>
-                                <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Unassigned" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Unassigned">Unassigned</SelectItem>
-                                        {projectMembers
-                                            .filter(m => {
-                                                if (newTaskRoleFilter === 'All') return true;
-                                                return m.project_role_id.toString() === newTaskRoleFilter;
-                                            })
-                                            .map(m => (
-                                                <SelectItem key={m.user_id} value={m.user_id.toString()}>
-                                                    {m.user_name} ({m.role_name})
-                                                </SelectItem>
-                                            ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="flex flex-col gap-2 col-span-2">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estimated Manhours</label>
-                                <Input type="number" value={newTaskEstimate} onChange={e => setNewTaskEstimate(e.target.value)} min="0" step="0.5" placeholder="0" />
-                            </div>
+                            {selectedProject?.methodology !== 'Waterfall' && (
+                                <div className="flex flex-col gap-2 col-span-2">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estimated Manhours</label>
+                                    <Input type="number" value={newTaskEstimate} onChange={e => setNewTaskEstimate(e.target.value)} min="0" step="0.5" placeholder="0" />
+                                </div>
+                            )}
                         </div>
                         <DialogFooter className="mt-4">
                             <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
@@ -936,6 +1215,141 @@ export default function ProjectBoard() {
                             Confirm Delete
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Bulk Edit Task Modal */}
+            <Dialog open={isBulkEditTaskModalOpen} onOpenChange={setIsBulkEditTaskModalOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Bulk Edit Manhours & Quota</DialogTitle>
+                        <DialogDescription>
+                            Applying changes to {selectedTaskIds.length} task(s). Leave fields blank to keep their current values.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form className="flex flex-col gap-4 py-4" onSubmit={handleBulkEditSubmit}>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Project Role Quota</label>
+                            <Select value={bulkEditRoleFilter} onValueChange={setBulkEditRoleFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Keep current role quota" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="All">Keep current role quota</SelectItem>
+                                    {roleQuotas
+                                        .filter(q => q.quota_hours > 0)
+                                        .map(q => (
+                                            <SelectItem key={q.project_role_id} value={q.project_role_id.toString()}>
+                                                {q.role_name} (Rem: {q.quota_hours - (q.allocated_hours || 0)}h)
+                                            </SelectItem>
+                                        ))
+                                    }
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estimated Manhours <span className="text-slate-400 font-normal">(for each task)</span></label>
+                            <Input type="number" value={bulkEditEstimate} onChange={e => setBulkEditEstimate(e.target.value)} min="0" step="0.5" placeholder="Leave blank to keep current" />
+                        </div>
+                        <DialogFooter className="mt-4">
+                            <Button type="button" variant="outline" onClick={() => setIsBulkEditTaskModalOpen(false)}>Cancel</Button>
+                            <Button type="submit" disabled={isSubmittingBulk}>
+                                {isSubmittingBulk && <Loader2 className="mr-2 size-4 animate-spin" />}
+                                Save Changes
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Import Tasks Modal */}
+            <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>Import Tasks</DialogTitle>
+                        <DialogDescription>
+                            Upload a CSV file to import tasks to this project board.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {!importResult ? (
+                        <form onSubmit={handleImportTasks} className="space-y-4 py-4">
+                            <div className="p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl flex flex-col items-center justify-center gap-3 bg-slate-50/50 dark:bg-slate-900/50">
+                                <div className="p-3 rounded-full bg-primary/10 text-primary">
+                                    <Upload className="size-6" />
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                        {importFile ? importFile.name : 'Choose a file or drag and drop'}
+                                    </p>
+                                    <p className="text-xs text-slate-500 mt-1">CSV file only (max 5MB)</p>
+                                </div>
+                                <input
+                                    type="file"
+                                    accept=".csv"
+                                    className="hidden"
+                                    id="csv-upload"
+                                    onChange={(e) => setImportFile(e.target.files[0])}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => document.getElementById('csv-upload').click()}
+                                >
+                                    Select File
+                                </Button>
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg border border-primary/10">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                                        <Download className="size-4" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-primary">Need a template?</p>
+                                        <p className="text-[10px] text-slate-500 font-medium">Download the standard CSV structure.</p>
+                                    </div>
+                                </div>
+                                <Button type="button" variant="ghost" size="sm" onClick={handleDownloadTemplate} className="hover:bg-primary/10 text-primary">
+                                    Download
+                                </Button>
+                            </div>
+
+                            <DialogFooter className="pt-4">
+                                <Button type="button" variant="ghost" onClick={() => setIsImportModalOpen(false)}>Cancel</Button>
+                                <Button type="submit" disabled={!importFile || isImporting}>
+                                    {isImporting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                                    Start Import
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    ) : (
+                        <div className="py-4 space-y-4">
+                            <div className={`p-4 rounded-xl border flex items-start gap-3 ${importResult.errors.length === 0 ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-800' : 'bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-900/20 dark:border-orange-800'}`}>
+                                {importResult.errors.length === 0 ? <Plus className="size-5 shrink-0" /> : <AlertCircle className="size-5 shrink-0" />}
+                                <div>
+                                    <p className="font-bold">{importResult.message}</p>
+                                    <p className="text-sm opacity-90">{importResult.success} tasks successfully created.</p>
+                                </div>
+                            </div>
+                            
+                            {importResult.errors.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Alerts / Errors ({importResult.errors.length})</p>
+                                    <div className="max-h-[200px] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-2 space-y-1">
+                                        {importResult.errors.map((err, i) => (
+                                            <p key={i} className="text-[11px] text-rose-500 font-medium font-mono">{err}</p>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <DialogFooter className="pt-4">
+                                <Button type="button" className="w-full" onClick={() => setIsImportModalOpen(false)}>Close</Button>
+                            </DialogFooter>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </div>

@@ -9,6 +9,72 @@ use Carbon\Carbon;
 
 class FinancialReportController extends Controller
 {
+    public function projectRealizationSummary(Request $request)
+    {
+        $projects = DB::table('projects as p')
+            ->leftJoin('project_allocations as pa', 'pa.project_id', '=', 'p.id')
+            ->select(
+                'p.id',
+                'p.name',
+                'p.methodology',
+                'p.quotation_value'
+            )
+            ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 1 THEN pa.amount ELSE 0 END), 0) as topup_income")
+            ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 0 THEN pa.amount ELSE 0 END), 0) as planning_expense")
+            ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 0 THEN COALESCE(pa.realized_amount, pa.amount) ELSE 0 END), 0) as final_expense")
+            ->groupBy('p.id', 'p.name', 'p.methodology', 'p.quotation_value')
+            ->orderBy('p.name')
+            ->get()
+            ->map(function ($project) {
+                $methodology = strtolower((string) ($project->methodology ?? ''));
+                $isScrum = str_contains($methodology, 'scrum') || str_contains($methodology, 'agile');
+
+                $rawTopUpIncome = (float) ($project->topup_income ?? 0);
+                $topUpIncome = $isScrum ? $rawTopUpIncome : 0.0;
+
+                $planningIncome = (float) ($project->quotation_value ?? 0);
+                $initialIncome = max(0, $planningIncome - $topUpIncome);
+                $planningExpense = (float) ($project->planning_expense ?? 0);
+                $finalExpense = (float) ($project->final_expense ?? 0);
+
+                $remainingMargin = $planningIncome - $finalExpense;
+                $marginPercentage = $planningIncome > 0
+                    ? round(($remainingMargin / $planningIncome) * 100, 2)
+                    : 0;
+
+                return [
+                    'project_id' => $project->id,
+                    'project_name' => $project->name,
+                    'methodology' => $project->methodology,
+                    'initial_income' => $initialIncome,
+                    'topup_income' => $topUpIncome,
+                    'planning_income' => $planningIncome,
+                    'planning_expense' => $planningExpense,
+                    'final_expense' => $finalExpense,
+                    'remaining_margin' => $remainingMargin,
+                    'margin_percentage' => $marginPercentage,
+                ];
+            })
+            ->values();
+
+        $totals = [
+            'initial_income' => $projects->sum('initial_income'),
+            'topup_income' => $projects->sum('topup_income'),
+            'planning_income' => $projects->sum('planning_income'),
+            'planning_expense' => $projects->sum('planning_expense'),
+            'final_expense' => $projects->sum('final_expense'),
+            'remaining_margin' => $projects->sum('remaining_margin'),
+        ];
+        $totals['margin_percentage'] = $totals['planning_income'] > 0
+            ? round(($totals['remaining_margin'] / $totals['planning_income']) * 100, 2)
+            : 0;
+
+        return response()->json([
+            'data' => $projects,
+            'totals' => $totals,
+        ]);
+    }
+
     public function getSummary(Request $request)
     {
         $startDate = $request->query('start_date', Carbon::now()->startOfYear()->toDateString());

@@ -65,13 +65,16 @@
                 <div class="stat-value">{{ number_format($stats['remaining'], 1) }}h / {{ number_format($stats['total_quota'] ?? 0, 1) }}h</div>
             </div>
         </div>
+        <div style="font-size: 10px; color: #64748b; margin-top: -14px;">
+            Logged Actual: {{ number_format($stats['actual_logged_in_range'] ?? 0, 1) }}h (range), {{ number_format($stats['actual_logged_total'] ?? 0, 1) }}h (total)
+        </div>
     </div>
     @endif
 
     <div class="section">
         <div class="section-title">Category Progress Breakdown</div>
         <div style="margin-bottom: 15px; font-size: 9px; color: #64748b; background: #f8fafc; padding: 10px; border-radius: 6px;">
-            <strong>Status Progress:</strong> To Do (0%) | In Progress (25%) | Re-open (50%) | Review (75%) | Done (100%)
+            <strong>Status Progress:</strong> To Do (0%) | In Progress (25%) | Reopen (50%) | Review (75%) | Done (100%)
         </div>
         
         @foreach($categoryProgress as $cat => $p)
@@ -84,7 +87,7 @@
                 Total Tasks: {{ $p['total'] }} (
                 Done: {{ $p['counts']['Done'] }} | 
                 Review: {{ $p['counts']['Review'] }} | 
-                In Progress: {{ $p['counts']['In Progress'] + $p['counts']['Re-open'] }} | 
+                In Progress: {{ $p['counts']['In Progress'] + $p['counts']['Reopen'] }} | 
                 To Do: {{ $p['counts']['To Do'] }}
                 )
             </div>
@@ -116,11 +119,11 @@
                     <td>{{ $task->feature_title ?: '-' }}</td>
                     <td>
                         <span class="badge {{ 
-                            $task->status === 'Done' ? 'badge-done' : 
-                            ($task->status === 'In Progress' ? 'badge-progress' : 
-                            ($task->status === 'Re-open' ? 'badge-reopen' : 'badge-todo')) 
+                            $task->normalized_status === 'Done' ? 'badge-done' : 
+                            ($task->normalized_status === 'In Progress' ? 'badge-progress' : 
+                            ($task->normalized_status === 'Reopen' ? 'badge-reopen' : 'badge-todo')) 
                         }}">
-                            {{ $task->status }}
+                            {{ $task->normalized_status }}
                         </span>
                     </td>
                     <td>{{ $task->updated_at->format('d M Y') }}</td>
@@ -140,9 +143,9 @@
         <table>
             <thead>
                 <tr>
-                    <th width="{{ $project->methodology === 'Agile Scrum' ? '40%' : '50%' }}">Task</th>
+                    <th width="{{ $project->methodology === 'Agile Scrum' ? '35%' : '45%' }}">Task</th>
+                    <th width="{{ $project->methodology === 'Agile Scrum' ? '25%' : '30%' }}">Feature</th>
                     <th width="{{ $project->methodology === 'Agile Scrum' ? '20%' : '25%' }}">Status</th>
-                    <th width="{{ $project->methodology === 'Agile Scrum' ? '20%' : '25%' }}">Feature</th>
                     @if($project->methodology === 'Agile Scrum')
                     <th width="20%">Est. Manhours</th>
                     @endif
@@ -152,12 +155,12 @@
                 @foreach($inProgressTasks as $task)
                 <tr>
                     <td><strong>{{ $task->title }}</strong></td>
+                    <td>{{ $task->feature_title ?: '-' }}</td>
                     <td>
-                        <span class="badge {{ $task->status === 'Re-open' ? 'badge-reopen' : 'badge-progress' }}">
-                            {{ $task->status }}
+                        <span class="badge {{ $task->normalized_status === 'Reopen' ? 'badge-reopen' : 'badge-progress' }}">
+                            {{ $task->normalized_status }}
                         </span>
                     </td>
-                    <td>{{ $task->feature_title ?: '-' }}</td>
                     @if($project->methodology === 'Agile Scrum')
                     <td>{{ number_format($task->estimated_hours, 1) }}h</td>
                     @endif

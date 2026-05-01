@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Role;
+use App\Models\Permission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -13,6 +14,27 @@ use App\Traits\LogActivity;
 class AuthController extends Controller
 {
     use LogActivity;
+
+    private function ensureBoardOnlyPermissions(Role $role): void
+    {
+        $permissionSpecs = [
+            ['slug' => 'project_board.read', 'name' => 'Read Project Board', 'module' => 'Project Board'],
+            ['slug' => 'project_board.create', 'name' => 'Create Project Board', 'module' => 'Project Board'],
+            ['slug' => 'project_board.update', 'name' => 'Update Project Board', 'module' => 'Project Board'],
+        ];
+
+        $permissionIds = [];
+        foreach ($permissionSpecs as $spec) {
+            $permission = Permission::firstOrCreate(
+                ['slug' => $spec['slug']],
+                ['name' => $spec['name'], 'module' => $spec['module']]
+            );
+            $permissionIds[] = $permission->id;
+        }
+
+        $role->permissions()->sync($permissionIds);
+    }
+
     public function signup(Request $request)
     {
         $request->validate([
@@ -21,8 +43,9 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
         ]);
 
-        // Default role for signup (matching database schema)
-        $defaultRole = Role::where('name', 'Member')->first() ?? Role::first();
+        // Signup users default to board-only access.
+        $defaultRole = Role::firstOrCreate(['name' => 'Board Member']);
+        $this->ensureBoardOnlyPermissions($defaultRole);
 
         $user = User::create([
             'name' => $request->name,
@@ -39,7 +62,7 @@ class AuthController extends Controller
             'status' => 'success',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user->load('role'),
+            'user' => $user->load('role.permissions'),
         ]);
     }
 
@@ -59,7 +82,7 @@ class AuthController extends Controller
             'status' => 'success',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user->load('role'),
+            'user' => $user->load('role.permissions'),
         ]);
     }
 
@@ -77,7 +100,7 @@ class AuthController extends Controller
     {
         return response()->json([
             'status' => 'success',
-            'user' => $request->user()->load('role')
+            'user' => $request->user()->load('role.permissions')
         ]);
     }
 
@@ -106,7 +129,7 @@ class AuthController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Profile updated successfully',
-            'user' => $user->load('role')
+            'user' => $user->load('role.permissions')
         ]);
     }
 }

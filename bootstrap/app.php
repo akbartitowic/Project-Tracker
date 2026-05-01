@@ -15,6 +15,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'permission' => \App\Http\Middleware\CheckPermission::class,
         ]);
+
+        // Return JSON 401 for unauthenticated API requests instead of redirecting
+        $middleware->redirectGuestsTo(fn ($request) =>
+            $request->expectsJson() || $request->is('api/*') ? null : route('login')
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

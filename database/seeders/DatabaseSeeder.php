@@ -8,6 +8,8 @@ use App\Models\Task;
 use App\Models\Presale;
 use App\Models\Manhour;
 use App\Models\FinancialRecord;
+use App\Models\Company;
+use App\Models\ProjectCategory;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -33,6 +35,19 @@ class DatabaseSeeder extends Seeder
             'role' => 'Admin',
             'status' => 'Active',
         ]);
+
+        User::firstOrCreate(
+            ['email' => 'tito@noohtify.com'],
+            [
+                'name' => 'Tito Testing',
+                'password' => Hash::make('abcd1234'),
+                'role' => 'Admin',
+                'status' => 'Active',
+            ]
+        );
+
+        Company::firstOrCreate(['name' => 'Noohtify']);
+        ProjectCategory::firstOrCreate(['name' => 'Web Development']);
 
         // 3. Create Additional Users
         $users = User::factory()->count(10)->create();

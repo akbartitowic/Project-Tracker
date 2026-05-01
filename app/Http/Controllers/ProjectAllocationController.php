@@ -44,10 +44,38 @@ class ProjectAllocationController extends Controller
         return response()->json(['deleted' => $deleted]);
     }
 
+    public function realize(Request $request, string $id)
+    {
+        $allocation = ProjectAllocation::find($id);
+        if (!$allocation) {
+            return response()->json(['error' => 'Allocation not found'], 404);
+        }
+
+        if ($allocation->is_topup) {
+            return response()->json(['error' => 'Realization hanya berlaku untuk data pengeluaran.'], 422);
+        }
+
+        $validated = $request->validate([
+            'realized_amount' => 'required|numeric|min:0',
+        ]);
+
+        $allocation->realized_amount = $validated['realized_amount'];
+        $allocation->realized_at = now();
+        $allocation->save();
+
+        return response()->json([
+            'message' => 'Realization saved',
+            'data' => $allocation,
+        ]);
+    }
+
     public function topUp(Request $request, $id)
     {
         $project = Project::find($id);
         if (!$project) return response()->json(['error' => 'Project not found'], 404);
+        if ($project->methodology === 'Waterfall') {
+            return response()->json(['error' => 'Top up quota tidak tersedia untuk project Waterfall.'], 422);
+        }
 
         $validated = $request->validate([
             'additional_quotation' => 'required|numeric|min:0',
@@ -76,9 +104,11 @@ class ProjectAllocationController extends Controller
             ProjectAllocation::create([
                 'project_id' => $id,
                 'category_id' => $validated['category_id'],
+                'project_role_id' => $validated['project_role_id'],
                 'amount' => $validated['additional_quotation'],
                 'description' => '[TOP UP] ' . $validated['description'],
-                'is_topup' => true
+                'is_topup' => true,
+                'topup_hours' => $validated['additional_hours']
             ]);
 
             DB::commit();
@@ -100,7 +130,16 @@ class ProjectAllocationController extends Controller
             ->where('pa.project_id', $id)
             ->get();
 
-        $totalAllocated = $allocations->where('is_topup', false)->sum('amount');
+        $expenseAllocations = $allocations->where('is_topup', false);
+        $totalAllocated = $expenseAllocations->sum(function ($row) {
+            return (float) ($row->realized_amount ?? $row->amount ?? 0);
+        });
+        $plannedAllocated = $expenseAllocations->sum(function ($row) {
+            return (float) ($row->amount ?? 0);
+        });
+        $topupHoursTotal = $allocations->where('is_topup', true)->sum(function ($row) {
+            return (float)($row->topup_hours ?? 0);
+        });
         $quotationValue = $project->quotation_value ?? 0;
 
         $allocatedHours = DB::table('tasks')->where('project_id', $id)->sum('estimated_hours');
@@ -112,11 +151,14 @@ class ProjectAllocationController extends Controller
                 'project_name' => $project->name,
                 'quotation_value' => $quotationValue,
                 'total_allocated' => $totalAllocated,
+                'planned_allocated' => $plannedAllocated,
                 'remaining_margin' => $quotationValue - $totalAllocated,
                 'total_manhours' => $totalManhours,
                 'allocated_hours' => $allocatedHours,
                 'actual_hours' => $actualHours,
                 'remaining_hours' => $totalManhours - $allocatedHours,
+                'topup_hours_total' => $topupHoursTotal,
+                'has_topup_manhours' => $topupHoursTotal > 0,
                 'allocations' => $allocations
             ]
         ]);

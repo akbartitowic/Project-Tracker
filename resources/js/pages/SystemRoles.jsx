@@ -1,10 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { fetchAPI } from '../services/api';
-import { Shield, Lock, Save, Plus, Trash2, CheckCircle2, Circle, X } from 'lucide-react';
+import { Shield, Lock, Save, Plus, Trash2, CheckCircle2, Circle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+
+const ACTIONS = ['create', 'read', 'update', 'delete'];
+const ACTION_LABELS = {
+    create: 'Create',
+    read: 'Read',
+    update: 'Update',
+    delete: 'Delete',
+};
 
 export default function SystemRoles() {
     const [roles, setRoles] = useState([]);
@@ -25,15 +33,15 @@ export default function SystemRoles() {
                 fetchAPI('/roles'),
                 fetchAPI('/permissions')
             ]);
-            if (rolesRes.data) setRoles(rolesRes.data);
-            if (permRes.data) setPermissions(permRes.data);
-            
-            // Auto Select first role if none selected
-            if (!selectedRole && rolesRes.data?.length > 0) {
-                setSelectedRole(rolesRes.data[0]);
+            const fetchedRoles = rolesRes.data || [];
+            const fetchedPermissions = permRes.data || {};
+            setRoles(fetchedRoles);
+            setPermissions(fetchedPermissions);
+
+            if (!selectedRole && fetchedRoles.length > 0) {
+                setSelectedRole(fetchedRoles[0]);
             } else if (selectedRole) {
-                // Update selected role data from fresh fetch
-                const updated = rolesRes.data.find(r => r.id === selectedRole.id);
+                const updated = fetchedRoles.find((r) => r.id === selectedRole.id);
                 if (updated) setSelectedRole(updated);
             }
         } catch (err) {
@@ -43,21 +51,56 @@ export default function SystemRoles() {
         }
     };
 
+    const selectedPermissionIds = useMemo(() => {
+        return new Set((selectedRole?.permissions || []).map((p) => p.id));
+    }, [selectedRole]);
+
+    const modulePermissionGroups = useMemo(() => {
+        return Object.entries(permissions).map(([moduleName, modulePerms]) => {
+            const byAction = {};
+            modulePerms.forEach((perm) => {
+                const slugParts = String(perm.slug || '').split('.');
+                const actionFromSlug = slugParts[slugParts.length - 1];
+                const action = ACTIONS.includes(actionFromSlug)
+                    ? actionFromSlug
+                    : ACTIONS.find((a) => String(perm.name || '').toLowerCase().startsWith(a));
+                if (action) byAction[action] = perm;
+            });
+            return { moduleName, byAction };
+        });
+    }, [permissions]);
+
     const handleTogglePermission = (id) => {
         if (!selectedRole) return;
-        
-        const currentPerms = selectedRole.permissions.map(p => p.id);
-        let nextPerms;
-        
-        if (currentPerms.includes(id)) {
-            nextPerms = currentPerms.filter(pId => pId !== id);
+        const nextIds = new Set(selectedPermissionIds);
+        if (nextIds.has(id)) nextIds.delete(id);
+        else nextIds.add(id);
+
+        setSelectedRole({
+            ...selectedRole,
+            permissions: Array.from(nextIds).map((permissionId) => ({ id: permissionId })),
+        });
+    };
+
+    const handleToggleModuleAll = (moduleGroup) => {
+        if (!selectedRole) return;
+        const modulePermissionIds = ACTIONS
+            .map((action) => moduleGroup.byAction[action]?.id)
+            .filter(Boolean);
+        if (modulePermissionIds.length === 0) return;
+
+        const nextIds = new Set(selectedPermissionIds);
+        const allActive = modulePermissionIds.every((id) => nextIds.has(id));
+
+        if (allActive) {
+            modulePermissionIds.forEach((id) => nextIds.delete(id));
         } else {
-            nextPerms = [...currentPerms, id];
+            modulePermissionIds.forEach((id) => nextIds.add(id));
         }
 
         setSelectedRole({
             ...selectedRole,
-            permissions: nextPerms.map(pId => ({ id: pId })) // Temporary update for UI feedback
+            permissions: Array.from(nextIds).map((permissionId) => ({ id: permissionId })),
         });
     };
 
@@ -69,7 +112,7 @@ export default function SystemRoles() {
                 method: 'PUT',
                 body: JSON.stringify({
                     name: selectedRole.name,
-                    permissions: selectedRole.permissions.map(p => p.id)
+                    permissions: Array.from(selectedPermissionIds),
                 })
             });
             await loadData();
@@ -115,7 +158,7 @@ export default function SystemRoles() {
                         <Lock className="size-8 text-primary" />
                         Access Control
                     </h1>
-                    <p className="text-slate-500 font-medium">Manage system roles and their modular permissions.</p>
+                    <p className="text-slate-500 font-medium">Group permissions by menu with CRUD controls.</p>
                 </div>
                 <Button onClick={() => setIsCreating(true)} className="gap-2 shadow-lg shadow-primary/20">
                     <Plus className="size-4" /> Create New Role
@@ -123,12 +166,11 @@ export default function SystemRoles() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Roles List */}
                 <div className="space-y-4">
                     <h3 className="text-sm font-bold uppercase text-slate-400 tracking-wider px-2">System Roles</h3>
                     {roles.map((role) => (
-                        <Card 
-                            key={role.id} 
+                        <Card
+                            key={role.id}
                             className={`group cursor-pointer transition-all border-2 ${selectedRole?.id === role.id ? 'border-primary ring-2 ring-primary/10 shadow-lg' : 'border-transparent hover:border-slate-200'} shadow-sm relative overflow-hidden`}
                             onClick={() => setSelectedRole(role)}
                         >
@@ -142,9 +184,9 @@ export default function SystemRoles() {
                                         <p className="text-xs text-slate-500">{role.permissions?.length || 0} permissions active</p>
                                     </div>
                                 </div>
-                                <Button 
-                                    variant="ghost" 
-                                    size="icon" 
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
                                     className="size-8 text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -160,9 +202,9 @@ export default function SystemRoles() {
                     {isCreating && (
                         <Card className="border-dashed border-2 border-primary/50 bg-primary/5">
                             <CardContent className="p-4 space-y-3">
-                                <Input 
-                                    placeholder="Enter role name..." 
-                                    value={newRoleName} 
+                                <Input
+                                    placeholder="Enter role name..."
+                                    value={newRoleName}
                                     onChange={(e) => setNewRoleName(e.target.value)}
                                     className="bg-white border-primary/20"
                                     autoFocus
@@ -176,7 +218,6 @@ export default function SystemRoles() {
                     )}
                 </div>
 
-                {/* Permissions Grid */}
                 <div className="lg:col-span-2 space-y-6">
                     {selectedRole ? (
                         <>
@@ -192,33 +233,66 @@ export default function SystemRoles() {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {Object.keys(permissions).map((module) => (
-                                    <Card key={module} className="overflow-hidden border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                                        <CardHeader className="bg-slate-50/50 dark:bg-slate-800/20 py-3 border-b border-slate-100 dark:border-slate-800">
-                                            <CardTitle className="text-sm font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{module}</CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="p-4 space-y-2">
-                                            {permissions[module].map((perm) => {
-                                                const isActive = selectedRole.permissions.some(p => p.id === perm.id);
-                                                return (
-                                                    <div 
-                                                        key={perm.id} 
-                                                        className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${isActive ? 'bg-emerald-50/50 border-emerald-100 text-emerald-900' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'} `}
-                                                        onClick={() => handleTogglePermission(perm.id)}
+                                {modulePermissionGroups.map((moduleGroup) => {
+                                    const availableActions = ACTIONS
+                                        .filter((action) => Boolean(moduleGroup.byAction[action]));
+                                    const modulePermissionIds = availableActions
+                                        .map((action) => moduleGroup.byAction[action]?.id)
+                                        .filter(Boolean);
+                                    const allSelected = modulePermissionIds.length > 0 && modulePermissionIds.every((id) => selectedPermissionIds.has(id));
+                                    return (
+                                        <Card key={moduleGroup.moduleName} className="overflow-hidden border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                                            <CardHeader className="bg-slate-50/50 dark:bg-slate-800/20 py-3 border-b border-slate-100 dark:border-slate-800">
+                                                <div className="flex items-center justify-between">
+                                                    <CardTitle className="text-sm font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{moduleGroup.moduleName}</CardTitle>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleToggleModuleAll(moduleGroup)}
+                                                        className="h-7 px-2 text-[10px] font-bold uppercase"
                                                     >
-                                                        <span className="text-sm font-bold">{perm.name}</span>
-                                                        {isActive ? <CheckCircle2 className="size-5 text-emerald-500" /> : <Circle className="size-5 text-slate-200" />}
+                                                        {allSelected ? 'Clear Semua' : 'Pilih Semua'}
+                                                    </Button>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="p-4 grid grid-cols-2 gap-2">
+                                                {availableActions.map((action) => {
+                                                    const perm = moduleGroup.byAction[action];
+                                                    const isActive = perm ? selectedPermissionIds.has(perm.id) : false;
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            key={`${moduleGroup.moduleName}-${action}`}
+                                                            disabled={!perm}
+                                                            className={`flex items-center justify-between p-3 rounded-lg border transition-all text-left ${
+                                                                !perm
+                                                                    ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-100'
+                                                                    : isActive
+                                                                        ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900 dark:bg-emerald-900/20 dark:border-emerald-900/30 dark:text-emerald-200'
+                                                                        : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'
+                                                            }`}
+                                                            onClick={() => perm && handleTogglePermission(perm.id)}
+                                                        >
+                                                            <span className="text-sm font-bold">{ACTION_LABELS[action]}</span>
+                                                            {isActive ? <CheckCircle2 className="size-4 text-emerald-500" /> : <Circle className="size-4 text-slate-300" />}
+                                                        </button>
+                                                    );
+                                                })}
+                                                {availableActions.length === 0 && (
+                                                    <div className="col-span-2 text-xs text-slate-400 italic">
+                                                        No API actions detected for this menu.
                                                     </div>
-                                                );
-                                            })}
-                                        </CardContent>
-                                    </Card>
-                                ))}
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
                             </div>
                         </>
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400 p-12 border-2 border-dashed border-slate-100 rounded-3xl">
-                            < Shield className="size-16 mb-4 opacity-10" />
+                            <Shield className="size-16 mb-4 opacity-10" />
                             <p className="font-medium italic">Select a role on the left to manage permissions.</p>
                         </div>
                     )}

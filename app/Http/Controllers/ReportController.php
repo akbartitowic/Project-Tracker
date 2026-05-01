@@ -15,6 +15,19 @@ use Illuminate\Support\Facades\Log;
 
 class ReportController extends Controller
 {
+    private function normalizeTaskStatus(?string $status): string
+    {
+        $value = trim((string) $status);
+        return match (strtolower($value)) {
+            're-open', 'reopen' => 'Reopen',
+            'in progress' => 'In Progress',
+            'to do', 'todo' => 'To Do',
+            'review' => 'Review',
+            'done' => 'Done',
+            default => $value !== '' ? $value : 'To Do',
+        };
+    }
+
     public function generate(Request $request)
     {
         $request->validate([
@@ -93,51 +106,77 @@ class ReportController extends Controller
         $tasksInRange = Task::where('project_id', $project->id)
             ->whereBetween('updated_at', [$startDate, $endDate])
             ->get();
+        $tasksInRange->each(function ($task) {
+            $task->normalized_status = $this->normalizeTaskStatus($task->status);
+        });
 
         // 2. Tasks currently in progress (In Progress or Re-open)
         $inProgressTasks = Task::where('project_id', $project->id)
-            ->whereIn('status', ['In Progress', 'Re-open'])
             ->get();
+        $inProgressTasks = $inProgressTasks
+            ->filter(function ($task) {
+                $normalized = $this->normalizeTaskStatus($task->status);
+                $task->normalized_status = $normalized;
+                return in_array($normalized, ['In Progress', 'Reopen'], true);
+            })
+            ->values();
 
-        // 3. Scrum Manhours
+        // 3. Scrum Manhours (aligned with project quota usage based on task estimates)
+        $usedInRange = (float) $tasksInRange->sum(function ($task) {
+            return (float) ($task->estimated_hours ?? 0);
+        });
+        $totalUsed = (float) Task::where('project_id', $project->id)->sum('estimated_hours');
+        $totalQuota = (float) ($project->total_manhours ?? 0);
         $stats = [
-            'used_in_range' => Manhour::where('project_id', $project->id)
+            'used_in_range' => $usedInRange,
+            'total_used' => $totalUsed,
+            'total_quota' => $totalQuota,
+            'remaining' => $totalQuota - $totalUsed,
+            'actual_logged_in_range' => (float) Manhour::where('project_id', $project->id)
                 ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
                 ->sum('hours'),
-            'total_used' => Manhour::where('project_id', $project->id)->sum('hours'),
-            'total_quota' => $project->total_manhours,
-            'remaining' => ($project->total_manhours ?? 0) - Manhour::where('project_id', $project->id)->sum('hours')
+            'actual_logged_total' => (float) Manhour::where('project_id', $project->id)->sum('hours'),
         ];
 
-        // 4. Category Progress Breakdown
-        $categories = ['Analisa', 'Desain', 'Development', 'Testing', 'Production'];
+        // 4. Category Progress Breakdown (dynamic from existing tasks categories)
         $weights = [
             'To Do' => 0,
             'In Progress' => 25,
-            'Re-open' => 50,
+            'Reopen' => 50,
             'Review' => 75,
             'Done' => 100
         ];
         $categoryProgress = [];
+        $projectTasks = Task::where('project_id', $project->id)->get();
+        $categories = $projectTasks
+            ->map(fn ($task) => trim((string) ($task->category ?? '')))
+            ->map(fn ($category) => $category === '' ? 'Uncategorized' : $category)
+            ->unique()
+            ->values();
 
         foreach ($categories as $cat) {
-            $tasks = Task::where('project_id', $project->id)->where('category', $cat)->get();
+            $tasks = $projectTasks->filter(function ($task) use ($cat) {
+                $taskCategory = trim((string) ($task->category ?? ''));
+                $taskCategory = $taskCategory === '' ? 'Uncategorized' : $taskCategory;
+                return $taskCategory === $cat;
+            })->values();
             $totalCatTasks = $tasks->count();
             
             $weightedSum = 0;
             $statusCounts = [
                 'To Do' => 0,
                 'In Progress' => 0,
-                'Re-open' => 0,
+                'Reopen' => 0,
                 'Review' => 0,
                 'Done' => 0
             ];
 
             foreach ($tasks as $task) {
-                $weight = $weights[$task->status] ?? 0;
+                $normalizedStatus = $this->normalizeTaskStatus($task->status);
+                $weight = $weights[$normalizedStatus] ?? 0;
                 $weightedSum += $weight;
-                if (isset($statusCounts[$task->status])) {
-                    $statusCounts[$task->status]++;
+                if (isset($statusCounts[$normalizedStatus])) {
+                    $statusCounts[$normalizedStatus]++;
                 }
             }
 

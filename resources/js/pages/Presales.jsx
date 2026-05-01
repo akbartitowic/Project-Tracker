@@ -1,519 +1,807 @@
-import { useState, useEffect, useMemo } from 'react';
-import { fetchAPI } from '../services/api';
-import { 
-    Plus, MoreHorizontal, FileText, Presentation, PencilLine, 
-    CheckCircle2, XCircle, Search, Filter, Loader2, Banknote, 
-    Building2, Upload, Clock, TrendingUp, Target, Users, ArrowUpRight 
-} from 'lucide-react';
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { fetchAPI } from '../services/api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { CheckCircle2, Pencil, Plus } from 'lucide-react';
 
-const PIPELINE_STAGES = [
-    { id: 'Lead', label: 'Inbound Lead', color: 'bg-rose-100', text: 'text-rose-700', icon: Users, accent: 'bg-rose-500' },
-    { id: 'Proposal', label: 'Proposal Phase', color: 'bg-indigo-100', text: 'text-indigo-700', icon: FileText, accent: 'bg-indigo-500' },
-    { id: 'Presentation', label: 'Pitch/Presentation', color: 'bg-purple-100', text: 'text-purple-700', icon: Presentation, accent: 'bg-purple-500' },
-    { id: 'Quotation', label: 'Negotiation', color: 'bg-orange-100', text: 'text-orange-700', icon: Banknote, accent: 'bg-orange-500' }
-];
+const TAB_KEYS = ['Business', 'Tech', 'Operation'];
+const TAB_TO_PATH = {
+  Business: 'business',
+  Tech: 'tech',
+  Operation: 'operation',
+};
+const PATH_TO_TAB = {
+  business: 'Business',
+  tech: 'Tech',
+  operation: 'Operation',
+};
 
 export default function Presales() {
-    const navigate = useNavigate();
-    const { view } = useParams();
-    const showHistory = view === 'results';
-    const [leads, setLeads] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
+  const navigate = useNavigate();
+  const { view } = useParams();
+  const [loading, setLoading] = useState(true);
+  const [presales, setPresales] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [projectCategories, setProjectCategories] = useState([]);
+  const [projectRoles, setProjectRoles] = useState([]);
+  const [users, setUsers] = useState([]);
 
-    // Modal states
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [selectedLead, setSelectedLead] = useState(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+  const [isNewOpen, setIsNewOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-    const loadLeads = async () => {
-        setLoading(true);
-        try {
-            const res = await fetchAPI('/presales');
-            if (res.data) {
-                setLeads(res.data);
-            }
-        } catch (error) {
-            console.error("Failed to load leads", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const [newForm, setNewForm] = useState({
+    company_id: '',
+    project_name: '',
+    project_category_id: '',
+    estimated_budget: '',
+    project_description: '',
+  });
 
-    useEffect(() => {
-        loadLeads();
-    }, []);
+  const [businessForm, setBusinessForm] = useState({
+    deck_url: '',
+    quotation_url: '',
+    drive_url: '',
+    methodology: 'Agile Scrum',
+    total_manhours: '',
+    role_ids: [],
+    role_mh: {},
+  });
+  const [developmentMh, setDevelopmentMh] = useState({});
+  const [operationAssignments, setOperationAssignments] = useState({});
+  const [editForm, setEditForm] = useState({
+    id: null,
+    company_id: '',
+    project_name: '',
+    project_category_id: '',
+    estimated_budget: '',
+    project_description: '',
+  });
 
-    const stats = useMemo(() => {
-        const active = leads.filter(l => l.status !== 'Won' && l.status !== 'Lost');
-        const won = leads.filter(l => l.status === 'Won');
-        const totalValue = active.reduce((sum, l) => sum + (parseFloat(l.estimated_value) || 0), 0);
-        const winRate = leads.length ? Math.round((won.length / leads.length) * 100) : 0;
-        
-        return {
-            activeCount: active.length,
-            totalValue,
-            winRate,
-            leadsCount: leads.length
-        };
-    }, [leads]);
+  const selected = useMemo(
+    () => presales.find((item) => item.id?.toString() === selectedId?.toString()) || null,
+    [presales, selectedId]
+  );
 
-    const handleAddLead = async (e) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-        const formData = new FormData(e.target);
-        const rawVal = formData.get('estimated_value');
-        const payload = {
-            name: formData.get('name'),
-            sector: formData.get('sector'),
-            estimated_value: rawVal ? parseFloat(rawVal) : 0,
-            description: formData.get('description')
-        };
+  const canOpenTech = !!selected?.business_acknowledged_at;
+  const canOpenOperation = !!selected?.development_acknowledged_at;
+  const isProceeded = !!selected?.converted_project_id;
+  const canProceed =
+    !!selected?.business_acknowledged_at &&
+    !!selected?.development_acknowledged_at &&
+    !!selected?.operation_acknowledged_at &&
+    !isProceeded;
+  const activeTab = PATH_TO_TAB[(view || '').toLowerCase()] || 'Business';
 
-        try {
-            await fetchAPI('/presales', { method: 'POST', body: JSON.stringify(payload) });
-            setIsAddModalOpen(false);
-            loadLeads();
-        } catch (error) {
-            alert("Error creating lead: " + error.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      const [presaleRes, companyRes, categoryRes, roleRes, userRes] = await Promise.all([
+        fetchAPI('/presales'),
+        fetchAPI('/companies'),
+        fetchAPI('/project-categories'),
+        fetchAPI('/project-roles'),
+        fetchAPI('/users'),
+      ]);
 
-    const handleUpdateStatus = async (lead, newStatus) => {
-        try {
-            await fetchAPI(`/presales/${lead.id}`, {
-                method: 'PUT',
-                body: JSON.stringify({ status: newStatus })
-            });
-            loadLeads();
-            if (newStatus === 'Won') {
-                navigate('/create-project', { state: { fromLead: lead } });
-            }
-        } catch (error) {
-            alert(error.message);
-        }
-    };
+      const items = presaleRes.data || [];
+      setPresales(items);
+      setCompanies(companyRes.data || []);
+      setProjectCategories(categoryRes.data || []);
+      setProjectRoles(roleRes.data || []);
+      setUsers(userRes.data || []);
+      if (!selectedId && items.length) setSelectedId(items[0].id);
+    } catch (error) {
+      alert('Gagal memuat data presales: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const handleUpdateDetails = async (e) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-        const formData = new FormData(e.target);
-        const payload = Object.fromEntries(formData.entries());
-        if (payload.quotation_value) payload.quotation_value = parseFloat(payload.quotation_value);
-        if (payload.estimated_value) payload.estimated_value = parseFloat(payload.estimated_value);
+  useEffect(() => {
+    loadAll();
+  }, []);
 
-        try {
-            await fetchAPI(`/presales/${selectedLead.id}`, {
-                method: 'PUT',
-                body: JSON.stringify(payload)
-            });
-            setIsEditModalOpen(false);
-            loadLeads();
-        } catch (error) {
-            alert(error.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+  useEffect(() => {
+    const normalized = (view || '').toLowerCase();
+    if (!normalized || !PATH_TO_TAB[normalized]) {
+      navigate('/presales/business', { replace: true });
+    }
+  }, [view, navigate]);
 
-    const displayedLeads = useMemo(() => {
-        return leads.filter(l => {
-            const matchesSearch = l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                l.sector?.toLowerCase().includes(searchTerm.toLowerCase());
-            const isActive = l.status !== 'Won' && l.status !== 'Lost';
-            return matchesSearch && (showHistory ? !isActive : isActive);
-        });
-    }, [leads, searchTerm, showHistory]);
+  useEffect(() => {
+    if (!selected) return;
+    const roleReq = selected.role_requirements || [];
+    const roleMh = {};
+    const roleIds = roleReq.map((r) => r.project_role_id);
+    roleReq.forEach((r) => {
+      roleMh[r.project_role_id] = r.business_mh ?? '';
+    });
 
-    const formatCurrency = (val) => {
-        return new Intl.NumberFormat('id-ID', { 
-            style: 'currency', 
-            currency: 'IDR',
-            maximumFractionDigits: 0 
-        }).format(val || 0);
-    };
+    setBusinessForm({
+      deck_url: selected.deck_url || '',
+      quotation_url: selected.quotation_url || '',
+      drive_url: selected.drive_url || '',
+      methodology: selected.methodology || 'Agile Scrum',
+      total_manhours: selected.total_manhours ?? '',
+      role_ids: roleIds,
+      role_mh: roleMh,
+    });
 
-    const StatCard = ({ title, value, icon: Icon, trend, color }) => (
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 overflow-hidden relative group">
-            <div className={`absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity`}>
-                <Icon size={80} />
-            </div>
-            <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-2">
-                    <div className={`p-2 rounded-lg ${color} bg-opacity-10 dark:bg-opacity-20`}>
-                        <Icon className={`size-5 ${color.replace('bg-', 'text-')}`} />
-                    </div>
-                    <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">{title}</span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{value}</h3>
-                    {trend && <span className="text-xs font-bold text-emerald-500 flex items-center">{trend} <ArrowUpRight className="size-3" /></span>}
-                </div>
-            </CardContent>
-        </Card>
-    );
+    const devMap = {};
+    roleReq.forEach((r) => {
+      devMap[r.project_role_id] = r.development_mh ?? '';
+    });
+    setDevelopmentMh(devMap);
 
-    return (
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F8FAFC] dark:bg-background-dark h-full animate-fade">
-            <div className="px-8 pt-8 pb-4 shrink-0">
-                <div className="flex justify-between items-center mb-8">
-                    <div>
-                        <div className="flex items-center gap-3 mb-1">
-                            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Presales Pipeline</h1>
-                            <Badge className="bg-primary/10 text-primary border-none font-bold">PRO VERSION</Badge>
-                        </div>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium">Track opportunities and maximize your conversion rate.</p>
-                    </div>
-                    <div className="flex gap-3">
-                        <Button variant="outline" className="bg-white dark:bg-slate-900 shadow-sm border-slate-200" onClick={() => loadLeads()}>
-                            <TrendingUp className="size-4 mr-2" />
-                            Force Refresh
-                        </Button>
-                        <Button className="shadow-lg shadow-primary/20 gap-2 h-11 px-6 rounded-xl" onClick={() => setIsAddModalOpen(true)}>
-                            <Plus className="size-5" />
-                            New Opportunity
-                        </Button>
-                    </div>
-                </div>
+    const opMap = {};
+    (selected.operation_assignments || []).forEach((a) => {
+      if (!opMap[a.project_role_id]) opMap[a.project_role_id] = [];
+      opMap[a.project_role_id].push(a.user_id);
+    });
+    setOperationAssignments(opMap);
+  }, [selected]);
 
-                {/* Stats Dashboard */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <StatCard 
-                        title="Active Pipeline" 
-                        value={stats.activeCount} 
-                        icon={Target} 
-                        color="bg-primary"
-                    />
-                    <StatCard 
-                        title="Total Value" 
-                        value={formatCurrency(stats.totalValue)} 
-                        icon={Banknote} 
-                        color="bg-emerald-500"
-                        trend="+12%"
-                    />
-                    <StatCard 
-                        title="Win Rate" 
-                        value={`${stats.winRate}%`} 
-                        icon={TrendingUp} 
-                        color="bg-violet-500"
-                    />
-                    <StatCard 
-                        title="Database Size" 
-                        value={stats.leadsCount} 
-                        icon={Users} 
-                        color="bg-amber-500"
-                    />
-                </div>
+  const createOpportunity = async (e) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      const res = await fetchAPI('/presales', {
+        method: 'POST',
+        body: JSON.stringify({
+          company_id: parseInt(newForm.company_id),
+          project_name: newForm.project_name,
+          project_category_id: parseInt(newForm.project_category_id),
+          estimated_budget: Number(newForm.estimated_budget),
+          project_description: newForm.project_description,
+        }),
+      });
+      setIsNewOpen(false);
+      setNewForm({
+        company_id: '',
+        project_name: '',
+        project_category_id: '',
+        estimated_budget: '',
+        project_description: '',
+      });
+      await loadAll();
+      if (res?.id) setSelectedId(res.id);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-                <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800">
-                    <div className="relative flex-1 max-w-md">
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
-                        <Input
-                            placeholder="Filter leads by name or industry..."
-                            className="pl-11 bg-white dark:bg-slate-900 border-none shadow-sm rounded-xl h-11"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                        <Button
-                            variant={!showHistory ? "default" : "ghost"}
-                            className={`rounded-lg h-9 gap-2 px-4 ${!showHistory ? 'shadow-sm' : 'text-slate-500'}`}
-                            onClick={() => navigate('/presales')}
-                        >
-                            <TrendingUp className="size-4" /> Active
-                        </Button>
-                        <Button
-                            variant={showHistory ? "default" : "ghost"}
-                            className={`rounded-lg h-9 gap-2 px-4 ${showHistory ? 'shadow-sm' : 'text-slate-500'}`}
-                            onClick={() => navigate('/presales/results')}
-                        >
-                            <Clock className="size-4" /> Results
-                        </Button>
-                    </div>
-                </div>
-            </div>
+  const openEditOpportunity = (item) => {
+    setEditForm({
+      id: item.id,
+      company_id: item.company_id?.toString() || '',
+      project_name: item.project_name || item.name || '',
+      project_category_id: item.project_category_id?.toString() || '',
+      estimated_budget: item.estimated_budget ?? item.estimated_value ?? '',
+      project_description: item.project_description || item.description || '',
+    });
+    setIsEditOpen(true);
+  };
 
-            <div className="flex-1 overflow-x-auto px-8 pb-8 no-scrollbar">
-                <div className="flex gap-10 min-w-max h-full pb-10">
-                    {showHistory ? (
-                        ['Won', 'Lost'].map(status => (
-                            <div key={status} className="w-[340px] flex flex-col h-full">
-                                <div className="flex items-center justify-between px-4 mb-6">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`size-3 rounded-full ${status === 'Won' ? 'bg-emerald-400' : 'bg-rose-400'} ring-8 ${status === 'Won' ? 'ring-emerald-500/5' : 'ring-rose-500/5'}`}></div>
-                                        <h3 className="font-black text-slate-800 dark:text-slate-200 uppercase text-[12px] tracking-[0.2em]">{status}</h3>
-                                        <Badge className="bg-white dark:bg-slate-800 text-slate-500 shadow-sm border-slate-100 dark:border-slate-700 px-2 py-0 h-5 font-bold rounded-full">
-                                            {displayedLeads.filter(l => l.status === status).length}
-                                        </Badge>
-                                    </div>
-                                </div>
-                                <div className="flex-1 flex flex-col gap-5 overflow-y-auto no-scrollbar px-1">
-                                    {displayedLeads.filter(l => l.status === status).map(lead => (
-                                        <LeadCard key={lead.id} lead={lead} onClick={() => { setSelectedLead(lead); setIsEditModalOpen(true); }} onAction={handleUpdateStatus} formatCurrency={formatCurrency} />
-                                    ))}
-                                </div>
-                            </div>
-                        ))
-                    ) : (
-                        PIPELINE_STAGES.map(stage => (
-                            <div key={stage.id} className="w-[340px] flex flex-col h-full">
-                                <div className="flex items-center justify-between px-4 mb-6">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-2.5 rounded-2xl ${stage.color} ${stage.text}`}>
-                                            <stage.icon className="size-5" />
-                                        </div>
-                                        <h3 className="font-black text-slate-800 dark:text-slate-200 text-sm tracking-tight">{stage.label}</h3>
-                                        <div className={`size-6 rounded-full ${stage.color} flex items-center justify-center text-[10px] font-black ${stage.text}`}>
-                                            {displayedLeads.filter(l => l.status === stage.id).length}
-                                        </div>
-                                    </div>
-                                    <Button variant="ghost" size="icon" className="size-9 rounded-xl text-slate-400 hover:bg-white hover:shadow-sm" onClick={() => setIsAddModalOpen(true)}><Plus size={20} /></Button>
-                                </div>
+  const updateOpportunity = async (e) => {
+    e.preventDefault();
+    if (!editForm.id) return;
+    setIsSaving(true);
+    try {
+      await fetchAPI(`/presales/${editForm.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          company_id: editForm.company_id ? parseInt(editForm.company_id) : null,
+          project_name: editForm.project_name,
+          project_category_id: editForm.project_category_id ? parseInt(editForm.project_category_id) : null,
+          estimated_budget: editForm.estimated_budget !== '' ? Number(editForm.estimated_budget) : null,
+          project_description: editForm.project_description || null,
+          // keep legacy mirrored fields in sync
+          name: editForm.project_name,
+          estimated_value: editForm.estimated_budget !== '' ? Number(editForm.estimated_budget) : null,
+          description: editForm.project_description || null,
+        }),
+      });
+      setIsEditOpen(false);
+      await loadAll();
+      alert('Opportunity berhasil diupdate.');
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-                                <div className="flex-1 flex flex-col gap-5 overflow-y-auto no-scrollbar px-1 min-h-0">
-                                    {displayedLeads.filter(l => l.status === stage.id).map(lead => (
-                                        <LeadCard key={lead.id} lead={lead} onClick={() => { setSelectedLead(lead); setIsEditModalOpen(true); }} onAction={handleUpdateStatus} formatCurrency={formatCurrency} />
-                                    ))}
-                                    <button 
-                                        onClick={() => setIsAddModalOpen(true)}
-                                        className={`w-full flex items-center justify-center gap-2 py-6 rounded-[2rem] border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400 hover:border-${stage.accent.replace('bg-', '')} hover:bg-${stage.accent.replace('bg-', '')}/5 hover:text-${stage.accent.replace('bg-', '')} transition-all group`}
-                                    >
-                                        <Plus className="size-5 group-hover:scale-110 transition-transform" />
-                                        <span className="text-xs font-black uppercase tracking-[0.1em]">Add New Opportunity</span>
-                                    </button>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
+  const saveBusiness = async () => {
+    if (!selected) return;
+    try {
+      await fetchAPI(`/presales/${selected.id}/business`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          deck_url: businessForm.deck_url,
+          quotation_url: businessForm.quotation_url,
+          drive_url: businessForm.drive_url,
+          methodology: businessForm.methodology,
+          total_manhours:
+            businessForm.methodology === 'Agile Scrum' ? Number(businessForm.total_manhours || 0) : null,
+          project_role_ids: businessForm.role_ids,
+          business_role_mh: businessForm.role_mh,
+        }),
+      });
+      await loadAll();
+      alert('Data Business tersimpan.');
+    } catch (error) {
+      alert(error.message);
+    }
+  };
 
-            {/* Modals remain mostly the same but with refined styling */}
-            <AddLeadModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddLead} isSubmitting={isSubmitting} />
-            <EditLeadModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSubmit={handleUpdateDetails} lead={selectedLead} isSubmitting={isSubmitting} />
+  const acknowledgeBusiness = async () => {
+    if (!selected) return;
+    try {
+      await fetchAPI(`/presales/${selected.id}/business/acknowledge`, { method: 'POST' });
+      await loadAll();
+      alert('Business acknowledged.');
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const saveDevelopment = async () => {
+    if (!selected) return;
+    try {
+      await fetchAPI(`/presales/${selected.id}/development`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          development_role_mh: developmentMh,
+        }),
+      });
+      await loadAll();
+      alert('Data Tech tersimpan.');
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const acknowledgeDevelopment = async () => {
+    if (!selected) return;
+    try {
+      await fetchAPI(`/presales/${selected.id}/development/acknowledge`, { method: 'POST' });
+      await loadAll();
+      alert('Development acknowledged.');
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const saveOperation = async () => {
+    if (!selected) return;
+    try {
+      const assignments = businessForm.role_ids.map((roleId) => ({
+        project_role_id: roleId,
+        user_ids: operationAssignments[roleId] || [],
+      }));
+      await fetchAPI(`/presales/${selected.id}/operation`, {
+        method: 'PUT',
+        body: JSON.stringify({ assignments }),
+      });
+      await loadAll();
+      alert('Data Operation tersimpan.');
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const acknowledgeOperation = async () => {
+    if (!selected) return;
+    try {
+      await fetchAPI(`/presales/${selected.id}/operation/acknowledge`, { method: 'POST' });
+      await loadAll();
+      alert('Operation acknowledged.');
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const proceedProject = async () => {
+    if (!selected) return;
+    try {
+      const res = await fetchAPI(`/presales/${selected.id}/proceed-project`, { method: 'POST' });
+      if (res.project_id) navigate(`/board/${res.project_id}`);
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const toggleRole = (roleId) => {
+    setBusinessForm((prev) => {
+      const exists = prev.role_ids.includes(roleId);
+      const role_ids = exists ? prev.role_ids.filter((id) => id !== roleId) : [...prev.role_ids, roleId];
+      return { ...prev, role_ids };
+    });
+  };
+
+  const setAssignmentUsers = (roleId, userId, checked) => {
+    setOperationAssignments((prev) => {
+      const existing = prev[roleId] || [];
+      const next = checked ? [...existing, userId] : existing.filter((id) => id !== userId);
+      return { ...prev, [roleId]: Array.from(new Set(next)) };
+    });
+  };
+
+  if (loading) {
+    return <div className="p-8 text-slate-500">Loading presales flow...</div>;
+  }
+
+  return (
+    <div className="p-8 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Presales</h1>
+          <p className="text-slate-500 mt-1">Flow Business to Tech to Operation sampai Proceed Project.</p>
         </div>
-    );
-}
+        <Button onClick={() => setIsNewOpen(true)}>
+          <Plus className="size-4 mr-2" />
+          New Opportunity
+        </Button>
+      </div>
 
-function LeadCard({ lead, onClick, onAction, formatCurrency }) {
-    const stage = PIPELINE_STAGES.find(s => s.id === lead.status) || { accent: 'bg-primary' };
-    
-    return (
-        <Card 
-            className="group relative hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 cursor-pointer border-none bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden shadow-xl shadow-slate-200/50 dark:shadow-none animate-in-card min-h-[180px]" 
-            onClick={onClick}
-        >
-            <div className={`absolute top-0 left-0 w-1.5 h-full ${stage.accent} opacity-0 group-hover:opacity-100 transition-opacity`} />
-            
-            <CardContent className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                    <Badge variant="secondary" className="px-3 py-1 text-[10px] font-black tracking-widest uppercase bg-slate-50 dark:bg-slate-800 text-slate-400 border-none rounded-full">
-                        {lead.sector || 'General'}
-                    </Badge>
-                    
-                    <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="size-8 rounded-full text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10" 
-                            onClick={(e) => { e.stopPropagation(); onAction(lead, 'Won'); }}
-                        >
-                            <CheckCircle2 size={16} />
-                        </Button>
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="size-8 rounded-full text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10" 
-                            onClick={(e) => { e.stopPropagation(); onAction(lead, 'Lost'); }}
-                        >
-                            <XCircle size={16} />
-                        </Button>
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <Card className="xl:col-span-4">
+          <CardHeader>
+            <CardTitle>Opportunity List</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 max-h-[70vh] overflow-y-auto">
+            {presales.length === 0 ? (
+              <p className="text-slate-500">Belum ada opportunity.</p>
+            ) : (
+              presales.map((item) => (
+                <div
+                  key={item.id}
+                  className={`w-full text-left border rounded-lg p-3 transition cursor-pointer ${
+                    selectedId === item.id ? 'border-primary bg-primary/5' : 'hover:bg-slate-50'
+                  }`}
+                  onClick={() => setSelectedId(item.id)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{item.project_name || item.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {item.company?.name || '-'} - {item.project_category?.name || '-'}
+                      </p>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      disabled={!!item.converted_project_id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditOpportunity(item);
+                      }}
+                      title="Edit Opportunity"
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2 max-w-full">
+                    {item.business_acknowledged_at && (
+                      <Badge className="bg-blue-600 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
+                        Business Ack
+                      </Badge>
+                    )}
+                    {item.development_acknowledged_at && (
+                      <Badge className="bg-purple-600 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
+                        Tech Ack
+                      </Badge>
+                    )}
+                    {item.operation_acknowledged_at && (
+                      <Badge className="bg-green-600 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
+                        Operation Ack
+                      </Badge>
+                    )}
+                    {item.converted_project_id && (
+                      <Badge className="bg-emerald-600 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
+                        Proceeded
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-
-                <h4 className="font-black text-slate-800 dark:text-white text-lg mb-6 leading-tight group-hover:text-primary transition-colors">
-                    {lead.name}
-                </h4>
-                
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="size-9 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
-                                <Banknote className="size-4 text-emerald-500" />
-                            </div>
-                            <span className="text-base font-black text-slate-900 dark:text-white tracking-tight">
-                                {formatCurrency(lead.estimated_value)}
-                            </span>
-                        </div>
-                        
-                        <div className="flex -space-x-2">
-                            <div className="size-8 rounded-full border-4 border-white dark:border-slate-900 bg-gradient-to-br from-indigo-100 to-primary/20 flex items-center justify-center text-[11px] font-black text-primary uppercase shadow-sm">
-                                {lead.name.charAt(0)}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
-                        <div className="flex gap-2">
-                            {lead.proposal_doc_url && (
-                                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-500" title="Proposal Ready">
-                                    <FileText className="size-4" />
-                                </div>
-                            )}
-                            {lead.presentation_log && (
-                                <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-500" title="Presentation Logged">
-                                    <Presentation className="size-4" />
-                                </div>
-                            )}
-                            {!lead.proposal_doc_url && !lead.presentation_log && (
-                                <span className="text-[11px] text-slate-300 dark:text-slate-600 font-bold uppercase tracking-wider">No artifacts</span>
-                            )}
-                        </div>
-                        
-                        <div className="flex items-center gap-2 text-slate-400">
-                            <Clock size={14} />
-                            <span className="text-[11px] font-black uppercase tracking-widest">
-                                {new Date(lead.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </CardContent>
+              ))
+            )}
+          </CardContent>
         </Card>
-    );
-}
 
-function AddLeadModal({ isOpen, onClose, onSubmit, isSubmitting }) {
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[450px] rounded-3xl border-none shadow-2xl">
-                <DialogHeader>
-                    <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-4">
-                        <Plus size={24} />
-                    </div>
-                    <DialogTitle className="text-2xl font-black tracking-tight">New Opportunity</DialogTitle>
-                    <DialogDescription className="font-medium text-slate-500">Kickstart a new sales cycle by entering the lead details.</DialogDescription>
-                </DialogHeader>
-                <form onSubmit={onSubmit} className="flex flex-col gap-6 py-4">
-                    <div className="space-y-2">
-                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">Identity</label>
-                        <Input name="name" required placeholder="Client Name (e.g. PT Arta Graha)" className="h-12 rounded-xl bg-slate-50 border-none shadow-inner" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Sector</label>
-                            <Input name="sector" placeholder="e.g. Fintech" className="h-12 rounded-xl bg-slate-50 border-none shadow-inner" />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Est. Value</label>
-                            <div className="relative">
-                                <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
-                                <Input name="estimated_value" type="number" placeholder="Budget (Rp)" className="h-12 pl-9 rounded-xl bg-slate-50 border-none shadow-inner" />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">Context</label>
-                        <Textarea name="description" placeholder="Briefly describe the pain points and project scope..." className="min-h-[100px] rounded-2xl bg-slate-50 border-none shadow-inner" />
-                    </div>
-                    <DialogFooter className="pt-2">
-                        <Button type="button" variant="ghost" onClick={onClose} className="rounded-xl h-12">Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting} className="rounded-xl h-12 px-8 shadow-lg shadow-primary/25">
-                            {isSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="size-4 mr-2" />}
-                            Initialize Lead
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-function EditLeadModal({ isOpen, onClose, onSubmit, lead, isSubmitting }) {
-    if (!lead) return null;
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[550px] rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden">
-                <div className="h-24 bg-gradient-to-r from-primary to-indigo-600 p-8 flex items-end">
-                    <h2 className="text-2xl font-black text-white tracking-tight leading-none">Deal Engineering</h2>
+        <Card className="xl:col-span-8">
+          {!selected ? (
+            <CardContent className="p-8 text-slate-500">Pilih opportunity dulu.</CardContent>
+          ) : (
+            <>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <CardTitle>{selected.project_name}</CardTitle>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {selected.company?.name || '-'} | {selected.project_category?.name || '-'}
+                    </p>
+                    {isProceeded && (
+                      <p className="text-xs text-emerald-600 mt-1 font-medium">
+                        Opportunity sudah di-proceed ke project board, semua field dikunci.
+                      </p>
+                    )}
+                  </div>
+                  {canProceed && (
+                    <Button onClick={proceedProject}>
+                      <CheckCircle2 className="size-4 mr-2" />
+                      Proceed Project
+                    </Button>
+                  )}
                 </div>
-                <div className="p-8 pb-4 max-h-[75vh] overflow-y-auto no-scrollbar">
-                    <form onSubmit={onSubmit} className="flex flex-col gap-8">
-                        <div className="grid grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Client</label>
-                                <Input name="name" defaultValue={lead.name} required className="h-11 rounded-xl bg-slate-50 border-none font-bold" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Vertical</label>
-                                <Input name="sector" defaultValue={lead.sector} className="h-11 rounded-xl bg-slate-50 border-none font-bold" />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Business Objective</label>
-                            <Textarea name="description" defaultValue={lead.description} className="rounded-2xl bg-slate-50 border-none min-h-[80px]" />
-                        </div>
-
-                        <div className="space-y-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                            <h4 className="text-xs font-black uppercase text-primary tracking-[0.1em]">Execution Workflow</h4>
-                            
-                            <div className="grid grid-cols-1 gap-5">
-                                <div className="p-4 rounded-2xl bg-blue-500 bg-opacity-5 border border-blue-100 dark:border-blue-900/30">
-                                    <label className="text-xs font-bold flex items-center gap-2 text-blue-700 dark:text-blue-400 mb-3"><Upload size={14} /> Proposal Artifacts</label>
-                                    <Input name="proposal_doc_url" defaultValue={lead.proposal_doc_url} placeholder="Sharepoint/G-Drive URL..." className="bg-white dark:bg-slate-800 border-none shadow-sm h-10 rounded-lg text-sm text-slate-900 dark:text-white" />
-                                </div>
-
-                                <div className="p-4 rounded-2xl bg-purple-500 bg-opacity-5 border border-purple-100 dark:border-purple-900/30">
-                                    <label className="text-xs font-bold flex items-center gap-2 text-purple-700 dark:text-purple-400 mb-3"><Presentation size={14} /> Intelligence & Feedback</label>
-                                    <Textarea name="presentation_log" defaultValue={lead.presentation_log} placeholder="Key meeting notes..." className="bg-white dark:bg-slate-800 border-none shadow-sm rounded-lg min-h-[80px] text-sm text-slate-900 dark:text-white" />
-                                </div>
-
-                                <div className="p-4 rounded-2xl bg-amber-500 bg-opacity-5 border border-amber-100 dark:border-amber-900/30">
-                                    <label className="text-xs font-bold flex items-center gap-2 text-amber-700 dark:text-amber-400 mb-3"><Banknote size={14} /> Official Financials</label>
-                                    <Input name="quotation_value" type="number" defaultValue={lead.quotation_value} placeholder="Official Quote (IDR)" className="bg-white dark:bg-slate-800 border-none shadow-sm h-10 rounded-lg text-sm text-slate-900 dark:text-white" />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-6 items-end">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Pipeline State</label>
-                                    <Select name="status" defaultValue={lead.status}>
-                                        <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-none font-bold">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {PIPELINE_STAGES.map(s => (
-                                                <SelectItem key={s.id} value={s.id} className="font-bold">{s.label}</SelectItem>
-                                            ))}
-                                            <SelectItem value="Lost" className="font-bold text-rose-500">Archive (Lost)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="flex gap-2 h-11">
-                                    <Button type="submit" disabled={isSubmitting} className="flex-1 rounded-xl font-bold shadow-lg shadow-primary/20">
-                                        {isSubmitting ? <Loader2 className="animate-spin size-4" /> : 'Apply Intelligence'}
-                                    </Button>
-                                    <Button type="button" variant="ghost" onClick={onClose} className="rounded-xl px-4 text-slate-400">Close</Button>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
+                <div className="flex gap-2 mt-4">
+                  {TAB_KEYS.map((tab) => {
+                    const disabled = (tab === 'Tech' && !canOpenTech) || (tab === 'Operation' && !canOpenOperation);
+                    return (
+                      <Button
+                        key={tab}
+                        variant={activeTab === tab ? 'default' : 'outline'}
+                        disabled={disabled}
+                        onClick={() => navigate(`/presales/${TAB_TO_PATH[tab]}`)}
+                      >
+                        {tab}
+                      </Button>
+                    );
+                  })}
                 </div>
-                <div className="h-4 bg-slate-50 dark:bg-slate-900"></div>
-            </DialogContent>
-        </Dialog>
-    );
+              </CardHeader>
+
+              <CardContent className="space-y-6">
+                {activeTab === 'Business' && (
+                  <div className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <label className="space-y-2">
+                        <span className="text-sm font-medium">Deck URL</span>
+                        <Input
+                          value={businessForm.deck_url}
+                          disabled={isProceeded}
+                          onChange={(e) => setBusinessForm((prev) => ({ ...prev, deck_url: e.target.value }))}
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-sm font-medium">Quotation URL</span>
+                        <Input
+                          value={businessForm.quotation_url}
+                          disabled={isProceeded}
+                          onChange={(e) => setBusinessForm((prev) => ({ ...prev, quotation_url: e.target.value }))}
+                        />
+                      </label>
+                    </div>
+                    <label className="space-y-2 block">
+                      <span className="text-sm font-medium">Google Drive URL</span>
+                      <Input
+                        value={businessForm.drive_url}
+                        disabled={isProceeded}
+                        onChange={(e) => setBusinessForm((prev) => ({ ...prev, drive_url: e.target.value }))}
+                      />
+                    </label>
+
+                    <div>
+                      <p className="text-sm font-medium mb-2">Methodology</p>
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            checked={businessForm.methodology === 'Agile Scrum'}
+                            disabled={isProceeded}
+                            onChange={() => setBusinessForm((prev) => ({ ...prev, methodology: 'Agile Scrum' }))}
+                          />
+                          Agile Scrum
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            checked={businessForm.methodology === 'Waterfall'}
+                            disabled={isProceeded}
+                            onChange={() => setBusinessForm((prev) => ({ ...prev, methodology: 'Waterfall' }))}
+                          />
+                          Waterfall
+                        </label>
+                      </div>
+                    </div>
+
+                    {businessForm.methodology === 'Agile Scrum' && (
+                      <label className="space-y-2 block">
+                        <span className="text-sm font-medium">Total MH</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={businessForm.total_manhours}
+                          disabled={isProceeded}
+                          onChange={(e) => setBusinessForm((prev) => ({ ...prev, total_manhours: e.target.value }))}
+                        />
+                      </label>
+                    )}
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Kebutuhan Role</p>
+                      <div className="grid md:grid-cols-2 gap-2">
+                        {projectRoles.map((role) => (
+                          <label key={role.id} className="border rounded p-2 flex items-center justify-between">
+                            <span>{role.name}</span>
+                            <input
+                              type="checkbox"
+                              checked={businessForm.role_ids.includes(role.id)}
+                              disabled={isProceeded}
+                              onChange={() => toggleRole(role.id)}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+
+                    <div className="flex gap-2">
+                      <Button onClick={saveBusiness} disabled={isProceeded}>Save Business</Button>
+                      <Button variant="outline" onClick={acknowledgeBusiness} disabled={isProceeded}>
+                        Acknowledge
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'Tech' && (
+                  <div className="space-y-4">
+                    {businessForm.methodology === 'Agile Scrum' && (
+                      <p className="text-sm text-slate-600">
+                        Total MH dari Business: <b>{selected.total_manhours || 0}</b>
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Role dari Business</p>
+                      {businessForm.role_ids.length === 0 ? (
+                        <p className="text-slate-500 text-sm">Belum ada role dipilih di Business.</p>
+                      ) : (
+                        businessForm.role_ids.map((roleId) => {
+                          const role = projectRoles.find((r) => r.id === roleId);
+                          return (
+                            <div key={roleId} className="flex items-center gap-3">
+                              <span className="w-40 text-sm">{role?.name || `Role ${roleId}`}</span>
+                              {businessForm.methodology === 'Agile Scrum' ? (
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={developmentMh[roleId] ?? ''}
+                                  disabled={isProceeded}
+                                  onChange={(e) => setDevelopmentMh((prev) => ({ ...prev, [roleId]: e.target.value }))}
+                                  placeholder="MH Development"
+                                />
+                              ) : (
+                                <span className="text-sm text-slate-500">Waterfall - tanpa input MH</span>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={saveDevelopment} disabled={isProceeded}>Save Development</Button>
+                      <Button variant="outline" onClick={acknowledgeDevelopment} disabled={isProceeded}>
+                        Acknowledge
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'Operation' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-slate-600">Pilih user berdasarkan role yang sudah disepakati.</p>
+                    {businessForm.role_ids.map((roleId) => {
+                      const role = projectRoles.find((r) => r.id === roleId);
+                      return (
+                        <div key={roleId} className="border rounded-lg p-3 space-y-2">
+                          <p className="font-medium">{role?.name || `Role ${roleId}`}</p>
+                          <div className="grid md:grid-cols-2 gap-2">
+                            {users.map((user) => {
+                              const checked = (operationAssignments[roleId] || []).includes(user.id);
+                              return (
+                                <label key={user.id} className="border rounded p-2 flex items-center justify-between">
+                                  <span className="text-sm">
+                                    {user.name} <span className="text-slate-400">({user.role?.name || user.role})</span>
+                                  </span>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    disabled={isProceeded}
+                                    onChange={(e) => setAssignmentUsers(roleId, user.id, e.target.checked)}
+                                  />
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="flex gap-2">
+                      <Button onClick={saveOperation} disabled={isProceeded}>Save Operation</Button>
+                      <Button variant="outline" onClick={acknowledgeOperation} disabled={isProceeded}>
+                        Acknowledge
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </>
+          )}
+        </Card>
+      </div>
+
+      <Dialog open={isNewOpen} onOpenChange={setIsNewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Opportunity</DialogTitle>
+            <DialogDescription>Buat opportunity baru dari alur presales.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={createOpportunity} className="space-y-4">
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Nama Company</span>
+              <select
+                className="w-full border rounded-md p-2"
+                value={newForm.company_id}
+                onChange={(e) => setNewForm((prev) => ({ ...prev, company_id: e.target.value }))}
+                required
+              >
+                <option value="">Pilih company</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Project Name</span>
+              <Input
+                value={newForm.project_name}
+                onChange={(e) => setNewForm((prev) => ({ ...prev, project_name: e.target.value }))}
+                required
+              />
+            </label>
+
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Category Project</span>
+              <select
+                className="w-full border rounded-md p-2"
+                value={newForm.project_category_id}
+                onChange={(e) => setNewForm((prev) => ({ ...prev, project_category_id: e.target.value }))}
+                required
+              >
+                <option value="">Pilih category</option>
+                {projectCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Estimasi Budget (IDR)</span>
+              <Input
+                type="number"
+                min="0"
+                value={newForm.estimated_budget}
+                onChange={(e) => setNewForm((prev) => ({ ...prev, estimated_budget: e.target.value }))}
+                required
+              />
+            </label>
+
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Deskripsi Project</span>
+              <Textarea
+                value={newForm.project_description}
+                onChange={(e) => setNewForm((prev) => ({ ...prev, project_description: e.target.value }))}
+              />
+            </label>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsNewOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Create Opportunity'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Opportunity</DialogTitle>
+            <DialogDescription>Ubah data utama opportunity dari list.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={updateOpportunity} className="space-y-4">
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Nama Company</span>
+              <select
+                className="w-full border rounded-md p-2"
+                value={editForm.company_id}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, company_id: e.target.value }))}
+                required
+              >
+                <option value="">Pilih company</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Project Name</span>
+              <Input
+                value={editForm.project_name}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, project_name: e.target.value }))}
+                required
+              />
+            </label>
+
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Category Project</span>
+              <select
+                className="w-full border rounded-md p-2"
+                value={editForm.project_category_id}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, project_category_id: e.target.value }))}
+                required
+              >
+                <option value="">Pilih category</option>
+                {projectCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Estimasi Budget (IDR)</span>
+              <Input
+                type="number"
+                min="0"
+                value={editForm.estimated_budget}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, estimated_budget: e.target.value }))}
+                required
+              />
+            </label>
+
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Deskripsi Project</span>
+              <Textarea
+                value={editForm.project_description}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, project_description: e.target.value }))}
+              />
+            </label>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }

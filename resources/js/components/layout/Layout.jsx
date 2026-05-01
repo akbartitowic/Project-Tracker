@@ -8,11 +8,14 @@ export default function Layout() {
     // Determine header title based on route
     const getHeaderTitle = (pathname) => {
         if (pathname === '/') return 'Executive Overview';
-        if (pathname === '/create-project') return 'Create New Project';
+        if (pathname === '/create-project') return 'List Project';
         if (pathname === '/board') return 'Project Board';
         if (pathname === '/users') return 'Team & Users';
         if (pathname === '/manhours') return 'Manhours Ledger';
         if (pathname === '/reports') return 'Reports';
+        if (pathname === '/presales-companies') return 'Presales - List Company';
+        if (pathname === '/presales-project-categories') return 'Presales - Category Project';
+        if (pathname === '/finance-realization-report') return 'Finance - Realization Report';
         return 'Overview';
     };
 

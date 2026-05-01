@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { fetchAPI } from '../services/api';
 import { Wallet, Plus, Trash2, PieChart, Info, ArrowUpRight, Banknote, ListFilter, Search, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,6 +14,7 @@ export default function FinanceMonitoring() {
     const [selectedProject, setSelectedProject] = useState(null);
     const [summary, setSummary] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [allocationTab, setAllocationTab] = useState('expense');
 
     // Allocation Form States
     const [newAllocation, setNewAllocation] = useState({
@@ -34,7 +35,14 @@ export default function FinanceMonitoring() {
     // Quota Details States
     const [isQuotaDetailsOpen, setIsQuotaDetailsOpen] = useState(false);
     const [quotaBreakdown, setQuotaBreakdown] = useState([]);
+    const [quotaMeta, setQuotaMeta] = useState(null);
     const [loadingQuotas, setLoadingQuotas] = useState(false);
+
+    const selectedProjectData = useMemo(
+        () => projects.find((project) => project.id === selectedProject) || null,
+        [projects, selectedProject]
+    );
+    const isWaterfallProject = selectedProjectData?.methodology === 'Waterfall';
 
     const loadInitialData = async () => {
         try {
@@ -58,6 +66,10 @@ export default function FinanceMonitoring() {
             const res = await fetchAPI(`/projects/${projectId}/finance-summary`);
             setSummary(res.data);
             setSelectedProject(projectId);
+            
+            const qRes = await fetchAPI(`/projects/${projectId}/quotas`);
+            setQuotaBreakdown(qRes.data || []);
+            setQuotaMeta(qRes.meta || null);
         } catch (error) {
             alert('Failed to load project finance details');
         }
@@ -97,8 +109,38 @@ export default function FinanceMonitoring() {
         }
     };
 
+    const handleRealizeAllocation = async (allocation) => {
+        if (!selectedProject) return;
+        const defaultValue = allocation.realized_amount ?? allocation.amount ?? 0;
+        const input = window.prompt(
+            `Input Realization amount for "${allocation.category_name}"`,
+            Number(defaultValue)
+        );
+
+        if (input === null) return;
+        const parsed = Number(input);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+            alert('Realization amount must be a valid number (>= 0).');
+            return;
+        }
+
+        try {
+            await fetchAPI(`/project-allocations/${allocation.id}/realization`, {
+                method: 'PUT',
+                body: JSON.stringify({ realized_amount: parsed }),
+            });
+            loadProjectFinance(selectedProject);
+        } catch (error) {
+            alert('Failed to save realization: ' + error.message);
+        }
+    };
+
     const handleTopUp = async (e) => {
         e.preventDefault();
+        if (isWaterfallProject) {
+            alert('Top up quota tidak tersedia untuk project Waterfall.');
+            return;
+        }
         if (!selectedProject || !topUpData.category_id || !topUpData.project_role_id) return;
 
         try {
@@ -126,6 +168,7 @@ export default function FinanceMonitoring() {
         try {
             const res = await fetchAPI(`/projects/${selectedProject}/quotas`);
             setQuotaBreakdown(res.data || []);
+            setQuotaMeta(res.meta || null);
         } catch (error) {
             console.error('Failed to load quota breakdown:', error);
         } finally {
@@ -141,11 +184,31 @@ export default function FinanceMonitoring() {
         }).format(val);
     };
 
+    const formatHours = (val) => {
+        const num = Number(val || 0);
+        return Number.isInteger(num) ? `${num}` : num.toFixed(1);
+    };
+
+    const generalQuota = quotaMeta?.general_quota || {
+        base_quota_hours: 0,
+        topup_quota_hours: 0,
+        current_quota_hours: 0,
+        allocated_hours: 0,
+        actual_hours: 0,
+        remaining_hours: 0,
+    };
+    const hasGeneralTopUp = Number(generalQuota.topup_quota_hours || 0) > 0;
+
     const filteredProjects = projects.filter(p =>
         p.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const allocationPercentage = summary ? (summary.total_allocated / (summary.quotation_value || 1)) * 100 : 0;
+    const allocations = summary?.allocations || [];
+    const expenseAllocations = allocations.filter((alloc) => !alloc.is_topup);
+    const incomeAllocations = allocations.filter((alloc) => alloc.is_topup);
+    const activeAllocations = allocationTab === 'income' ? incomeAllocations : expenseAllocations;
+    const activeAllocationTotal = activeAllocations.reduce((sum, alloc) => sum + Number(alloc.amount || 0), 0);
 
     return (
         <div className="p-8 max-w-[1400px] mx-auto pb-20">
@@ -239,6 +302,13 @@ export default function FinanceMonitoring() {
                                                 <CardTitle className="text-xl mt-1">
                                                     {summary.allocated_hours}/{summary.total_manhours} <span className="text-sm font-normal text-slate-500 uppercase ml-1">Hours</span>
                                                 </CardTitle>
+                                                {summary.has_topup_manhours ? (
+                                                    <div className="mt-2 inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5">
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                                                            Top Up MH +{formatHours(summary.topup_hours_total)}h
+                                                        </span>
+                                                    </div>
+                                                ) : null}
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Remaining</div>
@@ -250,18 +320,27 @@ export default function FinanceMonitoring() {
                                         <Progress value={(summary.allocated_hours / (summary.total_manhours || 1)) * 100} className="h-1.5 mt-3" />
                                     </CardHeader>
                                 </Card>
-                                <Card className="flex items-center justify-center p-6 border-dashed border-2 hover:bg-slate-50 dark:hover:bg-slate-900/50 cursor-pointer transition-colors group"
-                                     onClick={() => setIsTopUpOpen(true)}>
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                                            <Plus className="size-6" />
-                                        </div>
+                                {isWaterfallProject ? (
+                                    <Card className="flex items-center justify-center p-6 border-dashed border-2 bg-slate-50/60 dark:bg-slate-900/30">
                                         <div className="text-left">
                                             <h3 className="font-bold text-slate-900 dark:text-white">Top Up Quota</h3>
-                                            <p className="text-xs text-slate-500">Increase budget and manhour limits.</p>
+                                            <p className="text-xs text-slate-500">Tidak tersedia untuk project Waterfall.</p>
                                         </div>
-                                    </div>
-                                </Card>
+                                    </Card>
+                                ) : (
+                                    <Card className="flex items-center justify-center p-6 border-dashed border-2 hover:bg-slate-50 dark:hover:bg-slate-900/50 cursor-pointer transition-colors group"
+                                         onClick={() => setIsTopUpOpen(true)}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                                                <Plus className="size-6" />
+                                            </div>
+                                            <div className="text-left">
+                                                <h3 className="font-bold text-slate-900 dark:text-white">Top Up Quota</h3>
+                                                <p className="text-xs text-slate-500">Increase budget and manhour limits.</p>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                )}
                             </div>
 
                             <Card>
@@ -271,10 +350,43 @@ export default function FinanceMonitoring() {
                                             <PieChart className="size-5 text-primary" /> Allocation Breakdown
                                         </CardTitle>
                                         <div className="text-xs font-medium text-slate-500 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
-                                            <Info className="size-3" /> {allocationPercentage.toFixed(1)}% of quotation used
+                                            <Info className="size-3" />
+                                            {allocationTab === 'expense'
+                                                ? `${allocationPercentage.toFixed(1)}% of quotation used`
+                                                : `Top Up total: ${formatCurrency(activeAllocationTotal)}`}
                                         </div>
                                     </div>
-                                    <Progress value={allocationPercentage} className="h-2 mt-2" />
+                                    {allocationTab === 'expense' ? (
+                                        <Progress value={allocationPercentage} className="h-2 mt-2" />
+                                    ) : (
+                                        <div className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                                            Pemasukan berasal dari transaksi Top Up Quota.
+                                        </div>
+                                    )}
+                                    <div className="mt-4 inline-flex rounded-lg border border-slate-200 dark:border-slate-800 p-1 bg-slate-50 dark:bg-slate-900/40">
+                                        <button
+                                            type="button"
+                                            onClick={() => setAllocationTab('expense')}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${
+                                                allocationTab === 'expense'
+                                                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
+                                            }`}
+                                        >
+                                            Pengeluaran ({expenseAllocations.length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setAllocationTab('income')}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${
+                                                allocationTab === 'income'
+                                                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                                                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
+                                            }`}
+                                        >
+                                            Pemasukan ({incomeAllocations.length})
+                                        </button>
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="overflow-x-auto">
@@ -283,34 +395,66 @@ export default function FinanceMonitoring() {
                                                 <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500">
                                                     <th className="text-left font-medium pb-3 px-2">Category</th>
                                                     <th className="text-left font-medium pb-3 px-2">Description</th>
-                                                    <th className="text-right font-medium pb-3 px-2 w-32">Amount</th>
-                                                    <th className="text-right font-medium pb-3 px-2 w-16"></th>
+                                                    <th className="text-right font-medium pb-3 px-2 w-40">
+                                                        {allocationTab === 'expense' ? 'Final Expense' : 'Amount'}
+                                                    </th>
+                                                    <th className="text-right font-medium pb-3 px-2 w-40"></th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
-                                                {summary.allocations.length === 0 ? (
+                                                {activeAllocations.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan="4" className="py-8 text-center text-slate-400 italic">No allocations yet. Add one below.</td>
+                                                        <td colSpan="4" className="py-8 text-center text-slate-400 italic">
+                                                            {allocationTab === 'income'
+                                                                ? 'Belum ada pemasukan (Top Up) untuk project ini.'
+                                                                : 'Belum ada pengeluaran. Tambahkan alokasi di bawah.'}
+                                                        </td>
                                                     </tr>
                                                 ) : (
-                                                    summary.allocations.map(alloc => (
+                                                    activeAllocations.map(alloc => (
                                                         <tr key={alloc.id} className="group">
                                                             <td className="py-3 px-2">
                                                                 <span className="font-medium text-slate-900 dark:text-white">
                                                                     {alloc.category_name}
-                                                                    {alloc.is_topup ? <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-bold uppercase tracking-tight">Top Up</span> : null}
+                                                                    {alloc.is_topup ? (
+                                                                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-bold uppercase tracking-tight">
+                                                                            {`Top Up MH${alloc.topup_hours ? ` +${formatHours(alloc.topup_hours)}h` : ''}`}
+                                                                        </span>
+                                                                    ) : null}
                                                                 </span>
                                                             </td>
                                                             <td className="py-3 px-2 text-slate-500">{alloc.description || '-'}</td>
                                                             <td className={`py-3 px-2 text-right font-medium ${alloc.is_topup ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
-                                                                {alloc.is_topup ? '+' : ''}{formatCurrency(alloc.amount)}
+                                                                {alloc.is_topup ? (
+                                                                    <>{`+${formatCurrency(alloc.amount)}`}</>
+                                                                ) : (
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span className="font-semibold text-slate-900 dark:text-white">
+                                                                            {formatCurrency(alloc.realized_amount ?? alloc.amount)}
+                                                                        </span>
+                                                                        <span className="text-[10px] text-slate-400">
+                                                                            Plan: {formatCurrency(alloc.amount)}
+                                                                            {alloc.realized_amount !== null && alloc.realized_amount !== undefined ? ' | Realized' : ' | Pending'}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
                                                             </td>
                                                             <td className="py-3 px-2 text-right">
-                                                                {!alloc.is_topup && (
-                                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteAllocation(alloc.id)}
-                                                                        className="size-7 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                        <Trash2 className="size-3.5" />
-                                                                    </Button>
+                                                                {!alloc.is_topup && allocationTab === 'expense' && (
+                                                                    <div className="inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={() => handleRealizeAllocation(alloc)}
+                                                                            className="h-7 px-2 text-[10px] font-bold border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900/40 dark:text-blue-300"
+                                                                        >
+                                                                            Realization
+                                                                        </Button>
+                                                                        <Button variant="ghost" size="icon" onClick={() => handleDeleteAllocation(alloc.id)}
+                                                                            className="size-7 text-slate-300 hover:text-red-500">
+                                                                            <Trash2 className="size-3.5" />
+                                                                        </Button>
+                                                                    </div>
                                                                 )}
                                                             </td>
                                                         </tr>
@@ -321,47 +465,53 @@ export default function FinanceMonitoring() {
                                     </div>
 
                                     {/* Add Allocation Form */}
-                                    <form onSubmit={handleAddAllocation} className="mt-6 p-4 rounded-xl border-2 border-dashed border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20">
-                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                                            <div className="flex flex-col gap-2">
-                                                <span className="text-xs font-bold text-slate-400 uppercase">Category</span>
-                                                <select
-                                                    value={newAllocation.category_id}
-                                                    onChange={(e) => setNewAllocation({ ...newAllocation, category_id: e.target.value })}
-                                                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm"
-                                                    required
-                                                >
-                                                    <option value="">Select Category</option>
-                                                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="flex flex-col gap-2 md:col-span-1">
-                                                <span className="text-xs font-bold text-slate-400 uppercase">Amount</span>
-                                                <div className="relative">
-                                                    <Banknote className="absolute left-3 top-3 size-3.5 text-slate-400" />
-                                                    <Input
-                                                        type="number"
-                                                        value={newAllocation.amount}
-                                                        onChange={(e) => setNewAllocation({ ...newAllocation, amount: e.target.value })}
-                                                        className="pl-9"
-                                                        placeholder="0"
+                                    {allocationTab === 'expense' ? (
+                                        <form onSubmit={handleAddAllocation} className="mt-6 p-4 rounded-xl border-2 border-dashed border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20">
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-xs font-bold text-slate-400 uppercase">Category</span>
+                                                    <select
+                                                        value={newAllocation.category_id}
+                                                        onChange={(e) => setNewAllocation({ ...newAllocation, category_id: e.target.value })}
+                                                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm"
                                                         required
+                                                    >
+                                                        <option value="">Select Category</option>
+                                                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="flex flex-col gap-2 md:col-span-1">
+                                                    <span className="text-xs font-bold text-slate-400 uppercase">Amount</span>
+                                                    <div className="relative">
+                                                        <Banknote className="absolute left-3 top-3 size-3.5 text-slate-400" />
+                                                        <Input
+                                                            type="number"
+                                                            value={newAllocation.amount}
+                                                            onChange={(e) => setNewAllocation({ ...newAllocation, amount: e.target.value })}
+                                                            className="pl-9"
+                                                            placeholder="0"
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-xs font-bold text-slate-400 uppercase">Description</span>
+                                                    <Input
+                                                        value={newAllocation.description}
+                                                        onChange={(e) => setNewAllocation({ ...newAllocation, description: e.target.value })}
+                                                        placeholder="Reason..."
                                                     />
                                                 </div>
+                                                <Button type="submit" className="w-full flex items-center gap-2">
+                                                    <Plus className="size-4" /> Add Line
+                                                </Button>
                                             </div>
-                                            <div className="flex flex-col gap-2">
-                                                <span className="text-xs font-bold text-slate-400 uppercase">Description</span>
-                                                <Input
-                                                    value={newAllocation.description}
-                                                    onChange={(e) => setNewAllocation({ ...newAllocation, description: e.target.value })}
-                                                    placeholder="Reason..."
-                                                />
-                                            </div>
-                                            <Button type="submit" className="w-full flex items-center gap-2">
-                                                <Plus className="size-4" /> Add Line
-                                            </Button>
+                                        </form>
+                                    ) : (
+                                        <div className="mt-6 p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/10 text-xs text-emerald-700 dark:text-emerald-300">
+                                            Pemasukan dicatat dari transaksi <strong>Top Up Quota</strong>. Gunakan card Top Up di atas untuk menambah pemasukan.
                                         </div>
-                                    </form>
+                                    )}
                                 </CardContent>
                             </Card>
 
@@ -375,7 +525,7 @@ export default function FinanceMonitoring() {
             </div>
 
             {/* Top Up Modal */}
-            {isTopUpOpen && (
+            {isTopUpOpen && !isWaterfallProject && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <Card className="w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
                         <CardHeader className="pb-4 border-b">
@@ -396,7 +546,9 @@ export default function FinanceMonitoring() {
                                             required
                                         >
                                             <option value="">Select Category</option>
-                                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            {categories.map(c => (
+                                                <option key={c.id} value={c.id}>{c.name}</option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div className="space-y-2">
@@ -408,7 +560,11 @@ export default function FinanceMonitoring() {
                                             required
                                         >
                                             <option value="">Select Role</option>
-                                            {projectRolesList.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                            {projectRolesList.map(r => {
+                                                const q = quotaBreakdown.find(qb => qb.project_role_id === r.id);
+                                                const label = q ? `${r.name} (Cur: ${q.quota_hours}h, Rem: ${q.quota_hours - q.allocated_hours}h)` : r.name;
+                                                return <option key={r.id} value={r.id}>{label}</option>
+                                            })}
                                         </select>
                                     </div>
                                 </div>
@@ -467,11 +623,52 @@ export default function FinanceMonitoring() {
                             {loadingQuotas ? (
                                 <div className="py-20 text-center text-slate-500">Loading breakdown...</div>
                             ) : (
-                                <div className="overflow-x-auto">
+                                <div className="space-y-5">
+                                    <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/50 dark:bg-slate-900/20">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">General Quota</h4>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase">Separated Base vs Top Up</span>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${hasGeneralTopUp ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                                                    {hasGeneralTopUp ? 'Top Up Applied' : 'No Top Up'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                                            <div className="rounded-md bg-white dark:bg-slate-950 p-3 border border-slate-200 dark:border-slate-800">
+                                                <div className="text-[10px] font-bold uppercase text-slate-500">Base</div>
+                                                <div className="text-base font-bold text-slate-900 dark:text-white">{formatHours(generalQuota.base_quota_hours)}h</div>
+                                            </div>
+                                            <div className="rounded-md bg-emerald-50 dark:bg-emerald-900/20 p-3 border border-emerald-200 dark:border-emerald-900/40">
+                                                <div className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-300">Top Up</div>
+                                                <div className="text-base font-bold text-emerald-700 dark:text-emerald-300">+{formatHours(generalQuota.topup_quota_hours)}h</div>
+                                            </div>
+                                            <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 p-3 border border-blue-200 dark:border-blue-900/40">
+                                                <div className="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-300">Current</div>
+                                                <div className="text-base font-bold text-blue-700 dark:text-blue-300">{formatHours(generalQuota.current_quota_hours)}h</div>
+                                            </div>
+                                            <div className="rounded-md bg-white dark:bg-slate-950 p-3 border border-slate-200 dark:border-slate-800">
+                                                <div className="text-[10px] font-bold uppercase text-slate-500">Allocated</div>
+                                                <div className="text-base font-bold text-slate-900 dark:text-white">{formatHours(generalQuota.allocated_hours)}h</div>
+                                            </div>
+                                            <div className="rounded-md bg-white dark:bg-slate-950 p-3 border border-slate-200 dark:border-slate-800">
+                                                <div className="text-[10px] font-bold uppercase text-slate-500">Remaining</div>
+                                                <div className={`text-base font-bold ${(generalQuota.remaining_hours ?? 0) < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                    {formatHours(generalQuota.remaining_hours)}h
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
                                         <thead>
                                             <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500">
                                                 <th className="text-left font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Project Role</th>
+                                                <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Base Quota</th>
+                                                <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Top Up</th>
+                                                <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Type</th>
+                                                <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Current Quota</th>
                                                 <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Allocated</th>
                                                 <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Actual Used</th>
                                                 <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Remaining</th>
@@ -480,7 +677,7 @@ export default function FinanceMonitoring() {
                                         <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                                             {quotaBreakdown.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan="4" className="py-8 text-center text-slate-400 italic">No role quotas defined for this project.</td>
+                                                    <td colSpan="8" className="py-8 text-center text-slate-400 italic">No role quotas defined for this project.</td>
                                                 </tr>
                                             ) : (
                                                 quotaBreakdown.map(item => {
@@ -497,15 +694,20 @@ export default function FinanceMonitoring() {
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="py-4 px-2 text-right font-medium text-slate-600 dark:text-slate-400">{item.quota_hours} <span className="text-[10px]">HRS</span></td>
-                                                            <td className="py-4 px-2 text-right font-bold text-slate-900 dark:text-white">
-                                                                <div className="flex flex-col items-end">
-                                                                    <span>{item.allocated_hours} <span className="text-[10px]">ALLC</span></span>
-                                                                    <span className="text-[9px] text-slate-400">ACT: {item.actual_hours}h</span>
-                                                                </div>
+                                                            <td className="py-4 px-2 text-right font-medium text-slate-600 dark:text-slate-400">{formatHours(item.base_quota_hours)} <span className="text-[10px]">HRS</span></td>
+                                                            <td className="py-4 px-2 text-right font-bold text-emerald-600 dark:text-emerald-400">+{formatHours(item.topup_hours)} <span className="text-[10px]">HRS</span></td>
+                                                            <td className="py-4 px-2 text-right">
+                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${Number(item.topup_hours || 0) > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
+                                                                    {Number(item.topup_hours || 0) > 0 ? 'Top Up' : 'Non Top Up'}
+                                                                </span>
                                                             </td>
+                                                            <td className="py-4 px-2 text-right font-medium text-slate-600 dark:text-slate-400">{formatHours(item.quota_hours)} <span className="text-[10px]">HRS</span></td>
+                                                            <td className="py-4 px-2 text-right font-bold text-slate-900 dark:text-white">
+                                                                {formatHours(item.allocated_hours)} <span className="text-[10px]">HRS</span>
+                                                            </td>
+                                                            <td className="py-4 px-2 text-right font-medium text-slate-600 dark:text-slate-400">{formatHours(item.actual_hours)} <span className="text-[10px]">HRS</span></td>
                                                             <td className={`py-4 px-2 text-right font-bold ${remaining < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                                                                {remaining.toFixed(1)} <span className="text-[10px]">HRS</span>
+                                                                {formatHours(remaining)} <span className="text-[10px]">HRS</span>
                                                             </td>
                                                         </tr>
                                                     );
@@ -513,6 +715,7 @@ export default function FinanceMonitoring() {
                                             )}
                                         </tbody>
                                     </table>
+                                </div>
                                 </div>
                             )}
                         </CardContent>

@@ -1,11 +1,15 @@
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, TrendingUp } from "lucide-react";
+import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, TrendingUp, Building2 } from "lucide-react";
+import { hasPermission } from '../../utils/permissions';
 
 export default function Sidebar() {
     const { toggleTheme } = useTheme();
     const { user, logout } = useAuth();
+    const can = (slug) => hasPermission(user, slug);
+    const canSeeFinanceSection = can('finance_monitoring.read') || can('finance_categories.read') || can('finance_report.read') || can('realization_report.read');
+    const canSeeSystemSection = can('teams_users.read') || can('access_control.read') || can('project_roles.read') || can('system_log.read');
 
     return (
         <aside className="w-64 h-screen overflow-y-auto border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col transition-colors duration-200">
@@ -20,92 +24,107 @@ export default function Sidebar() {
             </div>
 
             <nav className="flex-1 px-4 space-y-1">
-                <NavLink to="/"
+                {can('dashboard.read') && <NavLink to="/"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <LayoutDashboard className="size-5" />
                     <span className="text-sm">Dashboard</span>
-                </NavLink>
-                <NavLink to="/presales"
+                </NavLink>}
+                {can('presales.read') && <NavLink to="/presales"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Activity className="size-5" />
                     <span className="text-sm">Presales</span>
-                </NavLink>
-                <NavLink to="/create-project"
+                </NavLink>}
+                {can('list_company.read') && <NavLink to="/presales-companies"
+                    className={({ isActive }) => `flex items-center gap-3 px-6 py-2 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <Building2 className="size-4" />
+                    <span className="text-xs">List Company</span>
+                </NavLink>}
+                {can('category_project.read') && <NavLink to="/presales-project-categories"
+                    className={({ isActive }) => `flex items-center gap-3 px-6 py-2 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <Tag className="size-4" />
+                    <span className="text-xs">Category Project</span>
+                </NavLink>}
+                {can('list_project.read') && <NavLink to="/create-project"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <PlusCircle className="size-5" />
-                    <span className="text-sm">Create Project</span>
-                </NavLink>
-                <NavLink to="/board"
+                    <span className="text-sm">List Project</span>
+                </NavLink>}
+                {can('project_board.read') && <NavLink to="/board"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <KanbanSquare className="size-5" />
                     <span className="text-sm">Project Board</span>
-                </NavLink>
-                <NavLink to="/reports"
+                </NavLink>}
+                {can('reports.read') && <NavLink to="/reports"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <BarChart3 className="size-5" />
                     <span className="text-sm">Reports</span>
-                </NavLink>
-                <NavLink to="/generate-report"
+                </NavLink>}
+                {can('generate_report.read') && <NavLink to="/generate-report"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <FileText className="size-5" />
                     <span className="text-sm">Generate Report</span>
-                </NavLink>
+                </NavLink>}
 
-                <div className="pt-4 pb-2 px-3">
+                {canSeeFinanceSection && <div className="pt-4 pb-2 px-3">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Finance</p>
-                </div>
-                <NavLink to="/finance-monitoring"
+                </div>}
+                {can('finance_monitoring.read') && <NavLink to="/finance-monitoring"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Wallet className="size-5" />
                     <span className="text-sm">Monitoring</span>
-                </NavLink>
-                <NavLink to="/finance-categories"
+                </NavLink>}
+                {can('finance_categories.read') && <NavLink to="/finance-categories"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Tag className="size-5" />
                     <span className="text-sm">Categories</span>
-                </NavLink>
-                <NavLink to="/finance-report"
+                </NavLink>}
+                {can('finance_report.read') && <NavLink to="/finance-report"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <TrendingUp className="size-5" />
                     <span className="text-sm">Finance Report</span>
-                </NavLink>
+                </NavLink>}
+                {can('realization_report.read') && <NavLink to="/finance-realization-report"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <TrendingUp className="size-5" />
+                    <span className="text-sm">Realization Report</span>
+                </NavLink>}
 
-                <div className="pt-4 pb-2 px-3">
+                {canSeeSystemSection && <div className="pt-4 pb-2 px-3">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">System Settings</p>
-                </div>
-                <NavLink to="/users"
+                </div>}
+                {can('teams_users.read') && <NavLink to="/users"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Users className="size-5" />
                     <span className="text-sm">Teams & Users</span>
-                </NavLink>
-                <NavLink to="/roles"
+                </NavLink>}
+                {can('access_control.read') && <NavLink to="/roles"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Lock className="size-5" />
                     <span className="text-sm">Access Control</span>
-                </NavLink>
-                <NavLink to="/project-roles"
+                </NavLink>}
+                {can('project_roles.read') && <NavLink to="/project-roles"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Shield className="size-5" />
                     <span className="text-sm">Project Roles</span>
-                </NavLink>
-                <NavLink to="/system-logs"
+                </NavLink>}
+                {can('system_log.read') && <NavLink to="/system-logs"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <ClipboardList className="size-5" />
                     <span className="text-sm">System Log</span>
-                </NavLink>
+                </NavLink>}
             </nav>
 
             <div className="p-4 mt-auto border-t border-slate-200 dark:border-slate-800 transition-colors duration-200">
-                <NavLink to="/profile"
+                {can('profile.read') && <NavLink to="/profile"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mb-1 ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <User className="size-5" />
                     <span className="text-sm">My Profile</span>
-                </NavLink>
-                <NavLink to="/settings"
+                </NavLink>}
+                {can('settings.read') && <NavLink to="/settings"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Settings className="size-5" />
                     <span className="text-sm">Settings</span>
-                </NavLink>
+                </NavLink>}
 
                 <div className="mt-4 flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 transition-colors duration-200 overflow-hidden text-ellipsis">
                     <div className="flex items-center gap-3 overflow-hidden">

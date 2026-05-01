@@ -21,6 +21,8 @@ class SystemController extends Controller
 
             // Tables to truncate (transactional data)
             $tables = [
+                'activity_logs',
+                'financial_records',
                 'manhours',
                 'tasks',
                 'project_members',
@@ -28,6 +30,7 @@ class SystemController extends Controller
                 'project_role_quotas',
                 'projects',
                 'presales',
+                'finance_categories',
             ];
 
             foreach ($tables as $table) {

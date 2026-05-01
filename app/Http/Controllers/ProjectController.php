@@ -23,7 +23,33 @@ class ProjectController extends Controller
                     WHEN (SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id) > 0 AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status != 'Done') = 0 THEN 'Done'
                     ELSE 'Planning'
                 END as status
-            ")->get();
+            ")
+            ->selectRaw("(SELECT COALESCE(SUM(t.estimated_hours), 0) FROM tasks t WHERE t.project_id = projects.id) as allocated_hours")
+            ->selectRaw("
+                CASE
+                    WHEN projects.total_manhours IS NOT NULL AND projects.total_manhours > 0
+                        THEN ROUND(((SELECT COALESCE(SUM(t.estimated_hours), 0) FROM tasks t WHERE t.project_id = projects.id) * 100.0) / projects.total_manhours, 2)
+                    ELSE NULL
+                END as usage_percentage
+            ")
+            ->selectRaw("
+                CASE
+                    WHEN projects.total_manhours IS NOT NULL
+                        THEN projects.total_manhours - (SELECT COALESCE(SUM(t.estimated_hours), 0) FROM tasks t WHERE t.project_id = projects.id)
+                    ELSE NULL
+                END as remaining_manhours
+            ")
+            ->selectRaw("(SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id) as total_tasks")
+            ->selectRaw("(SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status = 'Reopen') as reopen_tasks")
+            ->selectRaw("(SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status = 'Done') as done_tasks")
+            ->selectRaw("
+                CASE
+                    WHEN (SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id) > 0
+                        THEN ROUND(((SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status = 'Done') * 100.0) / (SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id), 2)
+                    ELSE 0
+                END as waterfall_progress_percentage
+            ")
+            ->get();
             
         // Cast jobs back to array (or rely on Model casting)
         $projects->each(function($p) {
@@ -122,6 +148,11 @@ class ProjectController extends Controller
 
     public function quotas($id)
     {
+        $project = Project::find($id);
+        if (!$project) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+
         $quotas = DB::table('project_role_quotas as pq')
             ->join('project_roles as pr', 'pq.project_role_id', '=', 'pr.id')
             ->select('pq.*', 'pr.name as role_name')
@@ -130,7 +161,68 @@ class ProjectController extends Controller
             ->where('pq.project_id', $id)
             ->get();
 
-        return response()->json(['data' => $quotas]);
+        $topupByRole = DB::table('project_allocations')
+            ->select('project_role_id', DB::raw('CAST(COALESCE(SUM(topup_hours), 0) AS FLOAT) as topup_hours'))
+            ->where('project_id', $id)
+            ->where('is_topup', true)
+            ->whereNotNull('project_role_id')
+            ->groupBy('project_role_id')
+            ->pluck('topup_hours', 'project_role_id');
+
+        $topupHoursTotal = (float) DB::table('project_allocations')
+            ->where('project_id', $id)
+            ->where('is_topup', true)
+            ->sum('topup_hours');
+
+        $quotasWithSplit = $quotas->map(function ($quota) use ($topupByRole) {
+            $topupHours = (float) ($topupByRole[$quota->project_role_id] ?? 0);
+            $currentQuotaHours = (float) ($quota->quota_hours ?? 0);
+            $baseQuotaHours = max(0, $currentQuotaHours - $topupHours);
+
+            return (object) array_merge((array) $quota, [
+                'base_quota_hours' => $baseQuotaHours,
+                'topup_hours' => $topupHours,
+            ]);
+        });
+
+        $baseRoleQuotaTotal = (float) $quotasWithSplit->sum('base_quota_hours');
+        $topupRoleQuotaTotal = (float) $quotasWithSplit->sum('topup_hours');
+
+        $totalManhours = (float) ($project->total_manhours ?? 0);
+        $baseTotalManhours = max(0, $totalManhours - $topupHoursTotal);
+
+        $generalBaseQuota = max(0, $baseTotalManhours - $baseRoleQuotaTotal);
+        $generalTopupQuota = max(0, $topupHoursTotal - $topupRoleQuotaTotal);
+        $generalCurrentQuota = $generalBaseQuota + $generalTopupQuota;
+
+        $generalAllocatedHours = (float) DB::table('tasks')
+            ->where('project_id', $id)
+            ->whereNull('project_role_id')
+            ->sum('estimated_hours');
+
+        $generalActualHours = (float) DB::table('manhours')
+            ->where('project_id', $id)
+            ->whereNull('project_role_id')
+            ->sum('hours');
+
+        return response()->json([
+            'data' => $quotasWithSplit,
+            'meta' => [
+                'general_quota' => [
+                    'base_quota_hours' => $generalBaseQuota,
+                    'topup_quota_hours' => $generalTopupQuota,
+                    'current_quota_hours' => $generalCurrentQuota,
+                    'allocated_hours' => $generalAllocatedHours,
+                    'actual_hours' => $generalActualHours,
+                    'remaining_hours' => $generalCurrentQuota - $generalAllocatedHours,
+                ],
+                'totals' => [
+                    'base_total_manhours' => $baseTotalManhours,
+                    'topup_total_manhours' => $topupHoursTotal,
+                    'current_total_manhours' => $totalManhours,
+                ],
+            ],
+        ]);
     }
 
     public function balance($id)

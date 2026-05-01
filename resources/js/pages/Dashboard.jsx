@@ -4,10 +4,19 @@ import { Rocket, Timer, Wallet, Users, AlertCircle, Clock } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from 'react-router-dom';
 
+const getMethodologyLabel = (value) => {
+    const normalized = String(value || '').toLowerCase();
+    return normalized.includes('waterfall') ? 'Waterfall' : 'Scrum';
+};
+
 export default function Dashboard() {
     const navigate = useNavigate();
     const [stats, setStats] = useState({
         totalProjects: 0,
+        activeProjects: 0,
+        doneProjects: 0,
+        scrumProjects: 0,
+        waterfallProjects: 0,
         totalHours: 0,
         activeTasks: 0,
         totalRevenue: 0,
@@ -54,7 +63,10 @@ export default function Dashboard() {
                             <span className="text-xs font-bold text-accent bg-accent/5 px-2 py-1 rounded">Active</span>
                         </div>
                         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Active Projects</p>
-                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{stats.totalProjects}</h3>
+                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{stats.activeProjects}</h3>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                            Done: {stats.doneProjects} | Total: {stats.totalProjects}
+                        </p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -67,9 +79,9 @@ export default function Dashboard() {
                             </div>
                         </div>
                         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Agency Net Margin</p>
-                        <div className="flex items-baseline gap-2">
-                            <h3 className="text-3xl font-bold mt-1 text-emerald-600">{formatCurrency(stats.totalMargin)}</h3>
-                            <span className="text-xs font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.marginPercentage.toFixed(1)}%</span>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <h3 className="text-2xl xl:text-3xl font-bold text-emerald-600 break-words">{formatCurrency(stats.totalMargin)}</h3>
+                            <span className="text-xs font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded shrink-0">{stats.marginPercentage.toFixed(1)}%</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -91,6 +103,29 @@ export default function Dashboard() {
                         </div>
                         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Active Tasks</p>
                         <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{stats.activeTasks}</h3>
+                    </CardContent>
+                </Card>
+            </section>
+
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="border-blue-100 dark:border-blue-900/30 bg-blue-50/40 dark:bg-blue-900/10">
+                    <CardContent className="p-5">
+                        <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">Scrum Projects</h4>
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-bold">Agile</span>
+                        </div>
+                        <p className="text-3xl mt-2 font-bold text-slate-900 dark:text-white">{stats.scrumProjects}</p>
+                        <p className="text-xs text-slate-500 mt-1">Projects with Scrum / Agile methodology.</p>
+                    </CardContent>
+                </Card>
+                <Card className="border-violet-100 dark:border-violet-900/30 bg-violet-50/40 dark:bg-violet-900/10">
+                    <CardContent className="p-5">
+                        <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-violet-700 dark:text-violet-300 uppercase tracking-wide">Waterfall Projects</h4>
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 font-bold">Fixed Scope</span>
+                        </div>
+                        <p className="text-3xl mt-2 font-bold text-slate-900 dark:text-white">{stats.waterfallProjects}</p>
+                        <p className="text-xs text-slate-500 mt-1">Projects with Waterfall methodology.</p>
                     </CardContent>
                 </Card>
             </section>
@@ -161,9 +196,14 @@ export default function Dashboard() {
                                     <div key={idx} className="p-4 rounded-lg bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/20">
                                         <div className="flex justify-between items-start mb-2">
                                             <span className="font-bold text-sm text-slate-900 dark:text-rose-100 truncate pr-2">{proj.name}</span>
-                                            <span className={`text-[10px] font-bold ${proj.burn_percentage > 100 ? 'text-white bg-rose-600' : 'text-rose-700 bg-rose-100 dark:bg-rose-900/40'} px-2 py-0.5 rounded shadow-sm`}>
-                                                {Math.round(proj.burn_percentage)}% Used
-                                            </span>
+                                            <div className="flex items-center gap-1">
+                                                <span className={`text-[10px] font-bold ${proj.burn_percentage > 100 ? 'text-white bg-rose-600' : 'text-rose-700 bg-rose-100 dark:bg-rose-900/40'} px-2 py-0.5 rounded shadow-sm`}>
+                                                    {Math.round(proj.burn_percentage)}% Used
+                                                </span>
+                                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase">
+                                                    {getMethodologyLabel(proj.methodology)}
+                                                </span>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 uppercase font-bold tracking-tight">
                                             <Clock className="size-3.5" /> {Math.max(0, proj.estimated_hours - proj.allocated_hours).toFixed(1)}h remaining

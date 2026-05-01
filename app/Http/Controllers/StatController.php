@@ -17,10 +17,22 @@ class StatController extends Controller
         $stats = DB::selectOne("
             SELECT 
                 (SELECT COUNT(*) FROM projects) as totalProjects,
+                (SELECT COUNT(*) FROM projects p
+                    WHERE NOT (
+                        (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) > 0
+                        AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'Done') = 0
+                    )
+                ) as activeProjects,
+                (SELECT COUNT(*) FROM projects p
+                    WHERE (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) > 0
+                    AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'Done') = 0
+                ) as doneProjects,
+                (SELECT COUNT(*) FROM projects WHERE lower(coalesce(methodology, '')) LIKE '%waterfall%') as waterfallProjects,
+                (SELECT COUNT(*) FROM projects WHERE lower(coalesce(methodology, '')) LIKE '%scrum%' OR lower(coalesce(methodology, '')) LIKE '%agile%') as scrumProjects,
                 (SELECT COUNT(*) FROM tasks WHERE status != 'Done') as activeTasks,
                 (SELECT SUM(hours) FROM manhours) as totalHours,
                 (SELECT SUM(quotation_value) FROM projects) as totalRevenue,
-                (SELECT SUM(amount) FROM project_allocations) as totalAllocated,
+                (SELECT SUM(amount) FROM project_allocations WHERE is_topup = 0) as totalAllocated,
                 (SELECT SUM(amount) FROM financial_records WHERE type = 'OPEX') as opexTotal,
                 (SELECT SUM(amount) FROM financial_records WHERE type = 'CAPEX') as capexTotal
         ");
@@ -35,6 +47,10 @@ class StatController extends Controller
 
         return [
             'totalProjects' => $stats->totalProjects,
+            'activeProjects' => $stats->activeProjects ?: 0,
+            'doneProjects' => $stats->doneProjects ?: 0,
+            'scrumProjects' => $stats->scrumProjects ?: 0,
+            'waterfallProjects' => $stats->waterfallProjects ?: 0,
             'activeTasks' => $stats->activeTasks,
             'totalHours' => $stats->totalHours ?: 0,
             'totalRevenue' => $totalRevenue,
@@ -77,7 +93,7 @@ class StatController extends Controller
     private function getEfficiencyData()
     {
         $projects = DB::table('projects')
-            ->select('id', 'name', 'total_manhours as estimated_hours')
+            ->select('id', 'name', 'methodology', 'total_manhours as estimated_hours')
             ->get();
 
         $taskSums = DB::table('tasks')

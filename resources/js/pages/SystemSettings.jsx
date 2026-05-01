@@ -203,8 +203,8 @@ export default function SystemSettings() {
                             <div>
                                 <h4 className="font-bold text-lg">Reset Transactional Data</h4>
                                 <p className="text-sm text-slate-500 max-w-md mt-2 leading-relaxed">
-                                    Removes all Projects, Tasks, Manhours, and Presales logs. <br />
-                                    <span className="font-bold text-rose-500">Authentication and Roles will stay intact.</span>
+                                    Removes all Projects, Tasks, Manhours, Finance, and System Logs. <br />
+                                    <span className="font-bold text-rose-500">Authentication, User Roles, and Permissions will stay intact.</span>
                                 </p>
                             </div>
                             <Button variant="destructive" onClick={resetFlow} className="gap-2 shadow-lg shadow-rose-500/20 h-11 px-8 font-bold">
