@@ -20,7 +20,7 @@ const ROUTE_PERMISSION_MAP = [
 ];
 
 export function getPermissionSlugs(user) {
-    const permissions = user?.role?.permissions || [];
+    const permissions = user?.role?.permissions || user?.role_permissions || [];
     return new Set(
         permissions
             .map((permission) => permission?.slug)
@@ -35,6 +35,25 @@ export function hasPermission(user, slug) {
     if (!slug) return true;
     const slugs = getPermissionSlugs(user);
     return slugs.has(slug);
+}
+
+export function isAdminUser(user) {
+    const roleName = String(user?.role?.name || user?.role_name || user?.role || '').toLowerCase();
+    if (roleName === 'admin') return true;
+    return String(user?.email || '').toLowerCase() === 'tito@noohtify.com';
+}
+
+export function getDefaultLandingPath(user) {
+    if (isAdminUser(user) || hasPermission(user, 'dashboard.read')) {
+        return '/';
+    }
+    if (hasPermission(user, 'list_project.read')) {
+        return '/create-project';
+    }
+    if (hasPermission(user, 'project_board.read')) {
+        return '/board';
+    }
+    return '/';
 }
 
 export function getRequiredPermissionForPath(pathname) {

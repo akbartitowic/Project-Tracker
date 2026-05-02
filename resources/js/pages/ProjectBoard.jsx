@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
-import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,6 +112,7 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
 export default function ProjectBoard() {
     const { projectId } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [projects, setProjects] = useState([]);
     const [selectedProject, setSelectedProject] = useState(null);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -127,6 +129,11 @@ export default function ProjectBoard() {
         perc: 0
     });
     const [projectToDelete, setProjectToDelete] = useState(null);
+    const [projectRolesMaster, setProjectRolesMaster] = useState([]);
+    const [isAssignMembersModalOpen, setIsAssignMembersModalOpen] = useState(false);
+    const [assigningProject, setAssigningProject] = useState(null);
+    const [assignmentRows, setAssignmentRows] = useState([]);
+    const [isSavingAssignment, setIsSavingAssignment] = useState(false);
     const [users, setUsers] = useState([]);
     const [projectMembers, setProjectMembers] = useState([]);
     const [tasks, setTasks] = useState([]);
@@ -177,6 +184,83 @@ export default function ProjectBoard() {
     useEffect(() => {
         loadProjects();
     }, []);
+
+    const openAssignMembersModal = async (project) => {
+        try {
+            const [membersRes, optionsRes] = await Promise.all([
+                fetchAPI(`/projects/${project.id}/members`),
+                fetchAPI(`/projects/${project.id}/assignment-options`),
+            ]);
+            const mapped = (membersRes.data || []).map((m) => ({
+                user_id: m.user_id?.toString() || '',
+                project_role_id: m.project_role_id?.toString() || '',
+            }));
+            const optionData = optionsRes.data || {};
+            setUsers(optionData.users || []);
+            setProjectRolesMaster(optionData.project_roles || []);
+            setAssigningProject(project);
+            setAssignmentRows(mapped.length > 0 ? mapped : [{ user_id: '', project_role_id: '' }]);
+            setIsAssignMembersModalOpen(true);
+        } catch (error) {
+            alert('Failed to load project members: ' + error.message);
+        }
+    };
+
+    const addAssignmentRow = () => {
+        setAssignmentRows((prev) => [...prev, { user_id: '', project_role_id: '' }]);
+    };
+
+    const removeAssignmentRow = (index) => {
+        const row = assignmentRows[index];
+        if (row && String(row.user_id) === String(user?.id)) {
+            alert('Kamu tidak bisa menghapus dirimu sendiri dari project ini.');
+            return;
+        }
+        setAssignmentRows((prev) => prev.filter((_, idx) => idx !== index));
+    };
+
+    const updateAssignmentRow = (index, field, value) => {
+        setAssignmentRows((prev) => prev.map((row, idx) => idx === index ? { ...row, [field]: value } : row));
+    };
+
+    const saveProjectAssignments = async () => {
+        if (!assigningProject) return;
+        const validRows = assignmentRows.filter((row) => row.user_id && row.project_role_id);
+        if (validRows.length === 0) {
+            alert('Minimal 1 anggota project harus diisi.');
+            return;
+        }
+        const currentUserAssignedBefore = projectMembers.some((member) => Number(member.user_id) === Number(user?.id));
+        const currentUserAssignedAfter = validRows.some((row) => Number(row.user_id) === Number(user?.id));
+        if (currentUserAssignedBefore && !currentUserAssignedAfter) {
+            alert('Kamu tidak bisa menghapus dirimu sendiri dari project ini.');
+            return;
+        }
+
+        setIsSavingAssignment(true);
+        try {
+            await fetchAPI(`/projects/${assigningProject.id}/members`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    members: validRows.map((row) => ({
+                        user_id: parseInt(row.user_id),
+                        project_role_id: parseInt(row.project_role_id),
+                    })),
+                }),
+            });
+            setIsAssignMembersModalOpen(false);
+            setAssigningProject(null);
+            setAssignmentRows([]);
+            if (selectedProject?.id && assigningProject?.id === selectedProject.id) {
+                loadBoard(selectedProject.id);
+            }
+            alert('Project members updated successfully.');
+        } catch (error) {
+            alert('Failed to save project members: ' + error.message);
+        } finally {
+            setIsSavingAssignment(false);
+        }
+    };
 
     const loadBoard = async (projectId) => {
         try {
@@ -534,6 +618,20 @@ export default function ProjectBoard() {
         });
     }, [tasks]);
 
+    const assignedProjectUsers = useMemo(() => {
+        const seen = new Set();
+        const uniqueUsers = [];
+        for (const member of projectMembers) {
+            if (!member?.user_id || seen.has(member.user_id)) continue;
+            seen.add(member.user_id);
+            uniqueUsers.push({
+                user_id: member.user_id,
+                user_name: member.user_name || 'User',
+            });
+        }
+        return uniqueUsers;
+    }, [projectMembers]);
+
     if (!selectedProject) {
         return (
             <div className="flex-1 p-8 overflow-y-auto w-full bg-slate-50/50 dark:bg-background-dark">
@@ -616,18 +714,32 @@ export default function ProjectBoard() {
                                             />
                                         </div>
                                     ) : (
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setProjectToDelete(project);
-                                                setIsDeleteModalOpen(true);
-                                            }}
-                                        >
-                                            <Trash2 className="size-4" />
-                                        </Button>
+                                        <div className="absolute top-2 right-2 z-20 flex items-center gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="text-slate-500 hover:text-blue-600"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openAssignMembersModal(project);
+                                                }}
+                                                title="Assign Project Members"
+                                            >
+                                                <UserPlus className="size-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="text-slate-500 hover:text-red-500"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setProjectToDelete(project);
+                                                    setIsDeleteModalOpen(true);
+                                                }}
+                                            >
+                                                <Trash2 className="size-4" />
+                                            </Button>
+                                        </div>
                                     )}
                                     <CardContent className="p-6">
                                         <div className="flex justify-between items-start mb-4">
@@ -733,18 +845,32 @@ export default function ProjectBoard() {
                                             </td>
                                             {!isEditMode && (
                                                 <td className="px-6 py-4 text-right">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="text-slate-400 hover:text-red-500"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setProjectToDelete(project);
-                                                            setIsDeleteModalOpen(true);
-                                                        }}
-                                                    >
-                                                        <Trash2 className="size-4" />
-                                                    </Button>
+                                                    <div className="inline-flex items-center gap-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-slate-400 hover:text-blue-600"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openAssignMembersModal(project);
+                                                            }}
+                                                            title="Assign Project Members"
+                                                        >
+                                                            <UserPlus className="size-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-slate-400 hover:text-red-500"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setProjectToDelete(project);
+                                                                setIsDeleteModalOpen(true);
+                                                            }}
+                                                        >
+                                                            <Trash2 className="size-4" />
+                                                        </Button>
+                                                    </div>
                                                 </td>
                                             )}
                                         </tr>
@@ -786,14 +912,39 @@ export default function ProjectBoard() {
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{selectedProject.methodology} Board</p>
                     </div>
                     <div className="flex gap-3">
-                        <div className="flex -space-x-2 mr-2">
-                            <img alt="Team" className="inline-block size-8 rounded-full ring-2 ring-white dark:ring-[#151b28]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5lHb2DboAaVdgRtJd20oMrJscs6GCT1uZttJn1ItKJE8ehEl_Oafic-6M-AUzdo86vUGpS0hv48UGE_fIG9nn8JLtHvzLCn1p3DxW5I5PiFGEETG4qGvIF3Fkbi3zWoPZQ7Vm5Sen0i4sVZEgzQFVYanLOfbFq1gJmDCx_v4Nwhhq-iQUrLfxTAcJi-irJ5XC8eAZ9eJ37aRMpF1KmJP2BOJrEHw3twbVFfHDnREWHfg2hGfEzVQTEnQw7T2X_-CWTXr3T5mDdP4" />
-                            <img alt="Team" className="inline-block size-8 rounded-full ring-2 ring-white dark:ring-[#151b28]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnIVACbY-hDuitabzPI8f9eZSblXygwRR07nlgL8cIbLCz7EvpoyElOQlFiJNiL1U4LfJH3-PRuS0jHnzEV6ebliHYm8RG0xa3j-tJfSBq6lB1OfTWvvFTeNDINmtE4UZHG4usnf2JF68shEhRatwq4WKKAkPflpESLgIm4PPlz1Gh2nAIdGxqLpZbow7-cpY2n0JvtoWacHdNnWff6KMqm2n3MP3PFC_JBi3KLQaVb5dN0CxIECl2kx7wnKijcig3awv5hrILVUA" />
-                            <div className="flex items-center justify-center size-8 rounded-full ring-2 ring-white dark:ring-[#151b28] bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300">
-                                +4
-                            </div>
+                        <div className="flex items-center -space-x-2 mr-1">
+                            {assignedProjectUsers.slice(0, 2).map((member) => (
+                                <div
+                                    key={member.user_id}
+                                    title={member.user_name}
+                                    className="inline-flex items-center justify-center size-8 rounded-full ring-2 ring-white dark:ring-[#151b28] bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200"
+                                >
+                                    {(member.user_name || 'U').charAt(0).toUpperCase()}
+                                </div>
+                            ))}
+                            {assignedProjectUsers.length > 2 && (
+                                <div className="flex items-center justify-center size-8 rounded-full ring-2 ring-white dark:ring-[#151b28] bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300">
+                                    +{assignedProjectUsers.length - 2}
+                                </div>
+                            )}
+                            {assignedProjectUsers.length === 0 && (
+                                <div className="inline-flex items-center justify-center size-8 rounded-full ring-2 ring-white dark:ring-[#151b28] bg-slate-100 dark:bg-slate-700 text-[10px] font-medium text-slate-500">
+                                    0
+                                </div>
+                            )}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 self-center mr-1">
+                            {assignedProjectUsers.length} member{assignedProjectUsers.length === 1 ? '' : 's'}
                         </div>
                         <div className="flex gap-2 mr-2 border-r border-slate-200 dark:border-slate-800 pr-4">
+                            <Button
+                                variant="outline"
+                                className="flex items-center gap-2"
+                                onClick={() => openAssignMembersModal(selectedProject)}
+                            >
+                                <UserPlus className="size-4" />
+                                <span>Assign Members</span>
+                            </Button>
                             {isTaskBulkEditMode && selectedTaskIds.length > 0 && (
                                 <Button
                                     variant="default"
@@ -1179,6 +1330,73 @@ export default function ProjectBoard() {
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Assign Members Modal */}
+            <Dialog open={isAssignMembersModalOpen} onOpenChange={setIsAssignMembersModalOpen}>
+                <DialogContent className="sm:max-w-[640px]">
+                    <DialogHeader>
+                        <DialogTitle>Assign Project Members</DialogTitle>
+                        <DialogDescription>
+                            {assigningProject ? `Set anggota project untuk "${assigningProject.name}".` : 'Set anggota project.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto">
+                        {assignmentRows.map((row, index) => (
+                            <div key={`${index}-${row.user_id}-${row.project_role_id}`} className="grid grid-cols-12 gap-2 items-end border border-slate-200 dark:border-slate-800 rounded-lg p-3">
+                                <div className="col-span-5">
+                                    <label className="text-xs font-medium text-slate-500">User</label>
+                                    <select
+                                        className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-md p-2 text-sm"
+                                        value={row.user_id}
+                                        onChange={(e) => updateAssignmentRow(index, 'user_id', e.target.value)}
+                                    >
+                                        <option value="">Select user</option>
+                                        {users.map((user) => (
+                                            <option key={user.id} value={user.id}>{user.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="col-span-5">
+                                    <label className="text-xs font-medium text-slate-500">Project Role</label>
+                                    <select
+                                        className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-md p-2 text-sm"
+                                        value={row.project_role_id}
+                                        onChange={(e) => updateAssignmentRow(index, 'project_role_id', e.target.value)}
+                                    >
+                                        <option value="">Select role</option>
+                                        {projectRolesMaster.map((role) => (
+                                            <option key={role.id} value={role.id}>{role.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="col-span-2 flex justify-end">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-slate-400 hover:text-red-500"
+                                        onClick={() => removeAssignmentRow(index)}
+                                        disabled={assignmentRows.length === 1 || String(row.user_id) === String(user?.id)}
+                                    >
+                                        <Trash2 className="size-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                        <Button type="button" variant="outline" className="w-full border-dashed" onClick={addAssignmentRow}>
+                            <Plus className="size-4 mr-2" />
+                            Add Member Row
+                        </Button>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsAssignMembersModalOpen(false)}>Cancel</Button>
+                        <Button type="button" onClick={saveProjectAssignments} disabled={isSavingAssignment}>
+                            {isSavingAssignment && <Loader2 className="size-4 mr-2 animate-spin" />}
+                            Save Members
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

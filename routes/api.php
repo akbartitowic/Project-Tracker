@@ -27,7 +27,7 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/signup', [AuthController::class, 'signup']);
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/me', [AuthController::class, 'me'])->middleware('permission:profile.read');
+    Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profile', [AuthController::class, 'updateProfile'])->middleware('permission:profile.update');
 
@@ -38,6 +38,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{id}/quotas', [ProjectController::class, 'quotas'])->middleware('permission:project_board.read');
     Route::get('/projects/{id}/balance', [ProjectController::class, 'balance'])->middleware('permission:project_board.read');
     Route::get('/projects/{id}/members', [ProjectController::class, 'members'])->middleware('permission:project_board.read');
+    Route::get('/projects/{id}/assignment-options', [ProjectController::class, 'assignmentOptions'])->middleware('permission:list_project.update');
+    Route::put('/projects/{id}/members', [ProjectController::class, 'syncMembers'])->middleware('permission:list_project.update');
     Route::get('/projects/{id}/finance-summary', [ProjectAllocationController::class, 'financeSummary'])->middleware('permission:finance_monitoring.read');
 
     // 1.5 System Log Routes

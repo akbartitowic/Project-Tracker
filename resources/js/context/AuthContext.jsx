@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
         if (res.status === 'success') {
             localStorage.setItem('auth_token', res.access_token);
             setUser(res.user);
-            return { success: true };
+            return { success: true, user: res.user };
         }
         return { success: false, message: res.message };
     };

@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\ProjectRoleQuota;
+use App\Models\ProjectRole;
 use App\Models\Task;
 use App\Models\Manhour;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Traits\LogActivity;
@@ -14,9 +16,21 @@ use App\Traits\LogActivity;
 class ProjectController extends Controller
 {
     use LogActivity;
+
+    private function isPrivilegedUser($user): bool
+    {
+        if (!$user) return false;
+        $email = strtolower((string) ($user->email ?? ''));
+        if ($email === 'tito@noohtify.com') return true;
+        $roleName = strtolower((string) ($user->role->name ?? $user->role ?? ''));
+        return $roleName === 'admin';
+    }
+
     public function index()
     {
-        $projects = Project::select('projects.*')
+        $user = request()->user();
+
+        $query = Project::select('projects.*')
             ->selectRaw("
                 CASE
                     WHEN (SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status IN ('In Progress', 'Review', 'Reopen')) > 0 THEN 'In Progress'
@@ -48,8 +62,18 @@ class ProjectController extends Controller
                         THEN ROUND(((SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status = 'Done') * 100.0) / (SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id), 2)
                     ELSE 0
                 END as waterfall_progress_percentage
-            ")
-            ->get();
+            ");
+
+        if (!$this->isPrivilegedUser($user)) {
+            $query->whereExists(function ($sub) use ($user) {
+                $sub->select(DB::raw(1))
+                    ->from('project_members as pm')
+                    ->whereColumn('pm.project_id', 'projects.id')
+                    ->where('pm.user_id', $user->id);
+            });
+        }
+
+        $projects = $query->get();
             
         // Cast jobs back to array (or rely on Model casting)
         $projects->each(function($p) {
@@ -90,7 +114,9 @@ class ProjectController extends Controller
             'hourly_rate' => 'nullable|numeric',
             'total_cost' => 'nullable|numeric',
             'quotation_value' => 'nullable|numeric',
-            'members' => 'nullable|array',
+            'members' => 'required|array|min:1',
+            'members.*.user_id' => 'required|exists:users,id',
+            'members.*.project_role_id' => 'required|exists:project_roles,id',
             'role_quotas' => 'nullable|array'
         ]);
 
@@ -151,6 +177,16 @@ class ProjectController extends Controller
         $project = Project::find($id);
         if (!$project) {
             return response()->json(['error' => 'Project not found'], 404);
+        }
+        $user = request()->user();
+        if (!$this->isPrivilegedUser($user)) {
+            $isAssigned = DB::table('project_members')
+                ->where('project_id', $id)
+                ->where('user_id', $user->id)
+                ->exists();
+            if (!$isAssigned) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
         }
 
         $quotas = DB::table('project_role_quotas as pq')
@@ -229,6 +265,16 @@ class ProjectController extends Controller
     {
         $project = Project::find($id);
         if (!$project) return response()->json(['error' => 'Project not found'], 404);
+        $user = request()->user();
+        if (!$this->isPrivilegedUser($user)) {
+            $isAssigned = DB::table('project_members')
+                ->where('project_id', $id)
+                ->where('user_id', $user->id)
+                ->exists();
+            if (!$isAssigned) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+        }
 
         $allocatedHours = Task::where('project_id', $id)->sum('estimated_hours');
         $actualHours = Manhour::where('project_id', $id)->sum('hours');
@@ -251,6 +297,17 @@ class ProjectController extends Controller
 
     public function members($id)
     {
+        $user = request()->user();
+        if (!$this->isPrivilegedUser($user)) {
+            $isAssigned = DB::table('project_members')
+                ->where('project_id', $id)
+                ->where('user_id', $user->id)
+                ->exists();
+            if (!$isAssigned) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+        }
+
         $members = DB::table('project_members as pm')
             ->join('users as u', 'pm.user_id', '=', 'u.id')
             ->join('project_roles as pr', 'pm.project_role_id', '=', 'pr.id')
@@ -259,5 +316,92 @@ class ProjectController extends Controller
             ->get();
 
         return response()->json(['data' => $members]);
+    }
+
+    public function assignmentOptions($id)
+    {
+        $project = Project::find($id);
+        if (!$project) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+
+        $user = request()->user();
+        if (!$this->isPrivilegedUser($user)) {
+            $isAssigned = DB::table('project_members')
+                ->where('project_id', $id)
+                ->where('user_id', $user->id)
+                ->exists();
+            if (!$isAssigned) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+        }
+
+        $users = User::query()
+            ->select('id', 'name', 'email')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        $roles = ProjectRole::query()
+            ->select('id', 'name')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        return response()->json([
+            'data' => [
+                'users' => $users,
+                'project_roles' => $roles,
+            ],
+        ]);
+    }
+
+    public function syncMembers(Request $request, $id)
+    {
+        $project = Project::find($id);
+        if (!$project) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'members' => 'required|array|min:1',
+            'members.*.user_id' => 'required|exists:users,id',
+            'members.*.project_role_id' => 'required|exists:project_roles,id',
+        ]);
+
+        $members = collect($validated['members'])
+            ->map(fn ($m) => [
+                'user_id' => (int) $m['user_id'],
+                'project_role_id' => (int) $m['project_role_id'],
+            ])
+            ->unique(fn ($m) => $m['user_id'] . '-' . $m['project_role_id'])
+            ->values();
+
+        $currentUser = $request->user();
+        $currentUserWasMember = DB::table('project_members')
+            ->where('project_id', $project->id)
+            ->where('user_id', $currentUser->id)
+            ->exists();
+        $currentUserStillMember = $members->contains(fn ($m) => (int) $m['user_id'] === (int) $currentUser->id);
+        if ($currentUserWasMember && !$currentUserStillMember) {
+            return response()->json(['error' => 'You cannot remove yourself from this project.'], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            ProjectMember::where('project_id', $project->id)->delete();
+            foreach ($members as $member) {
+                ProjectMember::create([
+                    'project_id' => $project->id,
+                    'user_id' => $member['user_id'],
+                    'project_role_id' => $member['project_role_id'],
+                ]);
+            }
+            DB::commit();
+
+            $this->log('Project', 'Updated Project Members', "Updated members for project: {$project->name}");
+            return response()->json(['status' => 'success']);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 }

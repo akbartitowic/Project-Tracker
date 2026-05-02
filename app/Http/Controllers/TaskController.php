@@ -15,11 +15,43 @@ use Illuminate\Support\Facades\Validator;
 class TaskController extends Controller
 {
     use LogActivity;
+
+    private function isPrivilegedUser($user): bool
+    {
+        if (!$user) return false;
+        $email = strtolower((string) ($user->email ?? ''));
+        if ($email === 'tito@noohtify.com') return true;
+        $roleName = strtolower((string) ($user->role->name ?? $user->role ?? ''));
+        return $roleName === 'admin';
+    }
+
+    private function canAccessProject($user, int $projectId): bool
+    {
+        if ($this->isPrivilegedUser($user)) return true;
+        return DB::table('project_members')
+            ->where('project_id', $projectId)
+            ->where('user_id', $user->id)
+            ->exists();
+    }
+
     public function index(Request $request)
     {
+        $user = $request->user();
         $query = Task::query();
+
+        if (!$this->isPrivilegedUser($user)) {
+            $assignedProjectIds = DB::table('project_members')
+                ->where('user_id', $user->id)
+                ->pluck('project_id');
+            $query->whereIn('project_id', $assignedProjectIds);
+        }
+
         if ($request->has('project_id')) {
-            $query->where('project_id', $request->query('project_id'));
+            $projectId = (int) $request->query('project_id');
+            if (!$this->canAccessProject($user, $projectId)) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+            $query->where('project_id', $projectId);
         }
         return response()->json(['data' => $query->get()]);
     }
@@ -39,10 +71,15 @@ class TaskController extends Controller
 
     public function import(Request $request)
     {
+        $user = $request->user();
         $request->validate([
             'project_id' => 'required|exists:projects,id',
             'file' => 'required|file|mimes:csv,txt'
         ]);
+
+        if (!$this->canAccessProject($user, (int) $request->project_id)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
 
         $project = Project::find($request->project_id);
         if (!$project) {
@@ -169,6 +206,7 @@ class TaskController extends Controller
 
     public function store(Request $request)
     {
+        $user = $request->user();
         $validated = $request->validate([
             'title' => 'required|string',
             'feature_title' => 'required|string',
@@ -181,6 +219,10 @@ class TaskController extends Controller
             'project_role_id' => 'nullable|exists:project_roles,id',
             'category' => 'nullable|string'
         ]);
+
+        if (!$this->canAccessProject($user, (int) $validated['project_id'])) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
 
         $est = (float)($validated['estimated_hours'] ?? 0);
         $project = Project::find($validated['project_id']);
@@ -235,10 +277,14 @@ class TaskController extends Controller
 
     public function updateStatus(Request $request, $id)
     {
+        $user = $request->user();
         $validated = $request->validate([
             'status' => 'required|string'
         ]);
         $task = Task::findOrFail($id);
+        if (!$this->canAccessProject($user, (int) $task->project_id)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
         $oldStatus = $task->status;
         $changes = $task->update($validated) ? 1 : 0;
         
@@ -249,7 +295,11 @@ class TaskController extends Controller
 
     public function update(Request $request, $id)
     {
+        $user = $request->user();
         $task = Task::findOrFail($id);
+        if (!$this->canAccessProject($user, (int) $task->project_id)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
         $validated = $request->validate([
             'title' => 'required|string',
             'feature_title' => 'required|string',
@@ -268,6 +318,7 @@ class TaskController extends Controller
 
     public function bulkEditManhours(Request $request)
     {
+        $user = $request->user();
         $validated = $request->validate([
             'task_ids' => 'required|array',
             'task_ids.*' => 'exists:tasks,id',
@@ -278,6 +329,20 @@ class TaskController extends Controller
 
         if (empty($validated['task_ids'])) {
             return response()->json(['error' => 'No tasks selected.'], 400);
+        }
+
+        if (!$this->isPrivilegedUser($user)) {
+            $unauthorizedExists = Task::whereIn('id', $validated['task_ids'])
+                ->whereNotIn('project_id', function ($q) use ($user) {
+                    $q->select('project_id')
+                        ->from('project_members')
+                        ->where('user_id', $user->id);
+                })
+                ->exists();
+
+            if ($unauthorizedExists) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
         }
 
         $updateData = [];

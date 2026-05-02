@@ -62,6 +62,10 @@ class User extends Authenticatable
         if (strtolower((string) $this->email) === 'tito@noohtify.com') {
             return true;
         }
-        return $this->role && $this->role->permissions()->where('slug', $slug)->exists();
+        $roleModel = $this->role()->first();
+        if (!$roleModel) {
+            return false;
+        }
+        return $roleModel->permissions()->where('slug', $slug)->exists();
     }
 }

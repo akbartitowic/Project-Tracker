@@ -23,7 +23,7 @@ import ProjectCategoryMaster from './pages/ProjectCategoryMaster';
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
 import { useAuth } from './context/AuthContext';
-import { getRequiredPermissionForPath, hasPermission } from './utils/permissions';
+import { getDefaultLandingPath, getRequiredPermissionForPath, hasPermission } from './utils/permissions';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -38,7 +38,10 @@ function ProtectedRoute({ children }) {
   if (!user) return <Navigate to="/login" replace />;
   const requiredPermission = getRequiredPermissionForPath(location.pathname);
   if (requiredPermission && !hasPermission(user, requiredPermission)) {
-    if (location.pathname === '/') {
+    const fallbackPath = getDefaultLandingPath(user);
+    const fallbackPermission = getRequiredPermissionForPath(fallbackPath);
+    const canUseFallback = !fallbackPermission || hasPermission(user, fallbackPermission);
+    if (location.pathname === fallbackPath || !canUseFallback) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white p-6 text-center">
           <div>
@@ -48,7 +51,7 @@ function ProtectedRoute({ children }) {
         </div>
       );
     }
-    return <Navigate to="/" replace />;
+    return <Navigate to={fallbackPath} replace />;
   }
   return children;
 }

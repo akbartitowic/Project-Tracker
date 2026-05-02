@@ -15,6 +15,22 @@ class AuthController extends Controller
 {
     use LogActivity;
 
+    private function serializeUser(User $user): array
+    {
+        $roleModel = $user->role()->with('permissions')->first();
+        $data = $user->toArray();
+        $data['role_name'] = $roleModel?->name ?? ($data['role'] ?? null);
+        $data['role_permissions'] = $roleModel
+            ? $roleModel->permissions->map(fn ($p) => [
+                'id' => $p->id,
+                'slug' => $p->slug,
+                'name' => $p->name,
+                'module' => $p->module,
+            ])->values()->all()
+            : [];
+        return $data;
+    }
+
     private function ensureBoardOnlyPermissions(Role $role): void
     {
         $permissionSpecs = [
@@ -62,7 +78,7 @@ class AuthController extends Controller
             'status' => 'success',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user->load('role.permissions'),
+            'user' => $this->serializeUser($user),
         ]);
     }
 
@@ -82,7 +98,7 @@ class AuthController extends Controller
             'status' => 'success',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user->load('role.permissions'),
+            'user' => $this->serializeUser($user),
         ]);
     }
 
@@ -100,7 +116,7 @@ class AuthController extends Controller
     {
         return response()->json([
             'status' => 'success',
-            'user' => $request->user()->load('role.permissions')
+            'user' => $this->serializeUser($request->user())
         ]);
     }
 
@@ -129,7 +145,7 @@ class AuthController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Profile updated successfully',
-            'user' => $user->load('role.permissions')
+            'user' => $this->serializeUser($user)
         ]);
     }
 }

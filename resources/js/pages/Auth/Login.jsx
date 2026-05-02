@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Activity, Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getDefaultLandingPath } from '../../utils/permissions';
 
 export default function Login() {
     const { login } = useAuth();
@@ -20,7 +21,7 @@ export default function Login() {
         try {
             const res = await login(credentials.email, credentials.password);
             if (res.success) {
-                navigate('/');
+                navigate(getDefaultLandingPath(res.user));
             } else {
                 setError(res.message);
             }

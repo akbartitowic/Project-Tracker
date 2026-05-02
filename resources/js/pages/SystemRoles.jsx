@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 const ACTIONS = ['create', 'read', 'update', 'delete'];
 const ACTION_LABELS = {
     create: 'Create',
-    read: 'Read',
+    read: 'Sidebar Menu',
     update: 'Update',
     delete: 'Delete',
 };
@@ -256,8 +256,28 @@ export default function SystemRoles() {
                                                     </Button>
                                                 </div>
                                             </CardHeader>
-                                            <CardContent className="p-4 grid grid-cols-2 gap-2">
-                                                {availableActions.map((action) => {
+                                            <CardContent className="p-4 space-y-3">
+                                                {moduleGroup.byAction.read && (
+                                                    <button
+                                                        type="button"
+                                                        className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left ${
+                                                            selectedPermissionIds.has(moduleGroup.byAction.read.id)
+                                                                ? 'bg-blue-50/70 border-blue-200 text-blue-900 dark:bg-blue-900/20 dark:border-blue-900/30 dark:text-blue-200'
+                                                                : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'
+                                                        }`}
+                                                        onClick={() => handleTogglePermission(moduleGroup.byAction.read.id)}
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold">Sidebar Menu</span>
+                                                            <span className="text-[10px] text-slate-400">Show or hide this menu in sidebar</span>
+                                                            <span className="text-[10px] text-slate-400 font-mono">{moduleGroup.byAction.read.slug}</span>
+                                                        </div>
+                                                        {selectedPermissionIds.has(moduleGroup.byAction.read.id) ? <CheckCircle2 className="size-4 text-blue-500" /> : <Circle className="size-4 text-slate-300" />}
+                                                    </button>
+                                                )}
+
+                                                <div className="grid grid-cols-2 gap-2">
+                                                {availableActions.filter((action) => action !== 'read').map((action) => {
                                                     const perm = moduleGroup.byAction[action];
                                                     const isActive = perm ? selectedPermissionIds.has(perm.id) : false;
                                                     return (
@@ -274,13 +294,17 @@ export default function SystemRoles() {
                                                             }`}
                                                             onClick={() => perm && handleTogglePermission(perm.id)}
                                                         >
-                                                            <span className="text-sm font-bold">{ACTION_LABELS[action]}</span>
+                                                            <span className="flex flex-col">
+                                                                <span className="text-sm font-bold">{ACTION_LABELS[action]}</span>
+                                                                {perm?.slug && <span className="text-[10px] text-slate-400 font-mono">{perm.slug}</span>}
+                                                            </span>
                                                             {isActive ? <CheckCircle2 className="size-4 text-emerald-500" /> : <Circle className="size-4 text-slate-300" />}
                                                         </button>
                                                     );
                                                 })}
-                                                {availableActions.length === 0 && (
-                                                    <div className="col-span-2 text-xs text-slate-400 italic">
+                                                </div>
+                                                {availableActions.filter((action) => action !== 'read').length === 0 && (
+                                                    <div className="text-xs text-slate-400 italic">
                                                         No API actions detected for this menu.
                                                     </div>
                                                 )}
