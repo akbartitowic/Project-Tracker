@@ -106,10 +106,13 @@
         <table>
             <thead>
                 <tr>
-                    <th width="40%">Task</th>
-                    <th width="20%">Feature</th>
-                    <th width="20%">Status</th>
-                    <th width="20%">Last Update</th>
+                    <th width="{{ $project->methodology === 'Agile Scrum' ? '32%' : '40%' }}">Task</th>
+                    <th width="{{ $project->methodology === 'Agile Scrum' ? '18%' : '22%' }}">Feature</th>
+                    <th width="{{ $project->methodology === 'Agile Scrum' ? '16%' : '18%' }}">Status</th>
+                    @if($project->methodology === 'Agile Scrum')
+                    <th width="14%">Total Penggunaan MH</th>
+                    @endif
+                    <th width="{{ $project->methodology === 'Agile Scrum' ? '20%' : '20%' }}">Last Update</th>
                 </tr>
             </thead>
             <tbody>
@@ -126,11 +129,14 @@
                             {{ $task->normalized_status }}
                         </span>
                     </td>
+                    @if($project->methodology === 'Agile Scrum')
+                    <td>{{ number_format((float) ($task->estimated_hours ?? 0), 1) }}h</td>
+                    @endif
                     <td>{{ $task->updated_at->format('d M Y') }}</td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="4" style="text-align: center; color: #94a3b8;">No tasks updated in this range.</td>
+                    <td colspan="{{ $project->methodology === 'Agile Scrum' ? 5 : 4 }}" style="text-align: center; color: #94a3b8;">No tasks updated in this range.</td>
                 </tr>
                 @endforelse
             </tbody>
@@ -143,11 +149,11 @@
         <table>
             <thead>
                 <tr>
-                    <th width="{{ $project->methodology === 'Agile Scrum' ? '35%' : '45%' }}">Task</th>
-                    <th width="{{ $project->methodology === 'Agile Scrum' ? '25%' : '30%' }}">Feature</th>
-                    <th width="{{ $project->methodology === 'Agile Scrum' ? '20%' : '25%' }}">Status</th>
+                    <th width="{{ $project->methodology === 'Agile Scrum' ? '30%' : '45%' }}">Task</th>
+                    <th width="{{ $project->methodology === 'Agile Scrum' ? '24%' : '30%' }}">Feature</th>
+                    <th width="{{ $project->methodology === 'Agile Scrum' ? '18%' : '25%' }}">Status</th>
                     @if($project->methodology === 'Agile Scrum')
-                    <th width="20%">Est. Manhours</th>
+                    <th width="28%">Total Penggunaan MH</th>
                     @endif
                 </tr>
             </thead>
@@ -162,7 +168,7 @@
                         </span>
                     </td>
                     @if($project->methodology === 'Agile Scrum')
-                    <td>{{ number_format($task->estimated_hours, 1) }}h</td>
+                    <td>{{ number_format((float) ($task->estimated_hours ?? 0), 1) }}h</td>
                     @endif
                 </tr>
                 @endforeach

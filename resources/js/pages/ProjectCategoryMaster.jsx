@@ -17,7 +17,7 @@ export default function ProjectCategoryMaster() {
       const res = await fetchAPI('/project-categories');
       setCategories(res.data || []);
     } catch (error) {
-      alert('Gagal memuat category project: ' + error.message);
+      alert('Gagal memuat category company: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -51,7 +51,7 @@ export default function ProjectCategoryMaster() {
   };
 
   const remove = async (id) => {
-    if (!window.confirm('Hapus category project ini?')) return;
+    if (!window.confirm('Hapus category company ini?')) return;
     try {
       await fetchAPI(`/project-categories/${id}`, { method: 'DELETE' });
       load();
@@ -63,20 +63,20 @@ export default function ProjectCategoryMaster() {
   return (
     <div className="max-w-4xl mx-auto p-8 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Category Project</h1>
-        <p className="text-slate-500 mt-1">Master data category project untuk Presales.</p>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Category Company</h1>
+        <p className="text-slate-500 mt-1">Master data category company untuk Presales.</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>{editing ? 'Edit Category' : 'Tambah Category'}</CardTitle>
+          <CardTitle>{editing ? 'Edit Category Company' : 'Tambah Category Company'}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="flex gap-3">
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Masukkan category project"
+              placeholder="Masukkan category company"
             />
             <Button type="submit">
               <Plus className="size-4 mr-2" />
@@ -88,13 +88,13 @@ export default function ProjectCategoryMaster() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Data Category Project</CardTitle>
+          <CardTitle>Data Category Company</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-slate-500">Loading...</p>
           ) : categories.length === 0 ? (
-            <p className="text-slate-500">Belum ada category project.</p>
+            <p className="text-slate-500">Belum ada category company.</p>
           ) : (
             <div className="space-y-2">
               {categories.map((item) => (

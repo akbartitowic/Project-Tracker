@@ -42,7 +42,7 @@ export default function Sidebar() {
                 {can('category_project.read') && <NavLink to="/presales-project-categories"
                     className={({ isActive }) => `flex items-center gap-3 px-6 py-2 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Tag className="size-4" />
-                    <span className="text-xs">Category Project</span>
+                    <span className="text-xs">Category Company</span>
                 </NavLink>}
                 {can('list_project.read') && <NavLink to="/create-project"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>

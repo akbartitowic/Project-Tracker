@@ -55,7 +55,10 @@ class TaskController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = Task::query();
+        $query = Task::query()
+            ->leftJoin('users', 'users.id', '=', 'tasks.assignee_id')
+            ->select('tasks.*')
+            ->selectRaw('users.name as assignee_name');
 
         if (!$this->isPrivilegedUser($user)) {
             $assignedProjectIds = DB::table('project_members')

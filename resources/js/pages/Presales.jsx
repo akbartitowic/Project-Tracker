@@ -55,6 +55,7 @@ export default function Presales() {
   });
   const [developmentMh, setDevelopmentMh] = useState({});
   const [operationAssignments, setOperationAssignments] = useState({});
+  const [businessReadyToAcknowledge, setBusinessReadyToAcknowledge] = useState(false);
   const [editForm, setEditForm] = useState({
     id: null,
     company_id: '',
@@ -146,7 +147,17 @@ export default function Presales() {
       opMap[a.project_role_id].push(a.user_id);
     });
     setOperationAssignments(opMap);
+    // Require explicit save before acknowledging, per request.
+    setBusinessReadyToAcknowledge(false);
   }, [selected]);
+
+  const updateBusinessForm = (updater) => {
+    setBusinessForm((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : { ...prev, ...updater };
+      return next;
+    });
+    setBusinessReadyToAcknowledge(false);
+  };
 
   const createOpportunity = async (e) => {
     e.preventDefault();
@@ -237,20 +248,26 @@ export default function Presales() {
         }),
       });
       await loadAll();
+      setBusinessReadyToAcknowledge(true);
       alert('Data Business tersimpan.');
     } catch (error) {
-      alert(error.message);
+      alert(`Gagal menyimpan data Business: ${error.message}`);
     }
   };
 
   const acknowledgeBusiness = async () => {
     if (!selected) return;
+    if (!businessReadyToAcknowledge) {
+      alert('Silakan klik Save Business terlebih dahulu sebelum Acknowledge.');
+      return;
+    }
     try {
       await fetchAPI(`/presales/${selected.id}/business/acknowledge`, { method: 'POST' });
       await loadAll();
+      setBusinessReadyToAcknowledge(false);
       alert('Business acknowledged.');
     } catch (error) {
-      alert(error.message);
+      alert(`Gagal acknowledge Business: ${error.message}`);
     }
   };
 
@@ -331,7 +348,7 @@ export default function Presales() {
   };
 
   const toggleRole = (roleId) => {
-    setBusinessForm((prev) => {
+    updateBusinessForm((prev) => {
       const exists = prev.role_ids.includes(roleId);
       const role_ids = exists ? prev.role_ids.filter((id) => id !== roleId) : [...prev.role_ids, roleId];
       return { ...prev, role_ids };
@@ -480,7 +497,7 @@ export default function Presales() {
                         <Input
                           value={businessForm.deck_url}
                           disabled={isProceeded}
-                          onChange={(e) => setBusinessForm((prev) => ({ ...prev, deck_url: e.target.value }))}
+                          onChange={(e) => updateBusinessForm((prev) => ({ ...prev, deck_url: e.target.value }))}
                         />
                       </label>
                       <label className="space-y-2">
@@ -488,7 +505,7 @@ export default function Presales() {
                         <Input
                           value={businessForm.quotation_url}
                           disabled={isProceeded}
-                          onChange={(e) => setBusinessForm((prev) => ({ ...prev, quotation_url: e.target.value }))}
+                          onChange={(e) => updateBusinessForm((prev) => ({ ...prev, quotation_url: e.target.value }))}
                         />
                       </label>
                     </div>
@@ -497,7 +514,7 @@ export default function Presales() {
                       <Input
                         value={businessForm.drive_url}
                         disabled={isProceeded}
-                        onChange={(e) => setBusinessForm((prev) => ({ ...prev, drive_url: e.target.value }))}
+                        onChange={(e) => updateBusinessForm((prev) => ({ ...prev, drive_url: e.target.value }))}
                       />
                     </label>
 
@@ -509,7 +526,7 @@ export default function Presales() {
                             type="radio"
                             checked={businessForm.methodology === 'Agile Scrum'}
                             disabled={isProceeded}
-                            onChange={() => setBusinessForm((prev) => ({ ...prev, methodology: 'Agile Scrum' }))}
+                            onChange={() => updateBusinessForm((prev) => ({ ...prev, methodology: 'Agile Scrum' }))}
                           />
                           Agile Scrum
                         </label>
@@ -518,7 +535,7 @@ export default function Presales() {
                             type="radio"
                             checked={businessForm.methodology === 'Waterfall'}
                             disabled={isProceeded}
-                            onChange={() => setBusinessForm((prev) => ({ ...prev, methodology: 'Waterfall' }))}
+                            onChange={() => updateBusinessForm((prev) => ({ ...prev, methodology: 'Waterfall' }))}
                           />
                           Waterfall
                         </label>
@@ -533,7 +550,7 @@ export default function Presales() {
                           min="0"
                           value={businessForm.total_manhours}
                           disabled={isProceeded}
-                          onChange={(e) => setBusinessForm((prev) => ({ ...prev, total_manhours: e.target.value }))}
+                          onChange={(e) => updateBusinessForm((prev) => ({ ...prev, total_manhours: e.target.value }))}
                         />
                       </label>
                     )}
@@ -558,7 +575,7 @@ export default function Presales() {
 
                     <div className="flex gap-2">
                       <Button onClick={saveBusiness} disabled={isProceeded}>Save Business</Button>
-                      <Button variant="outline" onClick={acknowledgeBusiness} disabled={isProceeded}>
+                      <Button variant="outline" onClick={acknowledgeBusiness} disabled={isProceeded || !businessReadyToAcknowledge}>
                         Acknowledge
                       </Button>
                     </div>
@@ -711,7 +728,7 @@ export default function Presales() {
             </label>
 
             <label className="space-y-2 block">
-              <span className="text-sm font-medium">Category Project</span>
+              <span className="text-sm font-medium">Category Company</span>
               <select
                 className="w-full border rounded-md p-2"
                 value={newForm.project_category_id}
@@ -792,7 +809,7 @@ export default function Presales() {
             </label>
 
             <label className="space-y-2 block">
-              <span className="text-sm font-medium">Category Project</span>
+              <span className="text-sm font-medium">Category Company</span>
               <select
                 className="w-full border rounded-md p-2"
                 value={editForm.project_category_id}

@@ -3,6 +3,8 @@ import { fetchAPI } from '../services/api';
 import { Rocket, Timer, Wallet, Users, AlertCircle, Clock } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { isAdminUser } from '../utils/permissions';
 
 const getMethodologyLabel = (value) => {
     const normalized = String(value || '').toLowerCase();
@@ -11,6 +13,7 @@ const getMethodologyLabel = (value) => {
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [stats, setStats] = useState({
         totalProjects: 0,
         activeProjects: 0,
@@ -36,11 +39,29 @@ export default function Dashboard() {
     };
 
     const [efficiencyData, setEfficiencyData] = useState([]);
+    const [dashboardMode, setDashboardMode] = useState('admin');
+    const [memberStats, setMemberStats] = useState({
+        totalProjectsHandled: 0,
+        activeTasks: 0,
+        taskStatusCounts: {
+            'To Do': 0,
+            'In Progress': 0,
+            Review: 0,
+            Reopen: 0,
+            Done: 0,
+        },
+    });
 
     useEffect(() => {
         const loadStats = async () => {
             try {
                 const res = await fetchAPI('/dashboard/overview');
+                if (res.mode === 'member') {
+                    setDashboardMode('member');
+                    if (res.userStats) setMemberStats(res.userStats);
+                    return;
+                }
+                setDashboardMode('admin');
                 if (res.stats) setStats(res.stats);
                 if (res.efficiency) setEfficiencyData(res.efficiency.slice(0, 5));
                 if (res.recentLogs) setRecentLogs(res.recentLogs);
@@ -52,8 +73,69 @@ export default function Dashboard() {
         loadStats();
     }, []);
 
+    const shouldShowMemberDashboard = dashboardMode === 'member' && !isAdminUser(user);
+    const commonSummary = shouldShowMemberDashboard
+        ? memberStats
+        : {
+            totalProjectsHandled: stats.totalProjects || 0,
+            activeTasks: stats.activeTasks || 0,
+            taskStatusCounts: stats.taskStatusCounts || {
+                'To Do': 0,
+                'In Progress': 0,
+                Review: 0,
+                Reopen: 0,
+                Done: 0,
+            },
+        };
+
+    const summarySection = (
+        <>
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <Card className="bg-gradient-to-br from-primary/5 to-transparent border-primary/10">
+                    <CardContent className="p-6">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Total Project yang Di-handle</p>
+                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{commonSummary.totalProjectsHandled}</h3>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-6">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Total Task yang Masih Aktif</p>
+                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{commonSummary.activeTasks}</h3>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-6">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Total Task Selesai</p>
+                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{commonSummary.taskStatusCounts?.Done || 0}</h3>
+                    </CardContent>
+                </Card>
+            </section>
+
+            <section>
+                <h4 className="font-bold text-lg text-slate-900 dark:text-white mb-4">Total Task per Status</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {['To Do', 'In Progress', 'Review', 'Reopen', 'Done'].map((status) => (
+                        <Card key={status}>
+                            <CardContent className="p-5">
+                                <p className="text-xs font-bold uppercase text-slate-500">{status}</p>
+                                <p className="text-2xl mt-2 font-bold text-slate-900 dark:text-white">
+                                    {commonSummary.taskStatusCounts?.[status] || 0}
+                                </p>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            </section>
+        </>
+    );
+
+    if (shouldShowMemberDashboard) {
+        return <div className="p-8 space-y-8">{summarySection}</div>;
+    }
+
     return (
         <div className="p-8 space-y-8">
+            {summarySection}
             {/* KPI Section */}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="bg-gradient-to-br from-primary/5 to-transparent border-primary/10">

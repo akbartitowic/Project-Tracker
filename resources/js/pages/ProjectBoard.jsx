@@ -15,7 +15,7 @@ import { DndContext, closestCorners, PointerSensor, useSensor, useSensors } from
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
-function DraggableTaskCard({ task, onClick }) {
+function DraggableTaskCard({ task, onClick, assigneeName }) {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: task.id,
         data: { task }
@@ -61,7 +61,7 @@ function DraggableTaskCard({ task, onClick }) {
 
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                        <span>{task.assignee_id ? `Assignee ${task.assignee_id}` : 'Unassigned'}</span>
+                        <span>{task.assignee_id ? (task.assignee_name || assigneeName || `Assignee ${task.assignee_id}`) : 'Unassigned'}</span>
                     </div>
                     {task.description && <FileText className="size-3.5 text-slate-400" />}
                 </div>
@@ -632,6 +632,19 @@ export default function ProjectBoard() {
         return uniqueUsers;
     }, [projectMembers]);
 
+    const assigneeNameById = useMemo(() => {
+        const map = {};
+        users.forEach((u) => {
+            if (u?.id != null && u?.name) map[u.id] = u.name;
+        });
+        projectMembers.forEach((m) => {
+            if (m?.user_id != null && m?.user_name && !map[m.user_id]) {
+                map[m.user_id] = m.user_name;
+            }
+        });
+        return map;
+    }, [users, projectMembers]);
+
     if (!selectedProject) {
         return (
             <div className="flex-1 p-8 overflow-y-auto w-full bg-slate-50/50 dark:bg-background-dark">
@@ -1094,7 +1107,12 @@ export default function ProjectBoard() {
                                     onAddTask={() => handleOpenModal('To Do')}
                                 >
                                     {getTasksByStatus(col.title).map(task => (
-                                        <DraggableTaskCard key={task.id} task={task} onClick={(t) => handleOpenModal(t.status, t)} />
+                                        <DraggableTaskCard
+                                            key={task.id}
+                                            task={task}
+                                            assigneeName={task.assignee_id ? assigneeNameById[task.assignee_id] : null}
+                                            onClick={(t) => handleOpenModal(t.status, t)}
+                                        />
                                     ))}
                                 </BoardColumn>
                             ))}
@@ -1162,7 +1180,7 @@ export default function ProjectBoard() {
                                                     <div className="size-6 rounded-full border border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center"></div>
                                                 )}
                                                 <span className="text-sm font-medium">
-                                                    {task.assignee_id ? users.find(u => u.id === task.assignee_id)?.name || `Assignee ${task.assignee_id}` : 'Unassigned'}
+                                                    {task.assignee_id ? task.assignee_name || users.find(u => u.id === task.assignee_id)?.name || `Assignee ${task.assignee_id}` : 'Unassigned'}
                                                 </span>
                                             </div>
                                         </td>

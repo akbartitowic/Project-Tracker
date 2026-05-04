@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 
 export default function FinanceMonitoring() {
     const [projects, setProjects] = useState([]);
@@ -37,6 +38,10 @@ export default function FinanceMonitoring() {
     const [quotaBreakdown, setQuotaBreakdown] = useState([]);
     const [quotaMeta, setQuotaMeta] = useState(null);
     const [loadingQuotas, setLoadingQuotas] = useState(false);
+    const [isRealizationModalOpen, setIsRealizationModalOpen] = useState(false);
+    const [selectedAllocationForRealization, setSelectedAllocationForRealization] = useState(null);
+    const [realizationAmountInput, setRealizationAmountInput] = useState('');
+    const [isSavingRealization, setIsSavingRealization] = useState(false);
 
     const selectedProjectData = useMemo(
         () => projects.find((project) => project.id === selectedProject) || null,
@@ -109,29 +114,35 @@ export default function FinanceMonitoring() {
         }
     };
 
-    const handleRealizeAllocation = async (allocation) => {
-        if (!selectedProject) return;
+    const openRealizationModal = (allocation) => {
         const defaultValue = allocation.realized_amount ?? allocation.amount ?? 0;
-        const input = window.prompt(
-            `Input Realization amount for "${allocation.category_name}"`,
-            Number(defaultValue)
-        );
+        setSelectedAllocationForRealization(allocation);
+        setRealizationAmountInput(String(defaultValue));
+        setIsRealizationModalOpen(true);
+    };
 
-        if (input === null) return;
-        const parsed = Number(input);
+    const submitRealization = async () => {
+        if (!selectedProject || !selectedAllocationForRealization) return;
+        const parsed = Number(realizationAmountInput);
         if (!Number.isFinite(parsed) || parsed < 0) {
             alert('Realization amount must be a valid number (>= 0).');
             return;
         }
 
+        setIsSavingRealization(true);
         try {
-            await fetchAPI(`/project-allocations/${allocation.id}/realization`, {
+            await fetchAPI(`/project-allocations/${selectedAllocationForRealization.id}/realization`, {
                 method: 'PUT',
                 body: JSON.stringify({ realized_amount: parsed }),
             });
+            setIsRealizationModalOpen(false);
+            setSelectedAllocationForRealization(null);
+            setRealizationAmountInput('');
             loadProjectFinance(selectedProject);
         } catch (error) {
             alert('Failed to save realization: ' + error.message);
+        } finally {
+            setIsSavingRealization(false);
         }
     };
 
@@ -441,11 +452,11 @@ export default function FinanceMonitoring() {
                                                             </td>
                                                             <td className="py-3 px-2 text-right">
                                                                 {!alloc.is_topup && allocationTab === 'expense' && (
-                                                                    <div className="inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <div className="inline-flex items-center gap-1">
                                                                         <Button
                                                                             variant="outline"
                                                                             size="sm"
-                                                                            onClick={() => handleRealizeAllocation(alloc)}
+                                                                            onClick={() => openRealizationModal(alloc)}
                                                                             className="h-7 px-2 text-[10px] font-bold border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900/40 dark:text-blue-300"
                                                                         >
                                                                             Realization
@@ -725,6 +736,54 @@ export default function FinanceMonitoring() {
                     </Card>
                 </div>
             )}
+
+            <Dialog open={isRealizationModalOpen} onOpenChange={setIsRealizationModalOpen}>
+                <DialogContent className="sm:max-w-[460px]">
+                    <DialogHeader>
+                        <DialogTitle>Set Realization Amount</DialogTitle>
+                        <DialogDescription>
+                            {selectedAllocationForRealization
+                                ? `Input nominal realisasi untuk kategori "${selectedAllocationForRealization.category_name}".`
+                                : 'Input nominal realisasi.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 bg-slate-50/60 dark:bg-slate-900/30">
+                            <p className="text-xs text-slate-500">Planned Amount</p>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                {selectedAllocationForRealization ? formatCurrency(selectedAllocationForRealization.amount || 0) : '-'}
+                            </p>
+                        </div>
+                        <label className="space-y-2 block">
+                            <span className="text-sm font-medium">Realization Amount (IDR)</span>
+                            <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={realizationAmountInput}
+                                onChange={(e) => setRealizationAmountInput(e.target.value)}
+                                placeholder="0"
+                            />
+                        </label>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                setIsRealizationModalOpen(false);
+                                setSelectedAllocationForRealization(null);
+                                setRealizationAmountInput('');
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="button" onClick={submitRealization} disabled={isSavingRealization}>
+                            {isSavingRealization ? 'Saving...' : 'Save Realization'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

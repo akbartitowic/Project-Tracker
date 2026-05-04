@@ -14,7 +14,7 @@ export default function Layout() {
         if (pathname === '/manhours') return 'Manhours Ledger';
         if (pathname === '/reports') return 'Reports';
         if (pathname === '/presales-companies') return 'Presales - List Company';
-        if (pathname === '/presales-project-categories') return 'Presales - Category Project';
+        if (pathname === '/presales-project-categories') return 'Presales - Category Company';
         if (pathname === '/finance-realization-report') return 'Finance - Realization Report';
         return 'Overview';
     };

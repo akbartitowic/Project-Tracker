@@ -4,9 +4,86 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class StatController extends Controller
 {
+    private function isPrivilegedUser($user): bool
+    {
+        if (!$user) return false;
+        $email = strtolower((string) ($user->email ?? ''));
+        if ($email === 'tito@noohtify.com') return true;
+
+        $roleText = strtolower((string) ($user->role ?? ''));
+        if ($roleText === 'admin') return true;
+
+        try {
+            $roleModel = $user->role()->first();
+            if ($roleModel && strtolower((string) $roleModel->name) === 'admin') {
+                return true;
+            }
+        } catch (\Throwable $e) {
+            // Ignore relation issues and continue fallback.
+        }
+
+        return false;
+    }
+
+    private function normalizeTaskStatus(?string $status): string
+    {
+        $value = trim((string) $status);
+        return match (strtolower($value)) {
+            're-open', 'reopen' => 'Reopen',
+            'in progress' => 'In Progress',
+            'to do', 'todo' => 'To Do',
+            'review' => 'Review',
+            'done' => 'Done',
+            default => $value !== '' ? $value : 'To Do',
+        };
+    }
+
+    private function getMemberDashboardData($user): array
+    {
+        $assignedProjectIds = DB::table('project_members')
+            ->where('user_id', $user->id)
+            ->pluck('project_id')
+            ->unique()
+            ->values();
+
+        $statusCounts = [
+            'To Do' => 0,
+            'In Progress' => 0,
+            'Review' => 0,
+            'Reopen' => 0,
+            'Done' => 0,
+        ];
+
+        if ($assignedProjectIds->isNotEmpty()) {
+            $tasks = DB::table('tasks')
+                ->select('status')
+                ->whereIn('project_id', $assignedProjectIds)
+                ->get();
+
+            foreach ($tasks as $task) {
+                $normalized = $this->normalizeTaskStatus($task->status ?? null);
+                if (!array_key_exists($normalized, $statusCounts)) {
+                    $statusCounts[$normalized] = 0;
+                }
+                $statusCounts[$normalized]++;
+            }
+        }
+
+        $activeTasks = collect($statusCounts)
+            ->reject(fn ($count, $status) => $status === 'Done')
+            ->sum();
+
+        return [
+            'totalProjectsHandled' => $assignedProjectIds->count(),
+            'activeTasks' => $activeTasks,
+            'taskStatusCounts' => $statusCounts,
+        ];
+    }
+
     public function stats()
     {
         return response()->json(['data' => $this->getStatsData()]);
@@ -45,6 +122,25 @@ class StatController extends Controller
         $totalMargin = $totalRevenue - $totalAllocated - $opexTotal - $capexTotal;
         $marginPercentage = $totalRevenue > 0 ? ($totalMargin / $totalRevenue) * 100 : 0;
 
+        $taskStatusCounts = [
+            'To Do' => 0,
+            'In Progress' => 0,
+            'Review' => 0,
+            'Reopen' => 0,
+            'Done' => 0,
+        ];
+        $statusRows = DB::table('tasks')
+            ->select('status', DB::raw('COUNT(*) as total'))
+            ->groupBy('status')
+            ->get();
+        foreach ($statusRows as $row) {
+            $normalized = $this->normalizeTaskStatus($row->status ?? null);
+            if (!array_key_exists($normalized, $taskStatusCounts)) {
+                $taskStatusCounts[$normalized] = 0;
+            }
+            $taskStatusCounts[$normalized] += (int) ($row->total ?? 0);
+        }
+
         return [
             'totalProjects' => $stats->totalProjects,
             'activeProjects' => $stats->activeProjects ?: 0,
@@ -56,7 +152,8 @@ class StatController extends Controller
             'totalRevenue' => $totalRevenue,
             'totalAllocated' => $totalAllocated,
             'totalMargin' => $totalMargin,
-            'marginPercentage' => $marginPercentage
+            'marginPercentage' => $marginPercentage,
+            'taskStatusCounts' => $taskStatusCounts,
         ];
     }
 
@@ -121,48 +218,129 @@ class StatController extends Controller
 
     private function getRevenueTrendData()
     {
-        $months = DB::table('projects')
-            ->selectRaw("strftime('%Y-%m', created_at) as month")
-            ->selectRaw('SUM(quotation_value) as billed')
-            ->groupByRaw("strftime('%Y-%m', created_at)")
-            ->orderByRaw("strftime('%Y-%m', created_at) ASC")
-            ->limit(6)
+        $projects = DB::table('projects')
+            ->select('id', 'created_at', 'quotation_value')
+            ->orderBy('created_at', 'asc')
             ->get();
 
-        if ($months->isEmpty()) return [];
+        if ($projects->isEmpty()) {
+            return [];
+        }
 
-        $monthList = $months->pluck('month')->toArray();
+        $projectRows = $projects->map(function ($p) {
+            return [
+                'id' => (int) $p->id,
+                'month' => Carbon::parse($p->created_at)->format('Y-m'),
+                'billed' => (float) ($p->quotation_value ?? 0),
+            ];
+        });
 
-        // Batch get all project allocations for these months
-        $projectAllocations = DB::table('project_allocations')
-            ->join('projects', 'project_allocations.project_id', '=', 'projects.id')
-            ->whereIn(DB::raw("strftime('%Y-%m', projects.created_at)"), $monthList)
-            ->selectRaw("strftime('%Y-%m', projects.created_at) as month, SUM(amount) as cost")
-            ->groupBy('month')
-            ->pluck('cost', 'month');
+        $monthList = $projectRows
+            ->pluck('month')
+            ->unique()
+            ->sort()
+            ->values()
+            ->take(-6)
+            ->values();
 
-        // Batch get all financial records for these months
-        $financialRecords = DB::table('financial_records')
-            ->whereIn(DB::raw("strftime('%Y-%m', date)"), $monthList)
-            ->selectRaw("strftime('%Y-%m', date) as month, SUM(amount) as cost")
-            ->groupBy('month')
-            ->pluck('cost', 'month');
+        $projectIds = $projectRows
+            ->whereIn('month', $monthList)
+            ->pluck('id')
+            ->unique()
+            ->values();
 
-        return $months->map(function($m) use ($projectAllocations, $financialRecords) {
-            $pCost = $projectAllocations[$m->month] ?? 0;
-            $fCost = $financialRecords[$m->month] ?? 0;
-            $m->cost = $pCost + $fCost;
-            return $m;
+        $allocByProject = DB::table('project_allocations')
+            ->select('project_id', DB::raw('SUM(amount) as cost'))
+            ->whereIn('project_id', $projectIds)
+            ->groupBy('project_id')
+            ->pluck('cost', 'project_id');
+
+        $firstMonth = $monthList->first();
+        $financialRows = DB::table('financial_records')
+            ->select('date', 'amount')
+            ->when($firstMonth, function ($q) use ($firstMonth) {
+                $q->whereDate('date', '>=', $firstMonth . '-01');
+            })
+            ->get();
+
+        $financialByMonth = [];
+        foreach ($financialRows as $row) {
+            $month = Carbon::parse($row->date)->format('Y-m');
+            if (!$monthList->contains($month)) {
+                continue;
+            }
+            $financialByMonth[$month] = ($financialByMonth[$month] ?? 0) + (float) ($row->amount ?? 0);
+        }
+
+        return $monthList->map(function ($month) use ($projectRows, $allocByProject, $financialByMonth) {
+            $monthProjects = $projectRows->where('month', $month);
+            $billed = (float) $monthProjects->sum('billed');
+
+            $projectCost = 0.0;
+            foreach ($monthProjects as $project) {
+                $projectCost += (float) ($allocByProject[$project['id']] ?? 0);
+            }
+
+            return (object) [
+                'month' => $month,
+                'billed' => $billed,
+                'cost' => $projectCost + (float) ($financialByMonth[$month] ?? 0),
+            ];
         });
     }
 
-    public function dashboardOverview()
+    public function dashboardOverview(Request $request)
     {
+        $user = $request->user();
+        if ($user && !$this->isPrivilegedUser($user)) {
+            return response()->json([
+                'mode' => 'member',
+                'userStats' => $this->getMemberDashboardData($user),
+            ]);
+        }
+
+        // Fail-safe: if one section errors, keep dashboard stats available.
+        try {
+            $stats = $this->getStatsData();
+        } catch (\Throwable $e) {
+            $stats = [
+                'totalProjects' => 0,
+                'activeProjects' => 0,
+                'doneProjects' => 0,
+                'scrumProjects' => 0,
+                'waterfallProjects' => 0,
+                'activeTasks' => 0,
+                'totalHours' => 0,
+                'totalRevenue' => 0,
+                'totalAllocated' => 0,
+                'totalMargin' => 0,
+                'marginPercentage' => 0,
+            ];
+        }
+
+        try {
+            $efficiency = $this->getEfficiencyData();
+        } catch (\Throwable $e) {
+            $efficiency = [];
+        }
+
+        try {
+            $recentLogs = $this->getRecentLogsData();
+        } catch (\Throwable $e) {
+            $recentLogs = [];
+        }
+
+        try {
+            $revenueTrend = $this->getRevenueTrendData();
+        } catch (\Throwable $e) {
+            $revenueTrend = [];
+        }
+
         return response()->json([
-            'stats' => $this->getStatsData(),
-            'efficiency' => $this->getEfficiencyData(),
-            'recentLogs' => $this->getRecentLogsData(),
-            'revenueTrend' => $this->getRevenueTrendData()
+            'stats' => $stats,
+            'efficiency' => $efficiency,
+            'recentLogs' => $recentLogs,
+            'revenueTrend' => $revenueTrend
         ]);
     }
 }
