@@ -22,7 +22,17 @@ export async function fetchAPI(endpoint, options = {}) {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `API error: ${response.statusText}`);
+            let message = errorData.message;
+            if (!message && errorData.errors && typeof errorData.errors === 'object') {
+                message = Object.values(errorData.errors)
+                    .flat()
+                    .filter(Boolean)
+                    .join(' ');
+            }
+            if (!message) {
+                message = `API error: ${response.status} ${response.statusText}`;
+            }
+            throw new Error(message);
         }
         
         return await response.json();

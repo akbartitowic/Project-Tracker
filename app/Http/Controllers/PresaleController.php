@@ -86,11 +86,49 @@ class PresaleController extends Controller
 
         DB::beginTransaction();
         try {
+            $businessRoleInput = collect($validated['business_role_mh'] ?? [])->mapWithKeys(fn ($v, $k) => [(int) $k => $v]);
+
+            // Per-role Business MH: UI may only send Total MH (no per-role breakdown). Then every role
+            // would otherwise save as 0 and Tech validation (dev <= business per role) wrongly rejects.
+            $perRoleBusiness = [];
+            foreach ($roleIds as $roleId) {
+                $raw = $businessRoleInput->get($roleId);
+                if ($raw === null || $raw === '') {
+                    $perRoleBusiness[$roleId] = 0.0;
+                } else {
+                    $perRoleBusiness[$roleId] = (float) $raw;
+                }
+            }
+
+            if ($validated['methodology'] === 'Agile Scrum') {
+                $budget = (float) ($validated['total_manhours'] ?? 0);
+                $sumBreakdown = array_sum($perRoleBusiness);
+                $roleCount = $roleIds->count();
+                if ($budget > 0 && $sumBreakdown < 0.00001 && $roleCount > 0) {
+                    if ($roleCount === 1) {
+                        $onlyId = (int) $roleIds->first();
+                        $perRoleBusiness[$onlyId] = $budget;
+                    } else {
+                        $each = round($budget / $roleCount, 4);
+                        $allocated = 0.0;
+                        foreach ($roleIds->values() as $idx => $roleId) {
+                            $rid = (int) $roleId;
+                            if ($idx === $roleCount - 1) {
+                                $perRoleBusiness[$rid] = round(max(0, $budget - $allocated), 4);
+                            } else {
+                                $perRoleBusiness[$rid] = $each;
+                                $allocated += $each;
+                            }
+                        }
+                    }
+                }
+            }
+
             $toKeep = [];
             foreach ($roleIds as $roleId) {
                 $mh = null;
                 if ($validated['methodology'] === 'Agile Scrum') {
-                    $mh = isset($validated['business_role_mh'][$roleId]) ? (float) $validated['business_role_mh'][$roleId] : 0;
+                    $mh = $perRoleBusiness[(int) $roleId] ?? 0;
                 }
 
                 $row = $existingRequirements->get($roleId);
@@ -170,10 +208,12 @@ class PresaleController extends Controller
 
         DB::beginTransaction();
         try {
-            $requirements = $presale->roleRequirements()->get();
+            $devInput = collect($validated['development_role_mh'] ?? [])->mapWithKeys(fn ($v, $k) => [(int) $k => $v]);
+            $requirements = $presale->roleRequirements()->with('role')->get();
             foreach ($requirements as $requirement) {
-                $roleId = $requirement->project_role_id;
-                $newMh = isset($validated['development_role_mh'][$roleId]) ? (float) $validated['development_role_mh'][$roleId] : null;
+                $roleId = (int) $requirement->project_role_id;
+                $raw = $devInput->get($roleId);
+                $newMh = ($raw === null || $raw === '') ? null : (float) $raw;
 
                 if ($presale->methodology === 'Agile Scrum') {
                     if ($newMh === null) {
@@ -181,10 +221,19 @@ class PresaleController extends Controller
                         return response()->json(['message' => 'Semua role wajib diisi estimasi MH pada tab Development.'], 422);
                     }
 
-                    if ($requirement->business_mh !== null && $newMh > (float) $requirement->business_mh) {
+                    $businessCap = $requirement->business_mh !== null ? (float) $requirement->business_mh : null;
+                    // Legacy / UI tanpa breakdown per role: DB bisa masih 0 sementara Total MH sudah diisi.
+                    if (($businessCap === null || $businessCap < 0.00001) && (float) ($presale->total_manhours ?? 0) > 0) {
+                        $roleCount = $presale->roleRequirements()->count();
+                        if ($roleCount === 1) {
+                            $businessCap = (float) $presale->total_manhours;
+                        }
+                    }
+                    if ($businessCap !== null && $newMh > $businessCap) {
                         DB::rollBack();
+                        $roleLabel = $requirement->role->name ?? "ID {$roleId}";
                         return response()->json([
-                            'message' => "MH Development untuk role {$requirement->project_role_id} tidak boleh melebihi MH Business.",
+                            'message' => "MH Development untuk «{$roleLabel}» ({$newMh}) tidak boleh melebihi MH Business per role ({$businessCap}). Pastikan tab Business sudah disimpan; batas per role mengikuti kolom MH Business per role, bukan hanya Total MH.",
                         ], 422);
                     }
                 }

@@ -273,6 +273,16 @@ export default function Presales() {
   const acknowledgeDevelopment = async () => {
     if (!selected) return;
     try {
+      // Acknowledge hanya baca data di server. Untuk Agile Scrum, MH tech harus sudah tersimpan
+      // lewat PUT /development — tanpa save, isian form belum masuk DB dan acknowledge gagal.
+      if (selected.methodology === 'Agile Scrum') {
+        await fetchAPI(`/presales/${selected.id}/development`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            development_role_mh: developmentMh,
+          }),
+        });
+      }
       await fetchAPI(`/presales/${selected.id}/development/acknowledge`, { method: 'POST' });
       await loadAll();
       alert('Development acknowledged.');
@@ -558,9 +568,15 @@ export default function Presales() {
                 {activeTab === 'Tech' && (
                   <div className="space-y-4">
                     {businessForm.methodology === 'Agile Scrum' && (
-                      <p className="text-sm text-slate-600">
-                        Total MH dari Business: <b>{selected.total_manhours || 0}</b>
-                      </p>
+                      <div className="text-sm text-slate-600 space-y-1">
+                        <p>
+                          Total MH dari Business: <b>{selected.total_manhours || 0}</b>
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          MH Tech dicek terhadap <b>MH Business per role</b> (tersimpan saat Save Business). Angka Total di atas
+                          dipakai sebagai batas per role jika breakdown per role tidak diisi.
+                        </p>
+                      </div>
                     )}
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Role dari Business</p>
@@ -569,9 +585,24 @@ export default function Presales() {
                       ) : (
                         businessForm.role_ids.map((roleId) => {
                           const role = projectRoles.find((r) => r.id === roleId);
+                          const reqRow = (selected.role_requirements || []).find(
+                            (r) => Number(r.project_role_id) === Number(roleId)
+                          );
+                          const bizCap =
+                            reqRow != null && reqRow.business_mh != null && reqRow.business_mh !== ''
+                              ? Number(reqRow.business_mh)
+                              : null;
                           return (
-                            <div key={roleId} className="flex items-center gap-3">
-                              <span className="w-40 text-sm">{role?.name || `Role ${roleId}`}</span>
+                            <div key={roleId} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                              <div className="w-40 shrink-0">
+                                <span className="text-sm block">{role?.name || `Role ${roleId}`}</span>
+                                {businessForm.methodology === 'Agile Scrum' && (
+                                  <span className="text-[10px] text-slate-500">
+                                    Batas Business:{' '}
+                                    {bizCap != null && !Number.isNaN(bizCap) ? `${bizCap} MH` : '—'}
+                                  </span>
+                                )}
+                              </div>
                               {businessForm.methodology === 'Agile Scrum' ? (
                                 <Input
                                   type="number"
@@ -589,6 +620,11 @@ export default function Presales() {
                         })
                       )}
                     </div>
+                    {businessForm.methodology === 'Agile Scrum' && (
+                      <p className="text-xs text-slate-500">
+                        Tombol Acknowledge akan menyimpan MH Tech terlebih dahulu, lalu mengunci tab ini.
+                      </p>
+                    )}
                     <div className="flex gap-2">
                       <Button onClick={saveDevelopment} disabled={isProceeded}>Save Development</Button>
                       <Button variant="outline" onClick={acknowledgeDevelopment} disabled={isProceeded}>
