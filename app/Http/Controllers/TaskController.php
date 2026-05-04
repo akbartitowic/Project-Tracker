@@ -34,6 +34,24 @@ class TaskController extends Controller
             ->exists();
     }
 
+    /**
+     * DB column tasks.estimated_hours is NOT NULL; Waterfall UI sends null — coerce to 0.
+     */
+    private function normalizeEstimatedHoursForDb(array &$validated): void
+    {
+        if (!array_key_exists('estimated_hours', $validated)) {
+            $validated['estimated_hours'] = 0;
+
+            return;
+        }
+        $v = $validated['estimated_hours'];
+        if ($v === null || $v === '') {
+            $validated['estimated_hours'] = 0;
+        } else {
+            $validated['estimated_hours'] = (float) $v;
+        }
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -220,6 +238,8 @@ class TaskController extends Controller
             'category' => 'nullable|string'
         ]);
 
+        $this->normalizeEstimatedHoursForDb($validated);
+
         if (!$this->canAccessProject($user, (int) $validated['project_id'])) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
@@ -311,7 +331,9 @@ class TaskController extends Controller
             'project_role_id' => 'nullable|exists:project_roles,id',
             'category' => 'nullable|string'
         ]);
-        
+
+        $this->normalizeEstimatedHoursForDb($validated);
+
         $changes = $task->update($validated) ? 1 : 0;
         return response()->json(['changes' => $changes]);
     }
@@ -347,7 +369,8 @@ class TaskController extends Controller
 
         $updateData = [];
         if (array_key_exists('estimated_hours', $validated)) {
-            $updateData['estimated_hours'] = $validated['estimated_hours'];
+            $eh = $validated['estimated_hours'];
+            $updateData['estimated_hours'] = ($eh === null || $eh === '') ? 0 : (float) $eh;
         }
         if (array_key_exists('project_role_id', $validated)) {
             $updateData['project_role_id'] = $validated['project_role_id'];
