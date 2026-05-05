@@ -15,7 +15,7 @@ import { DndContext, closestCorners, PointerSensor, useSensor, useSensors } from
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
-function DraggableTaskCard({ task, onClick, assigneeName }) {
+function DraggableTaskCard({ task, onClick, assigneeName, isFreelance }) {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: task.id,
         data: { task }
@@ -42,10 +42,12 @@ function DraggableTaskCard({ task, onClick, assigneeName }) {
             }}>
                 <div className="flex justify-between items-start mb-2">
                     <span className={`${pClass} text-[10px] px-2 py-0.5 rounded uppercase font-bold tracking-wider`}>{task.priority}</span>
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
-                        <Clock className="size-3.5" />
-                        {task.estimated_hours || 0} hrs
-                    </div>
+                    {!isFreelance && (
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+                            <Clock className="size-3.5" />
+                            {task.estimated_hours || 0} hrs
+                        </div>
+                    )}
                 </div>
                 {task.feature_title && (
                     <div className="flex items-center gap-2 mb-1">
@@ -165,6 +167,7 @@ export default function ProjectBoard() {
     const [bulkEditEstimate, setBulkEditEstimate] = useState('');
     const [bulkEditRoleFilter, setBulkEditRoleFilter] = useState('All');
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
+    const isFreelance = ((user?.role?.name || user?.role || '').toString().trim().toLowerCase() === 'freelance');
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -282,28 +285,31 @@ export default function ProjectBoard() {
                 });
             }
 
-            // Load users
-            const usersRes = await fetchAPI('/users');
-            if (usersRes.data) {
-                setUsers(usersRes.data);
-            }
-
-            // Load project members
+            // Members & tasks require project_board.read only — load before optional /users
             const membersRes = await fetchAPI(`/projects/${projectId}/members`);
             if (membersRes.data) {
                 setProjectMembers(membersRes.data);
             }
 
-            // Load tasks
             const tasksRes = await fetchAPI(`/tasks?project_id=${projectId}`);
             if (tasksRes.data) {
                 setTasks(tasksRes.data);
             }
 
-            // Load role quotas & utilization
             const quotasRes = await fetchAPI(`/projects/${projectId}/quotas`);
             if (quotasRes.data) {
                 setRoleQuotas(quotasRes.data);
+            }
+
+            // Full user directory requires teams_users.read — non-admins may lack this; board must still work
+            try {
+                const usersRes = await fetchAPI('/users');
+                if (usersRes?.data) {
+                    setUsers(usersRes.data);
+                }
+            } catch (e) {
+                console.warn('Project board: could not load /users (assignee pickers may be limited).', e);
+                setUsers([]);
             }
         } catch (error) {
             console.error("Failed to load board data", error);
@@ -645,9 +651,30 @@ export default function ProjectBoard() {
         return map;
     }, [users, projectMembers]);
 
+    /** When /users is forbidden (no teams_users.read), fall back to project members for assignee picker */
+    const assigneeSelectOptions = useMemo(() => {
+        if (users.length > 0) {
+            return users.map((u) => ({
+                id: u.id,
+                label: `${u.name} (${u.role?.name || u.role || 'Member'})`,
+            }));
+        }
+        const seen = new Set();
+        const opts = [];
+        for (const m of projectMembers) {
+            if (!m?.user_id || seen.has(m.user_id)) continue;
+            seen.add(m.user_id);
+            opts.push({
+                id: m.user_id,
+                label: `${m.user_name || 'User'} (${m.role_name || 'Member'})`,
+            });
+        }
+        return opts;
+    }, [users, projectMembers]);
+
     if (!selectedProject) {
         return (
-            <div className="flex-1 p-8 overflow-y-auto w-full bg-slate-50/50 dark:bg-background-dark">
+            <div className="flex-1 w-full overflow-y-auto bg-slate-50/50 p-4 sm:p-6 lg:p-8 dark:bg-background-dark">
                 <div className="max-w-[1200px] mx-auto">
                     <div className="mb-8 flex justify-between items-start">
                         <div>
@@ -770,7 +797,7 @@ export default function ProjectBoard() {
                                         <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{project.name}</h3>
                                         <p className="text-sm font-medium text-slate-500 line-clamp-2">{project.methodology} • {project.budget_status}</p>
 
-                                        {project.methodology === 'Agile Scrum' && project.total_manhours ? (
+                                        {!isFreelance && project.methodology === 'Agile Scrum' && project.total_manhours ? (
                                             <div className="mt-4 space-y-1 text-sm text-slate-600 dark:text-slate-400">
                                                 <div className="flex items-center gap-2">
                                                     <Clock className="size-4" />
@@ -780,7 +807,7 @@ export default function ProjectBoard() {
                                                     Usage: {Number(project.usage_percentage || 0).toFixed(1)}%
                                                 </div>
                                             </div>
-                                        ) : project.total_manhours ? (
+                                        ) : !isFreelance && project.total_manhours ? (
                                             <div className="mt-4 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                                                 <Clock className="size-4" />
                                                 <span>{project.total_manhours} hrs total quota</span>
@@ -799,7 +826,7 @@ export default function ProjectBoard() {
                                         <th className="px-6 py-4 font-medium">Project Name</th>
                                         <th className="px-6 py-4 font-medium">Status</th>
                                         <th className="px-6 py-4 font-medium">Methodology</th>
-                                        <th className="px-6 py-4 font-medium">Total Quota</th>
+                                        {!isFreelance && <th className="px-6 py-4 font-medium">Total Quota</th>}
                                         {!isEditMode && <th className="px-6 py-4 w-10 text-right">Actions</th>}
                                     </tr>
                                 </thead>
@@ -841,21 +868,23 @@ export default function ProjectBoard() {
                                             <td className="px-6 py-4 text-slate-500 font-medium">
                                                 {project.methodology}
                                             </td>
-                                            <td className="px-6 py-4">
-                                                {project.methodology === 'Agile Scrum' && project.total_manhours ? (
-                                                    <div className="flex flex-col text-slate-600 dark:text-slate-400">
-                                                        <span className="text-sm">Rem: {formatHours(project.remaining_manhours)} hrs</span>
-                                                        <span className="text-[11px] font-semibold text-primary">
-                                                            Usage: {Number(project.usage_percentage || 0).toFixed(1)}%
-                                                        </span>
-                                                    </div>
-                                                ) : project.total_manhours ? (
-                                                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                                                        <Clock className="size-4" />
-                                                        <span>{project.total_manhours} hrs</span>
-                                                    </div>
-                                                ) : '-'}
-                                            </td>
+                                            {!isFreelance && (
+                                                <td className="px-6 py-4">
+                                                    {project.methodology === 'Agile Scrum' && project.total_manhours ? (
+                                                        <div className="flex flex-col text-slate-600 dark:text-slate-400">
+                                                            <span className="text-sm">Rem: {formatHours(project.remaining_manhours)} hrs</span>
+                                                            <span className="text-[11px] font-semibold text-primary">
+                                                                Usage: {Number(project.usage_percentage || 0).toFixed(1)}%
+                                                            </span>
+                                                        </div>
+                                                    ) : project.total_manhours ? (
+                                                        <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                                                            <Clock className="size-4" />
+                                                            <span>{project.total_manhours} hrs</span>
+                                                        </div>
+                                                    ) : '-'}
+                                                </td>
+                                            )}
                                             {!isEditMode && (
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="inline-flex items-center gap-1">
@@ -958,7 +987,7 @@ export default function ProjectBoard() {
                                 <UserPlus className="size-4" />
                                 <span>Assign Members</span>
                             </Button>
-                            {isTaskBulkEditMode && selectedTaskIds.length > 0 && (
+                            {!isFreelance && isTaskBulkEditMode && selectedTaskIds.length > 0 && (
                                 <Button
                                     variant="default"
                                     className="shadow-lg shadow-primary/20"
@@ -967,17 +996,19 @@ export default function ProjectBoard() {
                                     Edit Selected ({selectedTaskIds.length})
                                 </Button>
                             )}
-                            <Button
-                                variant={isTaskBulkEditMode ? "secondary" : "outline"}
-                                className={isTaskBulkEditMode ? "bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700" : ""}
-                                onClick={() => {
-                                    if (!isTaskBulkEditMode && viewMode !== 'list') setViewMode('list');
-                                    setIsTaskBulkEditMode(!isTaskBulkEditMode);
-                                    if (isTaskBulkEditMode) setSelectedTaskIds([]);
-                                }}
-                            >
-                                {isTaskBulkEditMode ? "Cancel" : "Manage Tasks"}
-                            </Button>
+                            {!isFreelance && (
+                                <Button
+                                    variant={isTaskBulkEditMode ? "secondary" : "outline"}
+                                    className={isTaskBulkEditMode ? "bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700" : ""}
+                                    onClick={() => {
+                                        if (!isTaskBulkEditMode && viewMode !== 'list') setViewMode('list');
+                                        setIsTaskBulkEditMode(!isTaskBulkEditMode);
+                                        if (isTaskBulkEditMode) setSelectedTaskIds([]);
+                                    }}
+                                >
+                                    {isTaskBulkEditMode ? "Cancel" : "Manage Tasks"}
+                                </Button>
+                            )}
                         </div>
                         <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg mr-2">
                             <Button
@@ -1033,7 +1064,7 @@ export default function ProjectBoard() {
                             </Card>
                         ))}
                     </div>
-                ) : (roleQuotas.length > 0 || generalQuotaFromPresales > 0 || generalAllocatedHours > 0) && (
+                ) : !isFreelance && (roleQuotas.length > 0 || generalQuotaFromPresales > 0 || generalAllocatedHours > 0) && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {roleQuotas.map(quota => {
                             const alloc = Number(quota.allocated_hours) || 0;
@@ -1110,6 +1141,7 @@ export default function ProjectBoard() {
                                         <DraggableTaskCard
                                             key={task.id}
                                             task={task}
+                                            isFreelance={isFreelance}
                                             assigneeName={task.assignee_id ? assigneeNameById[task.assignee_id] : null}
                                             onClick={(t) => handleOpenModal(t.status, t)}
                                         />
@@ -1132,7 +1164,7 @@ export default function ProjectBoard() {
                                     <th className="px-6 py-4 font-medium">Assignee</th>
                                     <th className="px-6 py-4 font-medium text-center">Category</th>
                                     <th className="px-6 py-4 font-medium text-center">Role Quota</th>
-                                    <th className="px-6 py-4 font-medium text-right">Est. Hours</th>
+                                    {!isFreelance && <th className="px-6 py-4 font-medium text-right">Est. Hours</th>}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -1198,17 +1230,19 @@ export default function ProjectBoard() {
                                                     : 'General'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-right text-slate-500 dark:text-slate-400">
-                                            <div className="flex items-center justify-end gap-1.5 font-medium text-sm">
-                                                <Clock className="size-3.5" />
-                                                {task.estimated_hours || 0} hrs
-                                            </div>
-                                        </td>
+                                        {!isFreelance && (
+                                            <td className="px-6 py-4 text-right text-slate-500 dark:text-slate-400">
+                                                <div className="flex items-center justify-end gap-1.5 font-medium text-sm">
+                                                    <Clock className="size-3.5" />
+                                                    {task.estimated_hours || 0} hrs
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                                 {tasks.length === 0 && (
                                     <tr>
-                                        <td colSpan={isTaskBulkEditMode ? "8" : "7"} className="px-6 py-8 text-center text-slate-500">No tasks found. Create one first!</td>
+                                        <td colSpan={isTaskBulkEditMode && !isFreelance ? "8" : (isFreelance ? "6" : "7")} className="px-6 py-8 text-center text-slate-500">No tasks found. Create one first!</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -1286,7 +1320,7 @@ export default function ProjectBoard() {
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {selectedProject?.methodology !== 'Waterfall' && (
+                            {selectedProject?.methodology !== 'Waterfall' && !isFreelance && (
                                 <div className="flex flex-col gap-2">
                                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Project Role Quota</label>
                                     <Select value={newTaskRoleFilter} onValueChange={(val) => {
@@ -1325,15 +1359,15 @@ export default function ProjectBoard() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="Unassigned">Unassigned</SelectItem>
-                                        {users.map(user => (
-                                            <SelectItem key={user.id} value={user.id.toString()}>
-                                                {user.name} ({user.role?.name || user.role || 'Member'})
+                                        {assigneeSelectOptions.map((opt) => (
+                                            <SelectItem key={opt.id} value={opt.id.toString()}>
+                                                {opt.label}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            {selectedProject?.methodology !== 'Waterfall' && (
+                            {selectedProject?.methodology !== 'Waterfall' && !isFreelance && (
                                 <div className="flex flex-col gap-2 col-span-2">
                                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estimated Manhours</label>
                                     <Input type="number" value={newTaskEstimate} onChange={e => setNewTaskEstimate(e.target.value)} min="0" step="0.5" placeholder="0" />
@@ -1455,7 +1489,7 @@ export default function ProjectBoard() {
             </Dialog>
 
             {/* Bulk Edit Task Modal */}
-            <Dialog open={isBulkEditTaskModalOpen} onOpenChange={setIsBulkEditTaskModalOpen}>
+            <Dialog open={!isFreelance && isBulkEditTaskModalOpen} onOpenChange={setIsBulkEditTaskModalOpen}>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Bulk Edit Manhours & Quota</DialogTitle>

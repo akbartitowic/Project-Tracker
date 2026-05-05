@@ -55,7 +55,6 @@ export default function Presales() {
   });
   const [developmentMh, setDevelopmentMh] = useState({});
   const [operationAssignments, setOperationAssignments] = useState({});
-  const [businessReadyToAcknowledge, setBusinessReadyToAcknowledge] = useState(false);
   const [editForm, setEditForm] = useState({
     id: null,
     company_id: '',
@@ -65,9 +64,13 @@ export default function Presales() {
     project_description: '',
   });
 
+  const visiblePresales = useMemo(
+    () => presales.filter((item) => !item.converted_project_id),
+    [presales]
+  );
   const selected = useMemo(
-    () => presales.find((item) => item.id?.toString() === selectedId?.toString()) || null,
-    [presales, selectedId]
+    () => visiblePresales.find((item) => item.id?.toString() === selectedId?.toString()) || null,
+    [visiblePresales, selectedId]
   );
 
   const canOpenTech = !!selected?.business_acknowledged_at;
@@ -92,12 +95,13 @@ export default function Presales() {
       ]);
 
       const items = presaleRes.data || [];
+      const activeItems = items.filter((item) => !item.converted_project_id);
       setPresales(items);
       setCompanies(companyRes.data || []);
       setProjectCategories(categoryRes.data || []);
       setProjectRoles(roleRes.data || []);
       setUsers(userRes.data || []);
-      if (!selectedId && items.length) setSelectedId(items[0].id);
+      if (!selectedId && activeItems.length) setSelectedId(activeItems[0].id);
     } catch (error) {
       alert('Gagal memuat data presales: ' + error.message);
     } finally {
@@ -147,16 +151,25 @@ export default function Presales() {
       opMap[a.project_role_id].push(a.user_id);
     });
     setOperationAssignments(opMap);
-    // Require explicit save before acknowledging, per request.
-    setBusinessReadyToAcknowledge(false);
   }, [selected]);
+
+  useEffect(() => {
+    if (visiblePresales.length === 0) {
+      if (selectedId !== null) setSelectedId(null);
+      return;
+    }
+
+    const stillExists = visiblePresales.some((item) => item.id?.toString() === selectedId?.toString());
+    if (!stillExists) {
+      setSelectedId(visiblePresales[0].id);
+    }
+  }, [visiblePresales, selectedId]);
 
   const updateBusinessForm = (updater) => {
     setBusinessForm((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : { ...prev, ...updater };
       return next;
     });
-    setBusinessReadyToAcknowledge(false);
   };
 
   const createOpportunity = async (e) => {
@@ -234,21 +247,8 @@ export default function Presales() {
   const saveBusiness = async () => {
     if (!selected) return;
     try {
-      await fetchAPI(`/presales/${selected.id}/business`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          deck_url: businessForm.deck_url,
-          quotation_url: businessForm.quotation_url,
-          drive_url: businessForm.drive_url,
-          methodology: businessForm.methodology,
-          total_manhours:
-            businessForm.methodology === 'Agile Scrum' ? Number(businessForm.total_manhours || 0) : null,
-          project_role_ids: businessForm.role_ids,
-          business_role_mh: businessForm.role_mh,
-        }),
-      });
+      await submitBusinessData();
       await loadAll();
-      setBusinessReadyToAcknowledge(true);
       alert('Data Business tersimpan.');
     } catch (error) {
       alert(`Gagal menyimpan data Business: ${error.message}`);
@@ -257,14 +257,11 @@ export default function Presales() {
 
   const acknowledgeBusiness = async () => {
     if (!selected) return;
-    if (!businessReadyToAcknowledge) {
-      alert('Silakan klik Save Business terlebih dahulu sebelum Acknowledge.');
-      return;
-    }
     try {
+      // Keep UX simple: acknowledge always persists current Business form first.
+      await submitBusinessData();
       await fetchAPI(`/presales/${selected.id}/business/acknowledge`, { method: 'POST' });
       await loadAll();
-      setBusinessReadyToAcknowledge(false);
       alert('Business acknowledged.');
     } catch (error) {
       alert(`Gagal acknowledge Business: ${error.message}`);
@@ -355,6 +352,23 @@ export default function Presales() {
     });
   };
 
+  const submitBusinessData = async () => {
+    if (!selected) return;
+    await fetchAPI(`/presales/${selected.id}/business`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        deck_url: businessForm.deck_url,
+        quotation_url: businessForm.quotation_url,
+        drive_url: businessForm.drive_url,
+        methodology: businessForm.methodology,
+        total_manhours:
+          businessForm.methodology === 'Agile Scrum' ? Number(businessForm.total_manhours || 0) : null,
+        project_role_ids: businessForm.role_ids,
+        business_role_mh: businessForm.role_mh,
+      }),
+    });
+  };
+
   const setAssignmentUsers = (roleId, userId, checked) => {
     setOperationAssignments((prev) => {
       const existing = prev[roleId] || [];
@@ -364,11 +378,11 @@ export default function Presales() {
   };
 
   if (loading) {
-    return <div className="p-8 text-slate-500">Loading presales flow...</div>;
+    return <div className="p-4 text-slate-500 sm:p-6 lg:p-8">Loading presales flow...</div>;
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Presales</h1>
@@ -386,10 +400,15 @@ export default function Presales() {
             <CardTitle>Opportunity List</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 max-h-[70vh] overflow-y-auto">
-            {presales.length === 0 ? (
-              <p className="text-slate-500">Belum ada opportunity.</p>
+            {visiblePresales.length === 0 ? (
+              <div className="space-y-3">
+                <p className="text-slate-500">Tidak ada opportunity aktif. Project yang sudah proceed dapat dilihat di List Project.</p>
+                <Button variant="outline" onClick={() => navigate('/create-project')}>
+                  Go to List Project
+                </Button>
+              </div>
             ) : (
-              presales.map((item) => (
+              visiblePresales.map((item) => (
                 <div
                   key={item.id}
                   className={`w-full text-left border rounded-lg p-3 transition cursor-pointer ${
@@ -575,7 +594,7 @@ export default function Presales() {
 
                     <div className="flex gap-2">
                       <Button onClick={saveBusiness} disabled={isProceeded}>Save Business</Button>
-                      <Button variant="outline" onClick={acknowledgeBusiness} disabled={isProceeded || !businessReadyToAcknowledge}>
+                      <Button variant="outline" onClick={acknowledgeBusiness} disabled={isProceeded}>
                         Acknowledge
                       </Button>
                     </div>

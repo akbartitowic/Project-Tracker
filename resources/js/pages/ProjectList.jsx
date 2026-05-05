@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ const formatDurationDays = (startDate, status, endDate) => {
 
 export default function ProjectList() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -66,17 +68,18 @@ export default function ProjectList() {
         const totalReopen = filteredProjects.reduce((acc, p) => acc + Number(p.reopen_tasks || 0), 0);
         return { total, active, done, totalTasks, totalReopen };
     }, [filteredProjects]);
+    const isFreelance = ((user?.role?.name || user?.role || '').toString().trim().toLowerCase() === 'freelance');
 
     return (
-        <div className="p-8 max-w-[1400px] mx-auto pb-20">
+        <div className="mx-auto max-w-[1400px] p-4 pb-16 sm:p-6 sm:pb-20 lg:p-8">
             <div className="flex flex-col gap-2 mb-8">
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white">List Project</h1>
                 <p className="text-slate-500 dark:text-text-secondary">
-                    Menampilkan project aktif dan done beserta ringkasan durasi, manhours/progress, dan statistik task.
+                    Menampilkan project aktif dan done beserta ringkasan durasi, progress, dan statistik task.
                 </p>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <Card><CardContent className="p-4"><p className="text-xs text-slate-500">Total Project</p><p className="text-2xl font-bold">{summary.total}</p></CardContent></Card>
                 <Card><CardContent className="p-4"><p className="text-xs text-slate-500">Active</p><p className="text-2xl font-bold text-blue-600">{summary.active}</p></CardContent></Card>
                 <Card><CardContent className="p-4"><p className="text-xs text-slate-500">Done</p><p className="text-2xl font-bold text-emerald-600">{summary.done}</p></CardContent></Card>
@@ -86,12 +89,12 @@ export default function ProjectList() {
 
             <Card>
                 <CardHeader className="pb-4">
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div>
                             <CardTitle className="flex items-center gap-2"><KanbanSquare className="size-5 text-primary" /> Project Overview</CardTitle>
                             <CardDescription>Ringkasan per project sesuai metodologi Scrum/Waterfall.</CardDescription>
                         </div>
-                        <div className="relative w-full max-w-xs">
+                        <div className="relative w-full md:max-w-xs">
                             <Search className="absolute left-3 top-3 size-4 text-slate-400" />
                             <Input
                                 className="pl-10"
@@ -110,7 +113,7 @@ export default function ProjectList() {
                                     <th className="text-left font-medium pb-3 px-2">Project</th>
                                     <th className="text-left font-medium pb-3 px-2">Status</th>
                                     <th className="text-left font-medium pb-3 px-2">Berjalan</th>
-                                    <th className="text-left font-medium pb-3 px-2">Scrum (MH)</th>
+                                    {!isFreelance && <th className="text-left font-medium pb-3 px-2">Scrum (MH)</th>}
                                     <th className="text-left font-medium pb-3 px-2">Waterfall Progress</th>
                                     <th className="text-right font-medium pb-3 px-2">Total Task</th>
                                     <th className="text-right font-medium pb-3 px-2">Re-open</th>
@@ -119,9 +122,9 @@ export default function ProjectList() {
                             </thead>
                             <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                                 {loading ? (
-                                    <tr><td colSpan="8" className="py-10 text-center text-slate-400">Loading projects...</td></tr>
+                                    <tr><td colSpan={isFreelance ? "7" : "8"} className="py-10 text-center text-slate-400">Loading projects...</td></tr>
                                 ) : filteredProjects.length === 0 ? (
-                                    <tr><td colSpan="8" className="py-10 text-center text-slate-400">Tidak ada project aktif/done.</td></tr>
+                                    <tr><td colSpan={isFreelance ? "7" : "8"} className="py-10 text-center text-slate-400">Tidak ada project aktif/done.</td></tr>
                                 ) : (
                                     filteredProjects.map((project) => {
                                         const methodology = normalizeMethodology(project.methodology);
@@ -149,16 +152,18 @@ export default function ProjectList() {
                                                         {formatDurationDays(project.start_date, project.status, project.end_date)}
                                                     </div>
                                                 </td>
-                                                <td className="py-3 px-2">
-                                                    {isScrum ? (
-                                                        <div className="text-slate-700 dark:text-slate-300">
-                                                            <div className="inline-flex items-center gap-1.5"><Activity className="size-3.5 text-primary" /> Total {formatHours(totalMh)}h</div>
-                                                            <div className="text-[11px] text-slate-500">Sisa {formatHours(remainingMh)}h</div>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-slate-400">-</span>
-                                                    )}
-                                                </td>
+                                                {!isFreelance && (
+                                                    <td className="py-3 px-2">
+                                                        {isScrum ? (
+                                                            <div className="text-slate-700 dark:text-slate-300">
+                                                                <div className="inline-flex items-center gap-1.5"><Activity className="size-3.5 text-primary" /> Total {formatHours(totalMh)}h</div>
+                                                                <div className="text-[11px] text-slate-500">Sisa {formatHours(remainingMh)}h</div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-400">-</span>
+                                                        )}
+                                                    </td>
+                                                )}
                                                 <td className="py-3 px-2">
                                                     {isWaterfall ? (
                                                         <div className="text-slate-700 dark:text-slate-300">
