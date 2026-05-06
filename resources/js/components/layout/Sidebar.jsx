@@ -12,9 +12,11 @@ export default function Sidebar({ mobileOpen = false }) {
     const canSeeBisnisSection =
         can('presales.read') || can('list_company.read') || can('category_project.read');
     const canSeeOperationSection = can('list_project.read') || can('project_board.read');
-    const canSeeReportSection = can('reports.read') || can('generate_report.read');
-    const canSeeFinanceSection = can('finance_monitoring.read') || can('finance_categories.read') || can('finance_report.read') || can('realization_report.read');
-    const canSeeSystemSection = can('teams_users.read') || can('access_control.read') || can('project_roles.read') || can('system_log.read');
+    const canSeeReportSection =
+        can('reports.read') || can('generate_report.read') || can('finance_report.read') || can('realization_report.read');
+    const canSeeFinanceSection = can('finance_monitoring.read') || can('finance_categories.read');
+    const canSeeUserManagementSection = can('profile.read') || can('teams_users.read') || can('access_control.read');
+    const canSeeSystemSection = can('settings.read') || can('project_roles.read') || can('system_log.read');
 
     return (
         <aside
@@ -90,6 +92,16 @@ export default function Sidebar({ mobileOpen = false }) {
                     <FileText className="size-5" />
                     <span className="text-sm">Generate Report</span>
                 </NavLink>}
+                {can('finance_report.read') && <NavLink to="/finance-report"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <TrendingUp className="size-5" />
+                    <span className="text-sm">Finance Report</span>
+                </NavLink>}
+                {can('realization_report.read') && <NavLink to="/finance-realization-report"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <TrendingUp className="size-5" />
+                    <span className="text-sm">Realization Report</span>
+                </NavLink>}
 
                 {canSeeFinanceSection && <div className="pt-4 pb-2 px-3">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Finance</p>
@@ -104,20 +116,15 @@ export default function Sidebar({ mobileOpen = false }) {
                     <Tag className="size-5" />
                     <span className="text-sm">Categories</span>
                 </NavLink>}
-                {can('finance_report.read') && <NavLink to="/finance-report"
-                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-                    <TrendingUp className="size-5" />
-                    <span className="text-sm">Finance Report</span>
-                </NavLink>}
-                {can('realization_report.read') && <NavLink to="/finance-realization-report"
-                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-                    <TrendingUp className="size-5" />
-                    <span className="text-sm">Realization Report</span>
-                </NavLink>}
 
-                {canSeeSystemSection && <div className="pt-4 pb-2 px-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">System Settings</p>
+                {canSeeUserManagementSection && <div className="pt-4 pb-2 px-3">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">User Management</p>
                 </div>}
+                {can('profile.read') && <NavLink to="/profile"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <User className="size-5" />
+                    <span className="text-sm">My Profile</span>
+                </NavLink>}
                 {can('teams_users.read') && <NavLink to="/users"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Users className="size-5" />
@@ -127,6 +134,15 @@ export default function Sidebar({ mobileOpen = false }) {
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Lock className="size-5" />
                     <span className="text-sm">Access Control</span>
+                </NavLink>}
+
+                {canSeeSystemSection && <div className="pt-4 pb-2 px-3">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">System Settings</p>
+                </div>}
+                {can('settings.read') && <NavLink to="/settings"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <Settings className="size-5" />
+                    <span className="text-sm">Settings</span>
                 </NavLink>}
                 {can('project_roles.read') && <NavLink to="/project-roles"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
@@ -141,17 +157,6 @@ export default function Sidebar({ mobileOpen = false }) {
             </nav>
 
             <div className="p-4 mt-auto border-t border-slate-200 dark:border-slate-800 transition-colors duration-200">
-                {can('profile.read') && <NavLink to="/profile"
-                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mb-1 ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-                    <User className="size-5" />
-                    <span className="text-sm">My Profile</span>
-                </NavLink>}
-                {can('settings.read') && <NavLink to="/settings"
-                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-                    <Settings className="size-5" />
-                    <span className="text-sm">Settings</span>
-                </NavLink>}
-
                 <div className="mt-4 flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 transition-colors duration-200 overflow-hidden text-ellipsis">
                     <div className="flex items-center gap-3 overflow-hidden">
                         <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-black text-sm shrink-0">

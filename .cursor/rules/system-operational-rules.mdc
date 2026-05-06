@@ -21,10 +21,10 @@ alwaysApply: true
   - `Main` (Dashboard only, top of sidebar)
   - `Bisnis` (Presales, List Company, Category Company)
   - `Operation` (List Project, Project Board)
-  - `Report` (Reports, Generate Report)
-  - `Finance` (Monitoring, Categories, Finance Report, Realization Report)
-  - `System Settings` (Teams & Users, Access Control, Project Roles, System Log)
-  - `Account` (My Profile, Settings)
+  - `Report` (Reports, Generate Report, Finance Report, Realization Report)
+  - `Finance` (Monitoring, Categories)
+  - `User Management` (My Profile, Teams & Users, Access Control)
+  - `System Settings` (Settings, Project Roles, System Log)
 - Do not add a new menu item before category decision is confirmed.
 
 ## 3) Monitoring and Dashboard Synchronization
