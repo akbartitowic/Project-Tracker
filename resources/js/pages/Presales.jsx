@@ -35,6 +35,11 @@ export default function Presales() {
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [feedbackDialog, setFeedbackDialog] = useState({
+    open: false,
+    title: '',
+    message: '',
+  });
 
   const [newForm, setNewForm] = useState({
     company_id: '',
@@ -82,6 +87,13 @@ export default function Presales() {
     !!selected?.operation_acknowledged_at &&
     !isProceeded;
   const activeTab = PATH_TO_TAB[(view || '').toLowerCase()] || 'Business';
+  const showFeedback = (title, message) => {
+    setFeedbackDialog({
+      open: true,
+      title,
+      message,
+    });
+  };
 
   const loadAll = async () => {
     setLoading(true);
@@ -103,7 +115,7 @@ export default function Presales() {
       setUsers(userRes.data || []);
       if (!selectedId && activeItems.length) setSelectedId(activeItems[0].id);
     } catch (error) {
-      alert('Gagal memuat data presales: ' + error.message);
+      showFeedback('Gagal Memuat Data', 'Gagal memuat data presales: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -197,7 +209,7 @@ export default function Presales() {
       await loadAll();
       if (res?.id) setSelectedId(res.id);
     } catch (error) {
-      alert(error.message);
+      showFeedback('Gagal Membuat Opportunity', error.message);
     } finally {
       setIsSaving(false);
     }
@@ -236,9 +248,9 @@ export default function Presales() {
       });
       setIsEditOpen(false);
       await loadAll();
-      alert('Opportunity berhasil diupdate.');
+      showFeedback('Berhasil', 'Opportunity berhasil diupdate.');
     } catch (error) {
-      alert(error.message);
+      showFeedback('Gagal Update Opportunity', error.message);
     } finally {
       setIsSaving(false);
     }
@@ -249,9 +261,9 @@ export default function Presales() {
     try {
       await submitBusinessData();
       await loadAll();
-      alert('Data Business tersimpan.');
+      showFeedback('Berhasil', 'Data Business tersimpan.');
     } catch (error) {
-      alert(`Gagal menyimpan data Business: ${error.message}`);
+      showFeedback('Gagal Simpan Business', `Gagal menyimpan data Business: ${error.message}`);
     }
   };
 
@@ -262,75 +274,57 @@ export default function Presales() {
       await submitBusinessData();
       await fetchAPI(`/presales/${selected.id}/business/acknowledge`, { method: 'POST' });
       await loadAll();
-      alert('Business acknowledged.');
+      showFeedback('Berhasil', 'Business acknowledged.');
     } catch (error) {
-      alert(`Gagal acknowledge Business: ${error.message}`);
+      showFeedback('Gagal Acknowledge Business', `Gagal acknowledge Business: ${error.message}`);
     }
   };
 
   const saveDevelopment = async () => {
     if (!selected) return;
     try {
-      await fetchAPI(`/presales/${selected.id}/development`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          development_role_mh: developmentMh,
-        }),
-      });
+      await submitDevelopmentData();
       await loadAll();
-      alert('Data Tech tersimpan.');
+      showFeedback('Berhasil', 'Data Tech tersimpan.');
     } catch (error) {
-      alert(error.message);
+      showFeedback('Gagal Simpan Tech', error.message);
     }
   };
 
   const acknowledgeDevelopment = async () => {
     if (!selected) return;
     try {
-      // Acknowledge hanya baca data di server. Untuk Agile Scrum, MH tech harus sudah tersimpan
-      // lewat PUT /development — tanpa save, isian form belum masuk DB dan acknowledge gagal.
-      if (selected.methodology === 'Agile Scrum') {
-        await fetchAPI(`/presales/${selected.id}/development`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            development_role_mh: developmentMh,
-          }),
-        });
-      }
+      // Keep UX simple: acknowledge always persists current Development form first.
+      await submitDevelopmentData();
       await fetchAPI(`/presales/${selected.id}/development/acknowledge`, { method: 'POST' });
       await loadAll();
-      alert('Development acknowledged.');
+      showFeedback('Berhasil', 'Development acknowledged.');
     } catch (error) {
-      alert(error.message);
+      showFeedback('Gagal Acknowledge Development', error.message);
     }
   };
 
   const saveOperation = async () => {
     if (!selected) return;
     try {
-      const assignments = businessForm.role_ids.map((roleId) => ({
-        project_role_id: roleId,
-        user_ids: operationAssignments[roleId] || [],
-      }));
-      await fetchAPI(`/presales/${selected.id}/operation`, {
-        method: 'PUT',
-        body: JSON.stringify({ assignments }),
-      });
+      await submitOperationData();
       await loadAll();
-      alert('Data Operation tersimpan.');
+      showFeedback('Berhasil', 'Data Operation tersimpan.');
     } catch (error) {
-      alert(error.message);
+      showFeedback('Gagal Simpan Operation', error.message);
     }
   };
 
   const acknowledgeOperation = async () => {
     if (!selected) return;
     try {
+      // Keep UX simple: acknowledge always persists current Operation assignments first.
+      await submitOperationData();
       await fetchAPI(`/presales/${selected.id}/operation/acknowledge`, { method: 'POST' });
       await loadAll();
-      alert('Operation acknowledged.');
+      showFeedback('Berhasil', 'Operation acknowledged.');
     } catch (error) {
-      alert(error.message);
+      showFeedback('Gagal Acknowledge Operation', error.message);
     }
   };
 
@@ -340,7 +334,7 @@ export default function Presales() {
       const res = await fetchAPI(`/presales/${selected.id}/proceed-project`, { method: 'POST' });
       if (res.project_id) navigate(`/board/${res.project_id}`);
     } catch (error) {
-      alert(error.message);
+      showFeedback('Gagal Proceed Project', error.message);
     }
   };
 
@@ -366,6 +360,28 @@ export default function Presales() {
         project_role_ids: businessForm.role_ids,
         business_role_mh: businessForm.role_mh,
       }),
+    });
+  };
+
+  const submitDevelopmentData = async () => {
+    if (!selected) return;
+    await fetchAPI(`/presales/${selected.id}/development`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        development_role_mh: developmentMh,
+      }),
+    });
+  };
+
+  const submitOperationData = async () => {
+    if (!selected) return;
+    const assignments = businessForm.role_ids.map((roleId) => ({
+      project_role_id: roleId,
+      user_ids: operationAssignments[roleId] || [],
+    }));
+    await fetchAPI(`/presales/${selected.id}/operation`, {
+      method: 'PUT',
+      body: JSON.stringify({ assignments }),
     });
   };
 
@@ -593,8 +609,7 @@ export default function Presales() {
 
 
                     <div className="flex gap-2">
-                      <Button onClick={saveBusiness} disabled={isProceeded}>Save Business</Button>
-                      <Button variant="outline" onClick={acknowledgeBusiness} disabled={isProceeded}>
+                      <Button onClick={acknowledgeBusiness} disabled={isProceeded}>
                         Acknowledge
                       </Button>
                     </div>
@@ -662,8 +677,7 @@ export default function Presales() {
                       </p>
                     )}
                     <div className="flex gap-2">
-                      <Button onClick={saveDevelopment} disabled={isProceeded}>Save Development</Button>
-                      <Button variant="outline" onClick={acknowledgeDevelopment} disabled={isProceeded}>
+                      <Button onClick={acknowledgeDevelopment} disabled={isProceeded}>
                         Acknowledge
                       </Button>
                     </div>
@@ -700,8 +714,7 @@ export default function Presales() {
                       );
                     })}
                     <div className="flex gap-2">
-                      <Button onClick={saveOperation} disabled={isProceeded}>Save Operation</Button>
-                      <Button variant="outline" onClick={acknowledgeOperation} disabled={isProceeded}>
+                      <Button onClick={acknowledgeOperation} disabled={isProceeded}>
                         Acknowledge
                       </Button>
                     </div>
@@ -872,6 +885,26 @@ export default function Presales() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={feedbackDialog.open}
+        onOpenChange={(open) => setFeedbackDialog((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{feedbackDialog.title}</DialogTitle>
+            <DialogDescription>{feedbackDialog.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={() => setFeedbackDialog((prev) => ({ ...prev, open: false }))}
+            >
+              OK
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
