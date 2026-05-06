@@ -54,27 +54,28 @@ export default function Reports() {
             <div className="absolute top-10 left-10 w-96 h-96 bg-blue-500/10 rounded-full blur-[100px] -z-10 pointer-events-none"></div>
             <div className="absolute bottom-20 right-10 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] -z-10 pointer-events-none"></div>
 
-            <header className="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200/50 dark:border-slate-800/50 bg-white/70 dark:bg-[#1e232e]/70 backdrop-blur-md px-10 py-4 z-10 transition-colors duration-200">
-                <div className="flex items-center gap-8">
+            <header className="z-10 flex flex-wrap items-center justify-between gap-3 border-b border-solid border-slate-200/50 bg-white/70 px-4 py-3 backdrop-blur-md transition-colors duration-200 dark:border-slate-800/50 dark:bg-[#1e232e]/70 sm:px-6 sm:py-4 lg:px-10">
+                <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-8">
                     {/* Global Search */}
-                    <div className="hidden md:flex relative w-96">
+                    <div className="relative hidden min-w-0 flex-1 md:flex md:max-w-md lg:max-w-96">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 min-w-4 size-4 text-slate-500 dark:text-[#9da6b9]" />
                         <Input type="text" placeholder="Search reports..." className="pl-9 h-10 w-full bg-white/50 dark:bg-[#282e39]/50 shadow-sm" />
                     </div>
                 </div>
-                <div className="flex flex-1 justify-end gap-8">
-                    <div className="flex items-center gap-4">
-                        <Button variant="outline" className="gap-2 bg-white/50 dark:bg-slate-800/50">
-                            <Calendar className="size-4" />
-                            <span>This Month</span>
+                <div className="ml-auto flex shrink-0 justify-end gap-4 sm:gap-8">
+                    <div className="flex items-center gap-2 sm:gap-4">
+                        <Button variant="outline" className="gap-2 bg-white/50 text-xs sm:text-sm dark:bg-slate-800/50">
+                            <Calendar className="size-4 shrink-0" />
+                            <span className="hidden sm:inline">This Month</span>
+                            <span className="sm:hidden">Month</span>
                             <ChevronDown className="size-4" />
                         </Button>
                     </div>
                 </div>
             </header>
 
-            <div className="flex flex-1 justify-center py-8 z-0">
-                <div className="w-full max-w-[1200px] px-4 md:px-6 flex flex-col gap-8">
+            <div className="z-0 flex flex-1 justify-center py-4 sm:py-8">
+                <div className="flex w-full max-w-[1200px] flex-col gap-6 px-4 sm:gap-8 md:px-6">
                     {/* Page Title */}
                     <div className="flex flex-col md:flex-row justify-between gap-4 items-start md:items-center">
                         <div className="flex flex-col gap-1">

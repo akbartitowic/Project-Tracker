@@ -61,7 +61,7 @@ export default function CompanyMaster() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-8 space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8">
       <div>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">List Company</h1>
         <p className="text-slate-500 mt-1">Master data company untuk kebutuhan Presales.</p>

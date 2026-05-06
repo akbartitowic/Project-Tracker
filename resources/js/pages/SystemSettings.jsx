@@ -4,6 +4,7 @@ import { Settings, Database, AlertTriangle, RefreshCcw, CheckCircle2, ShieldAler
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 export default function SystemSettings() {
@@ -111,7 +112,7 @@ export default function SystemSettings() {
     };
 
     return (
-        <div className="p-8 max-w-4xl mx-auto space-y-10 pb-20 text-slate-900 dark:text-white transition-colors duration-200">
+        <div className="mx-auto max-w-4xl space-y-10 p-4 pb-16 text-slate-900 transition-colors duration-200 sm:p-6 sm:pb-20 lg:p-8 dark:text-white">
             <header>
                 <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 border border-primary/20">
                     <Settings className="size-10 text-primary" />
@@ -151,7 +152,7 @@ export default function SystemSettings() {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Password</label>
-                                    <Input name="mail_password" type="password" value={smtpSettings.mail_password} onChange={handleSmtpChange} placeholder="********" />
+                                    <PasswordInput name="mail_password" value={smtpSettings.mail_password} onChange={handleSmtpChange} placeholder="********" />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Encryption</label>

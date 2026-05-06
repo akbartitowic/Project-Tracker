@@ -24,10 +24,13 @@ export default function FinanceReport() {
     const [summary, setSummary] = useState({
         gross_income: 0,
         project_expenses: 0,
+        project_expenses_realized: 0,
         income_after_project_expenses: 0,
+        income_after_project_expenses_realized: 0,
         opex_total: 0,
         capex_total: 0,
         net_revenue: 0,
+        net_revenue_realized: 0,
         records: []
     });
 
@@ -126,7 +129,7 @@ export default function FinanceReport() {
     };
 
     return (
-        <div className="p-8 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-500">
+        <div className="mx-auto max-w-[1400px] animate-in fade-in p-4 pb-16 duration-500 sm:p-6 sm:pb-20 lg:p-8">
             {/* Header omitted for brevity in chunking but fully present in original */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div className="flex flex-col gap-2">
@@ -137,7 +140,7 @@ export default function FinanceReport() {
                         FINANCE REPORT
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 font-medium tracking-wide flex items-center gap-2">
-                        Comprehensive financial health overview and expense management.
+                        Ringkasan keuangan: bagian project memakai <strong className="text-slate-700 dark:text-slate-200 font-semibold">planning vs realisasi</strong> alokasi sesuai monitoring finance.
                     </p>
                 </div>
 
@@ -169,6 +172,20 @@ export default function FinanceReport() {
                 </Card>
             </div>
 
+            <div className="mb-8 rounded-xl border border-blue-200/80 bg-blue-50/60 p-4 text-sm text-slate-700 shadow-sm dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-slate-300">
+                <p className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                    <AlertCircle className="size-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    Cara membaca angka di halaman ini
+                </p>
+                <ul className="list-disc list-inside space-y-1.5 text-[13px] leading-relaxed pl-1">
+                    <li><strong className="font-semibold">Pendapatan kotor:</strong> jumlah nilai quotation project yang <strong className="font-semibold">tanggal dibuatnya</strong> masuk dalam rentang filter — ini angka forecasting (rencana deal), bukan penerimaan kas.</li>
+                    <li><strong className="font-semibold">Pengeluaran project · Planning:</strong> total nominal alokasi biaya (<code className="text-xs rounded bg-white/70 dark:bg-slate-800 px-1">amount</code>) untuk baris selain top-up, yang dibuat dalam periode tersebut.</li>
+                    <li><strong className="font-semibold">Pengeluaran project · Realisasi:</strong> total <code className="text-xs rounded bg-white/70 dark:bg-slate-800 px-1">realized_amount</code> jika sudah diisi di monitoring, atau mengikuti <code className="text-xs rounded bg-white/70 dark:bg-slate-800 px-1">amount</code> — konsisten dengan laporan Realization Report.</li>
+                    <li><strong className="font-semibold">Top-up Scrum</strong> tidak dimasukkan ke pengeluaran project di sini (itu menambah quotation/MH).</li>
+                    <li><strong className="font-semibold">OPEX / CAPEX:</strong> dihitung untuk <strong className="font-semibold">satu tahun kalender penuh</strong> (tahun dari tanggal mulai filter), bukan hanya antara tanggal dari–sampai.</li>
+                </ul>
+            </div>
+
             {/* Metrics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
                 {/* 1. Gross Income */}
@@ -184,7 +201,9 @@ export default function FinanceReport() {
                         <CardTitle className="text-3xl font-black text-slate-900 dark:text-white">
                             {formatCurrency(summary.gross_income)}
                         </CardTitle>
-                        <CardDescription className="text-xs font-bold text-slate-400">Total project quotations in range</CardDescription>
+                        <CardDescription className="text-xs font-bold text-slate-400">
+                            Forecast: total quotation untuk project baru dalam rentang tanggal filter (bukan cash-in aktual).
+                        </CardDescription>
                     </CardHeader>
                 </Card>
 
@@ -198,10 +217,17 @@ export default function FinanceReport() {
                             </div>
                             <span className="text-[10px] font-black italic tracking-widest text-slate-400 uppercase">Project Expenses</span>
                         </div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-700/90 dark:text-amber-400/90 mb-1">Planning (anggaran)</p>
                         <CardTitle className="text-3xl font-black text-slate-900 dark:text-white text-amber-600 dark:text-amber-400">
                             {formatCurrency(summary.project_expenses)}
                         </CardTitle>
-                        <CardDescription className="text-xs font-bold text-slate-400">Allocated budget for projects</CardDescription>
+                        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-orange-700/90 dark:text-orange-400/90">Realisasi</p>
+                            <p className="text-xl font-black text-orange-700 dark:text-orange-400 tabular-nums">{formatCurrency(summary.project_expenses_realized ?? summary.project_expenses)}</p>
+                        </div>
+                        <CardDescription className="text-xs font-bold text-slate-400 mt-2">
+                            Tanpa baris top-up. Realisasi = nilai realization di Finance Monitoring atau amount jika belum direalisasi.
+                        </CardDescription>
                     </CardHeader>
                 </Card>
 
@@ -215,10 +241,15 @@ export default function FinanceReport() {
                             </div>
                             <span className="text-[10px] font-black italic tracking-widest text-slate-500 uppercase">Margin After Project</span>
                         </div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Forecast (gunakan planning expense)</p>
                         <CardTitle className="text-3xl font-black text-white">
                             {formatCurrency(summary.income_after_project_expenses)}
                         </CardTitle>
-                        <CardDescription className="text-xs font-bold text-slate-400">Available for operations & business</CardDescription>
+                        <div className="mt-3 pt-3 border-t border-slate-700/60 space-y-1">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Setelah realisasi</p>
+                            <p className="text-xl font-black text-emerald-300 tabular-nums">{formatCurrency(summary.income_after_project_expenses_realized ?? summary.income_after_project_expenses)}</p>
+                        </div>
+                        <CardDescription className="text-xs font-bold text-slate-400 mt-2">Pendapatan kotor − pengeluaran project (masing-masing basis)</CardDescription>
                     </CardHeader>
                 </Card>
 
@@ -235,7 +266,7 @@ export default function FinanceReport() {
                         <CardTitle className="text-3xl font-black text-slate-900 dark:text-white text-rose-500">
                             {formatCurrency(summary.opex_total)}
                         </CardTitle>
-                        <CardDescription className="text-xs font-bold text-slate-400">Total for current year</CardDescription>
+                        <CardDescription className="text-xs font-bold text-slate-400">Tahun kalender tahun tanggal mulai filter (full year)</CardDescription>
                     </CardHeader>
                 </Card>
 
@@ -252,7 +283,7 @@ export default function FinanceReport() {
                         <CardTitle className="text-3xl font-black text-slate-900 dark:text-white text-indigo-500">
                             {formatCurrency(summary.capex_total)}
                         </CardTitle>
-                        <CardDescription className="text-xs font-bold text-slate-400">Total for current year</CardDescription>
+                        <CardDescription className="text-xs font-bold text-slate-400">Tahun kalender tahun tanggal mulai filter (full year)</CardDescription>
                     </CardHeader>
                 </Card>
 
@@ -265,10 +296,15 @@ export default function FinanceReport() {
                             </div>
                             <span className="text-[10px] font-black italic tracking-widest text-white/60 uppercase">Net Revenue</span>
                         </div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-white/65 mb-1">Forecast (− planning expense − OPEX − CAPEX)</p>
                         <CardTitle className="text-4xl font-black">
                             {formatCurrency(summary.net_revenue)}
                         </CardTitle>
-                        <CardDescription className="text-xs font-bold text-white/70">Final profit after all deductions</CardDescription>
+                        <div className="mt-3 pt-3 border-t border-white/25 space-y-1">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-white/65">Setelah realisasi project</p>
+                            <p className="text-2xl font-black text-white tabular-nums">{formatCurrency(summary.net_revenue_realized ?? summary.net_revenue)}</p>
+                        </div>
+                        <CardDescription className="text-xs font-bold text-white/75 mt-2">Margin project (basis masing-masing) dikurangi OPEX+CAPEX tahun tersebut</CardDescription>
                     </CardHeader>
                 </Card>
             </div>
@@ -482,7 +518,7 @@ export default function FinanceReport() {
                         <div className="space-y-1">
                             <h4 className="text-xs font-black italic text-slate-800 dark:text-white uppercase tracking-tight">Pro Tip</h4>
                             <p className="text-[11px] font-medium text-slate-500 leading-relaxed">
-                                Use OPEX for recurring costs (salaries, rent) and CAPEX for one-time assets (hardware, licenses). This keeps your revenue projections accurate.
+                                Pakai Forecast untuk budgeting; bandingkan dengan baris Realisasi setelah mengisi nominal realization di Finance Monitoring. Detail per project ada di Finance → Realization Report.
                             </p>
                         </div>
                     </div>

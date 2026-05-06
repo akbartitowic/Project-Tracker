@@ -222,7 +222,7 @@ export default function FinanceMonitoring() {
     const activeAllocationTotal = activeAllocations.reduce((sum, alloc) => sum + Number(alloc.amount || 0), 0);
 
     return (
-        <div className="p-8 max-w-[1400px] mx-auto pb-20">
+        <div className="mx-auto max-w-[1400px] p-4 pb-16 sm:p-6 sm:pb-20 lg:p-8">
             <div className="flex flex-col gap-2 mb-8">
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Finance Monitoring</h1>
                 <p className="text-slate-500 dark:text-text-secondary">Track project quotation values against cost allocations and margins.</p>

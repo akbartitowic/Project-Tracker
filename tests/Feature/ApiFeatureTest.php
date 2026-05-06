@@ -14,7 +14,7 @@ class ApiFeatureTest extends TestCase
     /**
      * A basic feature test example.
      */
-    public function test_api_endpoints_return_successful_response(): void
+    public function test_protected_api_endpoints_require_authentication(): void
     {
         $endpoints = [
             '/api/users',
@@ -32,8 +32,8 @@ class ApiFeatureTest extends TestCase
         ];
 
         foreach ($endpoints as $endpoint) {
-            $response = $this->get($endpoint);
-            $response->assertStatus(200);
+            $response = $this->getJson($endpoint);
+            $response->assertUnauthorized();
         }
     }
 }

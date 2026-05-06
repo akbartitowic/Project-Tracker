@@ -66,7 +66,7 @@ export default function SystemLogs() {
     );
 
     return (
-        <div className="p-8 space-y-8 animate-fade">
+        <div className="space-y-6 p-4 animate-fade sm:space-y-8 sm:p-6 lg:p-8">
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">

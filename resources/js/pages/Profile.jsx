@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { User, Mail, Phone, Lock, Save, CheckCircle2, Shield } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function Profile() {
@@ -44,7 +45,7 @@ export default function Profile() {
     };
 
     return (
-        <div className="p-8 max-w-4xl mx-auto space-y-8">
+        <div className="mx-auto max-w-4xl space-y-8 p-4 sm:p-6 lg:p-8">
             <header className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3">
@@ -130,10 +131,9 @@ export default function Profile() {
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">New Password</label>
                                     <div className="relative group">
-                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-slate-400 group-focus-within:text-primary transition-colors" />
-                                        <Input
-                                            type="password"
-                                            className="pl-11 h-11 rounded-xl focus:ring-primary"
+                                        <Lock className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-primary" />
+                                        <PasswordInput
+                                            className="h-11 rounded-xl pl-11 focus-visible:ring-primary"
                                             placeholder="Min. 8 characters"
                                             value={data.password}
                                             onChange={e => setData({ ...data, password: e.target.value })}
@@ -143,10 +143,9 @@ export default function Profile() {
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Confirm New Password</label>
                                     <div className="relative group">
-                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-slate-400 group-focus-within:text-primary transition-colors" />
-                                        <Input
-                                            type="password"
-                                            className="pl-11 h-11 rounded-xl focus:ring-primary"
+                                        <Lock className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-primary" />
+                                        <PasswordInput
+                                            className="h-11 rounded-xl pl-11 focus-visible:ring-primary"
                                             value={data.password_confirmation}
                                             onChange={e => setData({ ...data, password_confirmation: e.target.value })}
                                         />

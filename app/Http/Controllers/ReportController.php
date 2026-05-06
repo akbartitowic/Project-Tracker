@@ -32,11 +32,13 @@ class ReportController extends Controller
     {
         $request->validate([
             'project_id' => 'required|exists:projects,id',
-            'range' => 'required|in:weekly,biweekly,monthly',
+            'range' => 'required|in:weekly,biweekly,monthly,manual',
+            'start_date' => 'nullable|date|required_if:range,manual',
+            'end_date' => 'nullable|date|required_if:range,manual|after_or_equal:start_date',
             'preview' => 'nullable|boolean'
         ]);
 
-        $data = $this->getReportData($request->project_id, $request->range);
+        $data = $this->getReportData($request->project_id, $request->range, $request->start_date, $request->end_date);
         $pdf = Pdf::loadView('reports.project_report', $data);
 
         if ($request->preview) {
@@ -50,13 +52,15 @@ class ReportController extends Controller
     {
         $request->validate([
             'project_id' => 'required|exists:projects,id',
-            'range' => 'required|in:weekly,biweekly,monthly',
+            'range' => 'required|in:weekly,biweekly,monthly,manual',
+            'start_date' => 'nullable|date|required_if:range,manual',
+            'end_date' => 'nullable|date|required_if:range,manual|after_or_equal:start_date',
             'emails' => 'required|string', // Comma separated
             'subject' => 'required|string|max:255',
             'body' => 'required|string'
         ]);
 
-        $data = $this->getReportData($request->project_id, $request->range);
+        $data = $this->getReportData($request->project_id, $request->range, $request->start_date, $request->end_date);
         $pdf = Pdf::loadView('reports.project_report', $data);
         $pdfContent = $pdf->output();
 
@@ -91,16 +95,24 @@ class ReportController extends Controller
         }
     }
 
-    private function getReportData($projectId, $range)
+    private function getReportData($projectId, $range, $manualStartDate = null, $manualEndDate = null)
     {
         $project = Project::findOrFail($projectId);
-        $endDate = Carbon::now();
-        $startDate = match ($range) {
-            'weekly' => Carbon::now()->subWeek(),
-            'biweekly' => Carbon::now()->subWeeks(2),
-            'monthly' => Carbon::now()->subMonth(),
-            default => Carbon::now()->subWeek(),
-        };
+        $endDate = null;
+        $startDate = null;
+
+        if ($range === 'manual') {
+            $startDate = Carbon::parse($manualStartDate)->startOfDay();
+            $endDate = Carbon::parse($manualEndDate)->endOfDay();
+        } else {
+            $endDate = Carbon::now();
+            $startDate = match ($range) {
+                'weekly' => Carbon::now()->subWeek(),
+                'biweekly' => Carbon::now()->subWeeks(2),
+                'monthly' => Carbon::now()->subMonth(),
+                default => Carbon::now()->subWeek(),
+            };
+        }
 
         // 1. Task List Worked on in Range (Updated in the range)
         $tasksInRange = Task::where('project_id', $project->id)
@@ -191,7 +203,7 @@ class ReportController extends Controller
 
         return [
             'project' => $project,
-            'range' => $range,
+            'range' => $range === 'manual' ? 'manual' : $range,
             'startDate' => $startDate->format('d M Y'),
             'endDate' => $endDate->format('d M Y'),
             'tasksInRange' => $tasksInRange,

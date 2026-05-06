@@ -214,7 +214,7 @@ export default function CreateProject() {
     };
 
     return (
-        <div className="max-w-[960px] mx-auto pb-10 p-8">
+        <div className="mx-auto max-w-[960px] p-4 pb-10 sm:p-6 lg:p-8">
             <div className="flex flex-col gap-2 mb-8">
                 <div className="flex items-center gap-2 text-slate-500 dark:text-text-secondary text-sm mb-1">
                     <span>Projects</span>

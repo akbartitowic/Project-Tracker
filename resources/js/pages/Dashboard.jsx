@@ -130,11 +130,11 @@ export default function Dashboard() {
     );
 
     if (shouldShowMemberDashboard) {
-        return <div className="p-8 space-y-8">{summarySection}</div>;
+        return <div className="space-y-6 p-4 sm:space-y-8 sm:p-6 lg:p-8">{summarySection}</div>;
     }
 
     return (
-        <div className="p-8 space-y-8">
+        <div className="space-y-6 p-4 sm:space-y-8 sm:p-6 lg:p-8">
             {summarySection}
             {/* KPI Section */}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -215,12 +215,12 @@ export default function Dashboard() {
             <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <Card className="lg:col-span-2">
                     <CardContent className="p-6">
-                        <div className="flex items-center justify-between mb-8">
+                        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                                 <h4 className="font-bold text-lg text-slate-900 dark:text-white">Monthly Financial Performance</h4>
                                 <p className="text-sm text-slate-500 dark:text-slate-400 italic">Billed Value vs Project Costs</p>
                             </div>
-                            <div className="flex gap-4 text-xs font-bold uppercase tracking-tight">
+                            <div className="flex flex-wrap gap-4 text-xs font-bold uppercase tracking-tight">
                                 <div className="flex items-center gap-1.5">
                                     <span className="size-2 rounded-full bg-primary/30"></span>
                                     <span className="text-slate-400">Project Costs</span>
@@ -231,7 +231,8 @@ export default function Dashboard() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-end justify-around h-64 gap-4 px-4 border-b border-slate-100 pb-2">
+                        <div className="-mx-2 overflow-x-auto px-2 sm:mx-0 sm:px-0">
+                        <div className="flex min-w-[520px] items-end justify-around gap-4 border-b border-slate-100 px-4 pb-2 h-64">
                             {revenueTrend.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 italic">Financial trend loading...</div>
                             ) : (
@@ -255,6 +256,7 @@ export default function Dashboard() {
                                     );
                                 })
                             )}
+                        </div>
                         </div>
                     </CardContent>
                 </Card>

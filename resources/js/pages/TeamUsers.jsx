@@ -1,15 +1,20 @@
 import { useState, useEffect } from 'react';
 import { fetchAPI } from '../services/api';
 import { useNavigate } from 'react-router-dom';
-import { User, Shield, Code, Bug, Settings, UserPlus, Edit, Trash2, MessageSquare, X, Save, Loader2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { isAdminUser } from '../utils/permissions';
+import { User, Shield, Code, Bug, Settings, UserPlus, Edit, Trash2, MessageSquare, Save, Loader2, KeyRound } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
 export default function TeamUsers() {
     const navigate = useNavigate();
+    const { user: authUser } = useAuth();
+    const canResetPassword = isAdminUser(authUser);
     const [users, setUsers] = useState([]);
 
     // Create User Modal State
@@ -88,7 +93,9 @@ export default function TeamUsers() {
             email: user.email,
             phone_number: user.phone_number || '',
             role_id: user.role?.id || '',
-            status: user.status
+            status: user.status,
+            new_password: '',
+            new_password_confirm: '',
         });
         setIsEditModalOpen(true);
     };
@@ -97,9 +104,30 @@ export default function TeamUsers() {
         e.preventDefault();
         setIsSubmitting(true);
         try {
+            const payload = {
+                name: editingUser.name,
+                email: editingUser.email,
+                phone_number: editingUser.phone_number,
+                role_id: editingUser.role_id,
+                status: editingUser.status,
+            };
+            if (canResetPassword && editingUser.new_password) {
+                if (editingUser.new_password !== editingUser.new_password_confirm) {
+                    alert('Konfirmasi password tidak sama.');
+                    setIsSubmitting(false);
+                    return;
+                }
+                if (editingUser.new_password.length < 6) {
+                    alert('Password minimal 6 karakter.');
+                    setIsSubmitting(false);
+                    return;
+                }
+                payload.password = editingUser.new_password;
+            }
+
             await fetchAPI(`/users/${editingUserId}`, {
                 method: 'PUT',
-                body: JSON.stringify(editingUser)
+                body: JSON.stringify(payload)
             });
             setIsEditModalOpen(false);
             setEditingUserId(null);
@@ -151,8 +179,8 @@ export default function TeamUsers() {
 
     return (
         <div className="flex-1 flex flex-col overflow-y-auto w-full transition-colors duration-200 relative">
-            <div className="flex flex-1 justify-center py-8 z-0">
-                <div className="w-full max-w-[1200px] px-4 md:px-6 flex flex-col gap-8">
+            <div className="z-0 flex flex-1 justify-center py-4 sm:py-8">
+                <div className="flex w-full max-w-[1200px] flex-col gap-6 px-4 sm:gap-8 md:px-6">
                     {/* Page Title & Actions */}
                     <div className="flex flex-col md:flex-row justify-between gap-4 items-start md:items-center">
                         <div className="flex flex-col gap-1">
@@ -263,14 +291,13 @@ export default function TeamUsers() {
                         </div>
                         <div className="flex flex-col gap-2">
                             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Temporary Password</label>
-                            <Input 
-                                type="password" 
+                            <PasswordInput
                                 id="user-password"
-                                value={newUser.password} 
-                                onChange={handleInputChange} 
-                                placeholder="••••••••" 
-                                required 
-                                className="py-6" 
+                                value={newUser.password}
+                                onChange={handleInputChange}
+                                placeholder="••••••••"
+                                required
+                                className="py-6"
                             />
                         </div>
                         <div className="flex flex-col gap-2">
@@ -326,6 +353,41 @@ export default function TeamUsers() {
                                 </label>
                                 <Input type="tel" id="user-phone_number" value={editingUser.phone_number} onChange={handleInputChange} placeholder="+62 812 3456 7890" className="py-6 focus-visible:ring-green-500" />
                             </div>
+                            {canResetPassword && (
+                                <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
+                                    <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-900 dark:text-amber-200">
+                                        <KeyRound className="size-4 shrink-0" />
+                                        Reset password (admin)
+                                    </div>
+                                    <p className="mb-4 text-xs text-amber-800/90 dark:text-amber-200/80">
+                                        Kosongkan jika tidak ingin mengubah password. Hanya admin sistem yang dapat mengisi bagian ini.
+                                    </p>
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Password baru</label>
+                                            <PasswordInput
+                                                id="user-new_password"
+                                                value={editingUser.new_password || ''}
+                                                onChange={handleInputChange}
+                                                placeholder="••••••••"
+                                                autoComplete="new-password"
+                                                className="py-6"
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Konfirmasi password</label>
+                                            <PasswordInput
+                                                id="user-new_password_confirm"
+                                                value={editingUser.new_password_confirm || ''}
+                                                onChange={handleInputChange}
+                                                placeholder="••••••••"
+                                                autoComplete="new-password"
+                                                className="py-6"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="flex flex-col gap-2">
                                     <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">System Role</label>

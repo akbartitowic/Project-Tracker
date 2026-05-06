@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Activity, Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { getDefaultLandingPath } from '../../utils/permissions';
 
 export default function Login() {
@@ -38,8 +39,8 @@ export default function Login() {
             <div className="absolute top-[-10%] left-[-10%] size-96 bg-accent/20 rounded-full blur-[100px] animate-pulse"></div>
             <div className="absolute bottom-[-10%] right-[-10%] size-96 bg-primary/30 rounded-full blur-[100px] animate-pulse delay-700"></div>
 
-            <div className="w-full max-w-md p-8 relative z-10">
-                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
+            <div className="relative z-10 w-full max-w-md p-4 sm:p-8">
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
                     <div className="flex flex-col items-center mb-10">
                         <div className="size-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 border border-white/20 shadow-inner">
                             <img src="/logo.png" alt="Noohtify Logo" className="size-10 object-contain" />
@@ -74,12 +75,12 @@ export default function Login() {
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Password</label>
                             <div className="relative group">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-500 group-focus-within:text-accent transition-colors" />
-                                <Input
-                                    type="password"
+                                <Lock className="pointer-events-none absolute left-4 top-1/2 z-10 size-5 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-accent" />
+                                <PasswordInput
                                     required
                                     placeholder="••••••••"
-                                    className="pl-12 h-13 bg-white/5 border-white/10 text-white placeholder:text-slate-600 rounded-2xl focus:ring-accent focus:border-accent transition-all"
+                                    className="h-13 rounded-2xl border-white/10 bg-white/5 pl-12 text-white placeholder:text-slate-600 transition-all focus:border-accent focus:ring-accent"
+                                    toggleButtonClassName="text-slate-400 hover:bg-white/10 hover:text-white dark:hover:bg-white/10"
                                     value={credentials.password}
                                     onChange={e => setCredentials({ ...credentials, password: e.target.value })}
                                 />

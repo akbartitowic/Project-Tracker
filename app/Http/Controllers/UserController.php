@@ -7,6 +7,20 @@ use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
+    private function isAdminUser($user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+        if (strtolower((string) ($user->email ?? '')) === 'tito@noohtify.com') {
+            return true;
+        }
+        $user->loadMissing('role');
+        $roleName = strtolower((string) ($user->role->name ?? $user->role ?? ''));
+
+        return $roleName === 'admin';
+    }
+
     public function index()
     {
         return response()->json(['data' => User::with('role')->get()]);
@@ -31,6 +45,10 @@ class UserController extends Controller
     public function update(Request $request, string $id)
     {
         $user = User::findOrFail($id);
+        if ($request->filled('password') && !$this->isAdminUser($request->user())) {
+            return response()->json(['message' => 'Only administrators can set or change user passwords.'], 403);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string',
             'role_id' => 'required|exists:roles,id',
@@ -41,8 +59,7 @@ class UserController extends Controller
         ]);
 
         if (!empty($validated['password'])) {
-            // Managed by Model Cast if hashed cast is present, but let's be safe
-            // Actually User model has 'password' => 'hashed' cast
+            // User model 'password' => 'hashed' cast applies on set
         } else {
             unset($validated['password']);
         }

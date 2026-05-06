@@ -14,6 +14,10 @@ export default function GenerateReport() {
     const [projects, setProjects] = useState([]);
     const [selectedProject, setSelectedProject] = useState('');
     const [range, setRange] = useState('weekly');
+    const [manualRange, setManualRange] = useState({
+        start_date: '',
+        end_date: ''
+    });
     const [loading, setLoading] = useState(false);
     const [projectsLoading, setProjectsLoading] = useState(true);
     const [previewUrl, setPreviewUrl] = useState(null);
@@ -45,13 +49,20 @@ export default function GenerateReport() {
     useEffect(() => {
         if (selectedProject) {
             const project = projects.find(p => p.id.toString() === selectedProject.toString());
+            const rangeLabel = range === 'manual'
+                ? (manualRange.start_date && manualRange.end_date
+                    ? `manual (${manualRange.start_date} - ${manualRange.end_date})`
+                    : 'manual range')
+                : range;
             setEmailData(prev => ({
                 ...prev,
-                subject: `Project Report: ${project?.name} (${range})`,
-                body: `Hello,\n\nPlease find attached the ${range} project report for "${project?.name}".\n\nBest regards,\nProject Tracker System`
+                subject: `Project Report: ${project?.name} (${rangeLabel})`,
+                body: `Hello,\n\nPlease find attached the ${rangeLabel} project report for "${project?.name}".\n\nBest regards,\nProject Tracker System`
             }));
         }
-    }, [selectedProject, range, projects]);
+    }, [selectedProject, range, manualRange.start_date, manualRange.end_date, projects]);
+
+    const canRunReport = selectedProject && (!loading) && (range !== 'manual' || (manualRange.start_date && manualRange.end_date));
 
     const handlePreview = async () => {
         if (!selectedProject) return;
@@ -66,6 +77,8 @@ export default function GenerateReport() {
                 body: JSON.stringify({
                     project_id: selectedProject,
                     range: range,
+                    start_date: range === 'manual' ? manualRange.start_date : null,
+                    end_date: range === 'manual' ? manualRange.end_date : null,
                     preview: true
                 })
             });
@@ -95,6 +108,8 @@ export default function GenerateReport() {
                 body: JSON.stringify({
                     project_id: selectedProject,
                     range: range,
+                    start_date: range === 'manual' ? manualRange.start_date : null,
+                    end_date: range === 'manual' ? manualRange.end_date : null,
                     preview: false
                 })
             });
@@ -125,6 +140,8 @@ export default function GenerateReport() {
                 body: JSON.stringify({
                     project_id: selectedProject,
                     range: range,
+                    start_date: range === 'manual' ? manualRange.start_date : null,
+                    end_date: range === 'manual' ? manualRange.end_date : null,
                     emails: emailData.emails,
                     subject: emailData.subject,
                     body: emailData.body
@@ -146,20 +163,20 @@ export default function GenerateReport() {
     };
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-slate-50/50 dark:bg-background-dark pb-10">
-            <header className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28]">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate('/reports')} className="rounded-full">
+        <div className="flex h-full min-h-0 flex-1 flex-col bg-slate-50/50 pb-8 dark:bg-background-dark sm:pb-10">
+            <header className="flex items-start gap-3 border-b border-slate-200 bg-white p-4 sm:items-center sm:p-6 dark:border-slate-800 dark:bg-[#151b28]">
+                <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => navigate('/reports')} className="mt-0.5 shrink-0 rounded-full sm:mt-0">
                         <ChevronLeft className="size-5" />
                     </Button>
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Generate Project Report</h1>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Configure, export, and email detailed project performance reports.</p>
+                    <div className="min-w-0">
+                        <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">Generate Project Report</h1>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">Configure, export, and email detailed project performance reports.</p>
                     </div>
                 </div>
             </header>
 
-            <div className="flex-1 p-6 flex flex-col lg:flex-row gap-6 overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 sm:p-6 lg:flex-row lg:overflow-hidden">
                 {/* Configuration Sidebar */}
                 <div className="w-full lg:w-80 flex flex-col gap-6 shrink-0">
                     <Card className="border-none shadow-xl shadow-slate-200/50 dark:shadow-none dark:bg-[#1e2532]">
@@ -201,15 +218,39 @@ export default function GenerateReport() {
                                         <SelectItem value="weekly">Weekly</SelectItem>
                                         <SelectItem value="biweekly">Bi-weekly</SelectItem>
                                         <SelectItem value="monthly">Monthly</SelectItem>
+                                        <SelectItem value="manual">Manual Date Range</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
+                            {range === 'manual' && (
+                                <div className="space-y-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/80 dark:bg-slate-900/40">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
+                                        <Input
+                                            type="date"
+                                            value={manualRange.start_date}
+                                            onChange={(e) => setManualRange(prev => ({ ...prev, start_date: e.target.value }))}
+                                            className="bg-white dark:bg-slate-800"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">End Date</label>
+                                        <Input
+                                            type="date"
+                                            value={manualRange.end_date}
+                                            min={manualRange.start_date || undefined}
+                                            onChange={(e) => setManualRange(prev => ({ ...prev, end_date: e.target.value }))}
+                                            className="bg-white dark:bg-slate-800"
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="pt-4 flex flex-col gap-3">
                                 <Button 
                                     onClick={handlePreview} 
                                     className="w-full gap-2 shadow-lg shadow-primary/20 h-10" 
-                                    disabled={!selectedProject || loading}
+                                    disabled={!canRunReport}
                                 >
                                     {loading ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
                                     Preview PDF
@@ -219,7 +260,7 @@ export default function GenerateReport() {
                                         variant="outline" 
                                         onClick={handleDownload} 
                                         className="gap-2 border-slate-200 dark:border-slate-700 h-10"
-                                        disabled={!selectedProject || loading}
+                                        disabled={!canRunReport}
                                     >
                                         <Download className="size-4" />
                                         Download
@@ -228,7 +269,7 @@ export default function GenerateReport() {
                                         variant="outline" 
                                         onClick={() => setIsEmailModalOpen(true)}
                                         className="gap-2 border-primary/20 hover:bg-primary/5 text-primary h-10"
-                                        disabled={!selectedProject || loading}
+                                        disabled={!canRunReport}
                                     >
                                         <Mail className="size-4" />
                                         Email

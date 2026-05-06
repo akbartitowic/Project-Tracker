@@ -3,8 +3,9 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
 import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, TrendingUp, Building2 } from "lucide-react";
 import { hasPermission } from '../../utils/permissions';
+import { cn } from '@/lib/utils';
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false }) {
     const { toggleTheme } = useTheme();
     const { user, logout } = useAuth();
     const can = (slug) => hasPermission(user, slug);
@@ -12,7 +13,15 @@ export default function Sidebar() {
     const canSeeSystemSection = can('teams_users.read') || can('access_control.read') || can('project_roles.read') || can('system_log.read');
 
     return (
-        <aside className="w-64 h-screen overflow-y-auto border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col transition-colors duration-200">
+        <aside
+            className={cn(
+                'fixed inset-y-0 left-0 z-50 flex h-screen w-64 max-w-[min(18rem,88vw)] flex-col overflow-y-auto',
+                'border-r border-slate-200 bg-white transition-transform duration-200 ease-out',
+                'dark:border-slate-800 dark:bg-slate-900',
+                mobileOpen ? 'translate-x-0' : '-translate-x-full',
+                'lg:relative lg:inset-auto lg:z-auto lg:max-w-none lg:shrink-0 lg:translate-x-0',
+            )}
+        >
             <div className="p-6 flex items-center gap-3">
                 <div className="size-11 rounded-xl flex items-center justify-center p-1.5 bg-slate-50 dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-800">
                     <img src="/logo.png" alt="Noohtify Logo" className="size-full object-contain" />

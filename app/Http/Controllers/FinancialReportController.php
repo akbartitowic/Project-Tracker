@@ -34,6 +34,7 @@ class FinancialReportController extends Controller
 
                 $planningIncome = (float) ($project->quotation_value ?? 0);
                 $initialIncome = max(0, $planningIncome - $topUpIncome);
+                // planning_expense = SUM(allocation.amount); final_expense = SUM(COALESCE(realized_amount, amount))
                 $planningExpense = (float) ($project->planning_expense ?? 0);
                 $finalExpense = (float) ($project->final_expense ?? 0);
 
@@ -79,43 +80,65 @@ class FinancialReportController extends Controller
     {
         $startDate = $request->query('start_date', Carbon::now()->startOfYear()->toDateString());
         $endDate = $request->query('end_date', Carbon::now()->toDateString());
+        $rangeStart = $startDate . ' 00:00:00';
+        $rangeEnd = $endDate . ' 23:59:59';
 
-        // 1. Gross Income (Total quotation value of projects in range)
-        $grossIncome = DB::table('projects')
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+        /*
+         | Gross income: SUM(quotation_value) untuk project yang created_at dalam rentang filter.
+         | Ini nilai forecasting (quotation), bukan cash-in aktual.
+         */
+        $grossIncome = (float) DB::table('projects')
+            ->whereBetween('created_at', [$rangeStart, $rangeEnd])
             ->sum('quotation_value');
 
-        // 2. Project Expenses (Total project allocations in range)
-        $projectExpenses = DB::table('project_allocations')
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->sum('amount');
+        /*
+         | Pengeluaran project hanya dari alokasi bukan-top-up (top-up mencatat penambahan quotation/MH, bukan biaya).
+         | Planning = SUM(amount). Realized = SUM(COALESCE(realized_amount, amount)) — sama seperti Realization Report.
+         */
+        $allocationRow = DB::table('project_allocations')
+            ->whereBetween('created_at', [$rangeStart, $rangeEnd])
+            ->where(function ($q) {
+                $q->where('is_topup', 0)->orWhereNull('is_topup');
+            })
+            ->selectRaw('COALESCE(SUM(amount), 0) as planning_total')
+            ->selectRaw('COALESCE(SUM(COALESCE(realized_amount, amount)), 0) as realized_total')
+            ->first();
 
-        $incomeAfterProjectExpenses = $grossIncome - $projectExpenses;
+        $projectExpensesPlanning = (float) ($allocationRow->planning_total ?? 0);
+        $projectExpensesRealized = (float) ($allocationRow->realized_total ?? 0);
 
-        // 3. OPEX and CAPEX (Calculated per Year as requested)
+        $incomeAfterProjectPlanning = $grossIncome - $projectExpensesPlanning;
+        $incomeAfterProjectRealized = $grossIncome - $projectExpensesRealized;
+
+        // OPEX and CAPEX: tahun kalender dari tanggal mulai filter (perilaku lama tetap dipakai).
         $yearStart = Carbon::parse($startDate)->startOfYear()->toDateString();
         $yearEnd = Carbon::parse($startDate)->endOfYear()->toDateString();
 
-        $opexTotal = FinancialRecord::where('type', 'OPEX')
+        $opexTotal = (float) FinancialRecord::where('type', 'OPEX')
             ->whereBetween('date', [$yearStart, $yearEnd])
             ->sum('amount');
 
-        $capexTotal = FinancialRecord::where('type', 'CAPEX')
+        $capexTotal = (float) FinancialRecord::where('type', 'CAPEX')
             ->whereBetween('date', [$yearStart, $yearEnd])
             ->sum('amount');
 
-        $netRevenue = $incomeAfterProjectExpenses - ($opexTotal + $capexTotal);
+        $opexCapex = $opexTotal + $capexTotal;
+        $netRevenue = $incomeAfterProjectPlanning - $opexCapex;
+        $netRevenueRealized = $incomeAfterProjectRealized - $opexCapex;
 
         return response()->json([
             'data' => [
                 'gross_income' => $grossIncome,
-                'project_expenses' => $projectExpenses,
-                'income_after_project_expenses' => $incomeAfterProjectExpenses,
+                'project_expenses' => $projectExpensesPlanning,
+                'project_expenses_realized' => $projectExpensesRealized,
+                'income_after_project_expenses' => $incomeAfterProjectPlanning,
+                'income_after_project_expenses_realized' => $incomeAfterProjectRealized,
                 'opex_total' => $opexTotal,
                 'capex_total' => $capexTotal,
                 'net_revenue' => $netRevenue,
-                'records' => FinancialRecord::whereBetween('date', [$startDate, $endDate])->orderBy('date', 'desc')->get()
-            ]
+                'net_revenue_realized' => $netRevenueRealized,
+                'records' => FinancialRecord::whereBetween('date', [$startDate, $endDate])->orderBy('date', 'desc')->get(),
+            ],
         ]);
     }
 
