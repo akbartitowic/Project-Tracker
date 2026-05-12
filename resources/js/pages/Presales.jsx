@@ -115,7 +115,7 @@ export default function Presales() {
       setUsers(userRes.data || []);
       if (!selectedId && activeItems.length) setSelectedId(activeItems[0].id);
     } catch (error) {
-      showFeedback('Gagal Memuat Data', 'Gagal memuat data presales: ' + error.message);
+      showFeedback('Gagal Memuat Data', 'Gagal memuat data opportunity: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -394,15 +394,17 @@ export default function Presales() {
   };
 
   if (loading) {
-    return <div className="p-4 text-slate-500 sm:p-6 lg:p-8">Loading presales flow...</div>;
+    return <div className="p-4 text-slate-500 sm:p-6 lg:p-8">Memuat alur opportunity ke project...</div>;
   }
 
   return (
     <div className="space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Presales</h1>
-          <p className="text-slate-500 mt-1">Flow Business to Tech to Operation sampai Proceed Project.</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Opportunity ke Project</h1>
+          <p className="text-slate-500 mt-1">
+            Untuk opportunity dengan goals dan scope yang sudah pasti — alur Business, Tech, dan Operation sampai Proceed ke List Project dan Board.
+          </p>
         </div>
         <Button onClick={() => setIsNewOpen(true)}>
           <Plus className="size-4 mr-2" />
@@ -730,7 +732,7 @@ export default function Presales() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New Opportunity</DialogTitle>
-            <DialogDescription>Buat opportunity baru dari alur presales.</DialogDescription>
+            <DialogDescription>Buat opportunity baru dengan goals yang jelas sebelum masuk ke operasional project.</DialogDescription>
           </DialogHeader>
           <form onSubmit={createOpportunity} className="space-y-4">
             <label className="space-y-2 block">

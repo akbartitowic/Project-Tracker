@@ -9,9 +9,9 @@ export default function Sidebar({ mobileOpen = false }) {
     const { toggleTheme } = useTheme();
     const { user, logout } = useAuth();
     const can = (slug) => hasPermission(user, slug);
-    const canSeeBisnisSection =
-        can('presales.read') || can('list_company.read') || can('category_project.read');
-    const canSeeOperationSection = can('list_project.read') || can('project_board.read');
+    const canSeeBisnisSection = can('list_company.read') || can('category_project.read');
+    const canSeeOperationSection =
+        can('presales.read') || can('list_project.read') || can('project_board.read');
     const canSeeReportSection =
         can('reports.read') || can('generate_report.read') || can('finance_report.read') || can('realization_report.read');
     const canSeeFinanceSection = can('finance_monitoring.read') || can('finance_categories.read');
@@ -48,11 +48,6 @@ export default function Sidebar({ mobileOpen = false }) {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bisnis</p>
                 </div>}
                 {canSeeBisnisSection && <>
-                    {can('presales.read') && <NavLink to="/presales"
-                        className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-                        <Activity className="size-5" />
-                        <span className="text-sm">Presales</span>
-                    </NavLink>}
                     {can('list_company.read') && <NavLink to="/presales-companies"
                         className={({ isActive }) => `flex items-center gap-3 px-6 py-2 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                         <Building2 className="size-4" />
@@ -68,6 +63,11 @@ export default function Sidebar({ mobileOpen = false }) {
                 {canSeeOperationSection && <div className="pt-4 pb-2 px-3">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Operation</p>
                 </div>}
+                {can('presales.read') && <NavLink to="/presales"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <Activity className="size-5" />
+                    <span className="text-sm">Opportunity ke Project</span>
+                </NavLink>}
                 {can('list_project.read') && <NavLink to="/create-project"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <PlusCircle className="size-5" />

@@ -19,8 +19,8 @@ alwaysApply: true
   - Should we create a new category?
 - Existing menu categories in current system:
   - `Main` (Dashboard only, top of sidebar)
-  - `Bisnis` (Presales, List Company, Category Company)
-  - `Operation` (List Project, Project Board)
+  - `Bisnis` (List Company, Category Company)
+  - `Operation` (Opportunity ke Project, List Project, Project Board)
   - `Report` (Reports, Generate Report, Finance Report, Realization Report)
   - `Finance` (Monitoring, Categories)
   - `User Management` (My Profile, Teams & Users, Access Control)
