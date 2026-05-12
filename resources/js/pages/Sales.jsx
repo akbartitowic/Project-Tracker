@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ArrowLeft, Check, X } from 'lucide-react';
+import { Plus, ArrowLeft, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const FK_NONE = '__none__';
 
@@ -22,12 +22,6 @@ const STEPS = [
   { key: 'negotiation', label: 'Negotiation' },
   { key: 'closed', label: 'Closed' },
 ];
-
-function nextStepKey(key) {
-  const i = STEPS.findIndex((s) => s.key === key);
-  if (i < 0 || i >= STEPS.length - 1) return null;
-  return STEPS[i + 1].key;
-}
 
 function formatDurationSeconds(sec) {
   if (sec == null || !Number.isFinite(Number(sec))) return '-';
@@ -253,6 +247,7 @@ export default function Sales() {
           quotation_url: form.quotation_url.trim() || null,
         }),
       });
+      await loadPitch();
       showFeedback('Tersimpan', 'Detail pitch berhasil disimpan.');
     } catch (e) {
       showFeedback('Gagal simpan', e.message);
@@ -261,12 +256,8 @@ export default function Sales() {
     }
   };
 
-  const setStep = async (key) => {
+  const setStepInternal = async (key) => {
     if (!pitch?.id) return;
-    const maxIdx = STEPS.findIndex((s) => s.key === pitch.current_step);
-    const maxReachable = maxIdx >= 0 ? maxIdx : 0;
-    const targetIdx = STEPS.findIndex((s) => s.key === key);
-    if (targetIdx < 0 || targetIdx > maxReachable) return;
     setSaving(true);
     try {
       await fetchAPI(`/sales-pitches/${pitch.id}`, {
@@ -280,6 +271,53 @@ export default function Sales() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const goToStepFromTab = async (key) => {
+    if (!pitch?.id) return;
+    const curIdx = STEPS.findIndex((s) => s.key === pitch.current_step);
+    const targetIdx = STEPS.findIndex((s) => s.key === key);
+    if (targetIdx < 0 || targetIdx > curIdx) return;
+    if (key === pitch.current_step) {
+      setSearchParams({ step: key }, { replace: true });
+      return;
+    }
+    await setStepInternal(key);
+  };
+
+  const stepMundur = async () => {
+    if (!pitch) return;
+    const curIdx = STEPS.findIndex((s) => s.key === pitch.current_step);
+    if (curIdx <= 0) return;
+    const prev = STEPS[curIdx - 1].key;
+    await setStepInternal(prev);
+  };
+
+  const stepMaju = async () => {
+    if (!pitch) return;
+    const curIdx = STEPS.findIndex((s) => s.key === pitch.current_step);
+    if (curIdx < 0 || curIdx >= STEPS.length - 1) return;
+    const next = STEPS[curIdx + 1].key;
+    if (pitch.current_step === 'sent_compro') {
+      const u = (form.compro_url || '').trim() || String(pitch.compro_url || '').trim();
+      if (!u) {
+        showFeedback('URL diperlukan', 'Isi URL Compro (atau simpan di step ini) sebelum maju.');
+        return;
+      }
+      await patchPitchFields({ compro_url: u, current_step: next });
+      return;
+    }
+    if (pitch.current_step === 'proposal_sent') {
+      const pu = (form.proposal_url || '').trim() || String(pitch.proposal_url || '').trim();
+      const qu = (form.quotation_url || '').trim() || String(pitch.quotation_url || '').trim();
+      if (!pu || !qu) {
+        showFeedback('URL diperlukan', 'Isi link proposal dan quotation sebelum maju.');
+        return;
+      }
+      await patchPitchFields({ proposal_url: pu, quotation_url: qu, current_step: next });
+      return;
+    }
+    await setStepInternal(next);
   };
 
   const patchPitchFields = async (body) => {
@@ -299,35 +337,6 @@ export default function Sales() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const advanceFromSentCompro = async () => {
-    const u = form.compro_url.trim();
-    if (!u) {
-      showFeedback('URL diperlukan', 'Isi URL Compro sebelum pindah status.');
-      return;
-    }
-    const next = nextStepKey('sent_compro');
-    if (!next) return;
-    await patchPitchFields({ compro_url: u, current_step: next });
-  };
-
-  const advanceFromProposalSent = async () => {
-    const pu = form.proposal_url.trim();
-    const qu = form.quotation_url.trim();
-    if (!pu || !qu) {
-      showFeedback('URL diperlukan', 'Isi link proposal dan quotation sebelum pindah status.');
-      return;
-    }
-    const next = nextStepKey('proposal_sent');
-    if (!next) return;
-    await patchPitchFields({ proposal_url: pu, quotation_url: qu, current_step: next });
-  };
-
-  const advanceGeneric = async (fromKey) => {
-    const next = nextStepKey(fromKey);
-    if (!next) return;
-    await patchPitchFields({ current_step: next });
   };
 
   const finalizeOutcome = async (outcome) => {
@@ -375,7 +384,7 @@ export default function Sales() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{isNewPitch ? 'New Pitch' : 'Detail Pitch'}</h1>
           <p className="text-slate-500 mt-1 text-sm">
-            Step bisa diloncat sesuai kondisi. Simpan detail secara berkala. Pada step Closed, pilih Win atau Lost untuk menutup siklus.
+            Mundur / Maju memindahkan satu tahap sekaligus membawa data URL. Tab hanya untuk kembali ke step yang sudah pernah dicapai. Simpan detail secara berkala. Pada step Closed, pilih Win atau Lost.
           </p>
         </div>
 
@@ -386,8 +395,8 @@ export default function Sales() {
                 <div>
                   <CardTitle className="text-base">Status pipeline</CardTitle>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1 max-w-xl">
-                    Tab hanya bisa diklik untuk step yang sudah dicapai (tahap berikutnya tidak aktif). Alamat halaman memakai query ?step= dan ikut berubah saat step berubah.
-                    Di Sent Compro dan Proposal Sent, isi URL lalu gunakan tombol pindah status ke step berikutnya.
+                    Tab: hanya ke step yang sudah pernah dicapai (tidak loncat maju). Gunakan tombol Mundur / Maju untuk pindah satu tahap; data URL dari step sebelumnya ikut dibawa.
+                    Alamat memakai query ?step=.
                   </p>
                 </div>
                 {pitch.outcome && (
@@ -409,30 +418,95 @@ export default function Sales() {
                       size="sm"
                       variant={active ? 'default' : done ? 'secondary' : 'outline'}
                       disabled={idx > maxReachableIdx || !can('sales.update') || !!pitch.outcome}
-                      onClick={() => setStep(s.key)}
+                      onClick={() => goToStepFromTab(s.key)}
                     >
                       {idx + 1}. {s.label}
                     </Button>
                   );
                 })}
               </div>
+              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={stepIndex <= 0 || !can('sales.update') || !!pitch.outcome || saving}
+                  onClick={stepMundur}
+                >
+                  <ChevronLeft className="size-4 mr-1" />
+                  Mundur
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={stepIndex < 0 || stepIndex >= STEPS.length - 1 || !can('sales.update') || !!pitch.outcome || saving}
+                  onClick={stepMaju}
+                >
+                  Maju
+                  <ChevronRight className="size-4 ml-1" />
+                </Button>
+              </div>
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/50 p-4 space-y-4">
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                   {STEPS.find((x) => x.key === currentStepKey)?.label}
                 </p>
 
+                {stepIndex >= 2 && (
+                  <div className="rounded-md border border-slate-200 bg-white/90 dark:border-slate-600 dark:bg-slate-950/50 p-3 space-y-2 text-sm">
+                    <p className="font-medium text-slate-700 dark:text-slate-200">Data tahap sebelumnya</p>
+                    <div className="space-y-1.5 text-slate-600 dark:text-slate-300">
+                      <div className="flex flex-wrap gap-x-2 gap-y-1 items-baseline">
+                        <span className="text-slate-500 shrink-0">URL Compro</span>
+                        {(() => {
+                          const href = ((form.compro_url || '').trim() || String(pitch.compro_url || '').trim());
+                          return href ? (
+                            <a href={href.startsWith('http') ? href : `https://${href}`} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">
+                              {href}
+                            </a>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          );
+                        })()}
+                      </div>
+                      {stepIndex >= 3 && (
+                        <>
+                          <div className="flex flex-wrap gap-x-2 gap-y-1 items-baseline">
+                            <span className="text-slate-500 shrink-0">Link proposal</span>
+                            {(() => {
+                              const href = ((form.proposal_url || '').trim() || String(pitch.proposal_url || '').trim());
+                              return href ? (
+                                <a href={href.startsWith('http') ? href : `https://${href}`} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">
+                                  {href}
+                                </a>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              );
+                            })()}
+                          </div>
+                          <div className="flex flex-wrap gap-x-2 gap-y-1 items-baseline">
+                            <span className="text-slate-500 shrink-0">Link quotation</span>
+                            {(() => {
+                              const href = ((form.quotation_url || '').trim() || String(pitch.quotation_url || '').trim());
+                              return href ? (
+                                <a href={href.startsWith('http') ? href : `https://${href}`} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">
+                                  {href}
+                                </a>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              );
+                            })()}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {currentStepKey === 'new_prospect' && (
                   <div className="space-y-3">
                     <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Lead baru. Lanjut ke Sent Compro saat compro sudah dikirim ke klien.
+                      Lead baru. Gunakan tombol Maju untuk masuk ke Sent Compro setelah siap.
                     </p>
-                    <Button
-                      type="button"
-                      disabled={!can('sales.update') || !!pitch.outcome || saving}
-                      onClick={() => advanceGeneric('new_prospect')}
-                    >
-                      Pindah status → Sent Compro
-                    </Button>
                   </div>
                 )}
 
@@ -448,9 +522,7 @@ export default function Sales() {
                         disabled={!can('sales.update') || !!pitch.outcome}
                       />
                     </label>
-                    <Button type="button" disabled={!can('sales.update') || !!pitch.outcome || saving} onClick={advanceFromSentCompro}>
-                      Pindah status → Proposal Sent
-                    </Button>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Nilai tersimpan ikut saat Maju ke Proposal Sent (bisa juga Simpan detail).</p>
                   </div>
                 )}
 
@@ -476,27 +548,19 @@ export default function Sales() {
                         disabled={!can('sales.update') || !!pitch.outcome}
                       />
                     </label>
-                    <Button type="button" disabled={!can('sales.update') || !!pitch.outcome || saving} onClick={advanceFromProposalSent}>
-                      Pindah status → Meeting
-                    </Button>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">URL Compro dari tahap sebelumnya tampil di atas. Maju memerlukan proposal + quotation terisi (atau sudah tersimpan).</p>
                   </div>
                 )}
 
                 {currentStepKey === 'meeting' && (
                   <div className="space-y-3">
-                    <p className="text-sm text-slate-600 dark:text-slate-400">Meeting dengan klien. Lanjut jika sudah selesai.</p>
-                    <Button type="button" disabled={!can('sales.update') || !!pitch.outcome || saving} onClick={() => advanceGeneric('meeting')}>
-                      Pindah status → Negotiation
-                    </Button>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Meeting dengan klien. Ringkasan dokumen tahap awal ada di atas.</p>
                   </div>
                 )}
 
                 {currentStepKey === 'negotiation' && (
                   <div className="space-y-3">
                     <p className="text-sm text-slate-600 dark:text-slate-400">Negosiasi kontrak / harga.</p>
-                    <Button type="button" disabled={!can('sales.update') || !!pitch.outcome || saving} onClick={() => advanceGeneric('negotiation')}>
-                      Pindah status → Closed
-                    </Button>
                   </div>
                 )}
 
