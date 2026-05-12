@@ -19,7 +19,7 @@ alwaysApply: true
   - Should we create a new category?
 - Existing menu categories in current system:
   - `Main` (Dashboard only, top of sidebar)
-  - `Bisnis` (List Company, Category Company)
+  - `Bisnis` (Sales, List Company, Category Company)
   - `Operation` (New Project, List Project, Project Board)
   - `Report` (Reports, Generate Report, Finance Report, Realization Report)
   - `Finance` (Monitoring, Categories)

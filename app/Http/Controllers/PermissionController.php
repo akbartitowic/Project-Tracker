@@ -21,6 +21,7 @@ class PermissionController extends Controller
         $menuActionMap = [
             'Dashboard' => ['read'],
             'Presales' => ['create', 'read', 'update', 'delete'],
+            'Sales' => ['create', 'read', 'update', 'delete'],
             'List Company' => ['create', 'read', 'update', 'delete'],
             'Category Project' => ['create', 'read', 'update', 'delete'],
             'List Project' => ['create', 'read', 'update', 'delete'],

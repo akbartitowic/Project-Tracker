@@ -57,6 +57,15 @@ export function getDefaultLandingPath(user) {
 }
 
 export function getRequiredPermissionForPath(pathname) {
+    if (pathname === '/sales/pitch/new' || pathname.startsWith('/sales/pitch/new/')) {
+        return 'sales.create';
+    }
+    if (pathname.startsWith('/sales/pitch/')) {
+        return 'sales.read';
+    }
+    if (pathname === '/sales') {
+        return 'sales.read';
+    }
     const match = ROUTE_PERMISSION_MAP.find((item) =>
         pathname === item.path || pathname.startsWith(`${item.path}/`)
     );

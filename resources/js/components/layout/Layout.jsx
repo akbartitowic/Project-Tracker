@@ -20,7 +20,9 @@ export default function Layout() {
         if (pathname === '/users') return 'Team & Users';
         if (pathname === '/manhours') return 'Manhours Ledger';
         if (pathname === '/reports') return 'Reports';
-        if (pathname === '/presales-companies') return 'Bisnis - List Company';
+        if (pathname.startsWith('/sales/pitch/new')) return 'New Pitch';
+        if (pathname.startsWith('/sales/pitch/')) return 'Sales — Pitch';
+        if (pathname === '/sales') return 'Sales';
         if (pathname === '/presales-project-categories') return 'Bisnis - Category Company';
         if (pathname.startsWith('/presales')) return MENU_NEW_PROJECT;
         if (pathname === '/finance-realization-report') return 'Finance - Realization Report';

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, TrendingUp, Building2 } from "lucide-react";
+import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, TrendingUp, Building2, Handshake } from "lucide-react";
 import { hasPermission } from '../../utils/permissions';
 import { cn } from '@/lib/utils';
 import { MENU_NEW_PROJECT } from '../../constants/menuLabels';
@@ -10,7 +10,8 @@ export default function Sidebar({ mobileOpen = false }) {
     const { toggleTheme } = useTheme();
     const { user, logout } = useAuth();
     const can = (slug) => hasPermission(user, slug);
-    const canSeeBisnisSection = can('list_company.read') || can('category_project.read');
+    const canSeeBisnisSection =
+        can('sales.read') || can('list_company.read') || can('category_project.read');
     const canSeeOperationSection =
         can('presales.read') || can('list_project.read') || can('project_board.read');
     const canSeeReportSection =
@@ -49,6 +50,11 @@ export default function Sidebar({ mobileOpen = false }) {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bisnis</p>
                 </div>}
                 {canSeeBisnisSection && <>
+                    {can('sales.read') && <NavLink to="/sales"
+                        className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                        <Handshake className="size-5" />
+                        <span className="text-sm">Sales</span>
+                    </NavLink>}
                     {can('list_company.read') && <NavLink to="/presales-companies"
                         className={({ isActive }) => `flex items-center gap-3 px-6 py-2 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                         <Building2 className="size-4" />

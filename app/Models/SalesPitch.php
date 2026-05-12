@@ -1,0 +1,66 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class SalesPitch extends Model
+{
+    public const STEP_NEW_PROSPECT = 'new_prospect';
+
+    public const STEP_SENT_COMPRO = 'sent_compro';
+
+    public const STEP_PROPOSAL_SENT = 'proposal_sent';
+
+    public const STEP_MEETING = 'meeting';
+
+    public const STEP_NEGOTIATION = 'negotiation';
+
+    public const STEP_CLOSED = 'closed';
+
+    public const OUTCOME_WIN = 'win';
+
+    public const OUTCOME_LOST = 'lost';
+
+    /** @var list<string> */
+    public const STEPS_ORDER = [
+        self::STEP_NEW_PROSPECT,
+        self::STEP_SENT_COMPRO,
+        self::STEP_PROPOSAL_SENT,
+        self::STEP_MEETING,
+        self::STEP_NEGOTIATION,
+        self::STEP_CLOSED,
+    ];
+
+    protected $fillable = [
+        'user_id',
+        'title',
+        'prospect_name',
+        'company_name',
+        'email',
+        'phone',
+        'estimated_value',
+        'notes',
+        'current_step',
+        'outcome',
+        'lead_started_at',
+        'closed_at',
+        'step_reached_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'estimated_value' => 'decimal:2',
+            'lead_started_at' => 'datetime',
+            'closed_at' => 'datetime',
+            'step_reached_at' => 'array',
+        ];
+    }
+
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+}

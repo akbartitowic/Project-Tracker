@@ -22,6 +22,7 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\FinancialReportController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\ProjectCategoryController;
+use App\Http\Controllers\SalesPitchController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/signup', [AuthController::class, 'signup']);
@@ -96,6 +97,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/presales/{id}/operation', [PresaleController::class, 'updateOperation'])->middleware('permission:presales.update');
     Route::post('/presales/{id}/operation/acknowledge', [PresaleController::class, 'acknowledgeOperation'])->middleware('permission:presales.update');
     Route::post('/presales/{id}/proceed-project', [PresaleController::class, 'proceedToProject'])->middleware('permission:presales.update');
+
+    Route::get('/sales-pitches', [SalesPitchController::class, 'index'])->middleware('permission:sales.read');
+    Route::get('/sales-pitches/{id}', [SalesPitchController::class, 'show'])->middleware('permission:sales.read');
+    Route::post('/sales-pitches', [SalesPitchController::class, 'store'])->middleware('permission:sales.create');
+    Route::put('/sales-pitches/{id}', [SalesPitchController::class, 'update'])->middleware('permission:sales.update');
+    Route::delete('/sales-pitches/{id}', [SalesPitchController::class, 'destroy'])->middleware('permission:sales.delete');
+
     Route::get('/companies', [CompanyController::class, 'index'])->middleware('permission:list_company.read');
     Route::post('/companies', [CompanyController::class, 'store'])->middleware('permission:list_company.create');
     Route::put('/companies/{company}', [CompanyController::class, 'update'])->middleware('permission:list_company.update');
