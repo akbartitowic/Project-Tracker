@@ -21,7 +21,7 @@ export default function Layout() {
         if (pathname === '/reports') return 'Reports';
         if (pathname === '/presales-companies') return 'Bisnis - List Company';
         if (pathname === '/presales-project-categories') return 'Bisnis - Category Company';
-        if (pathname.startsWith('/presales')) return 'Opportunity ke Project';
+        if (pathname.startsWith('/presales')) return 'New Project';
         if (pathname === '/finance-realization-report') return 'Finance - Realization Report';
         return 'Overview';
     };

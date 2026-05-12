@@ -20,7 +20,7 @@ alwaysApply: true
 - Existing menu categories in current system:
   - `Main` (Dashboard only, top of sidebar)
   - `Bisnis` (List Company, Category Company)
-  - `Operation` (Opportunity ke Project, List Project, Project Board)
+  - `Operation` (New Project, List Project, Project Board)
   - `Report` (Reports, Generate Report, Finance Report, Realization Report)
   - `Finance` (Monitoring, Categories)
   - `User Management` (My Profile, Teams & Users, Access Control)
