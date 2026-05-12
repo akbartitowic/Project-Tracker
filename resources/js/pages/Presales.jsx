@@ -409,7 +409,7 @@ export default function Presales() {
         </div>
         <Button onClick={() => setIsNewOpen(true)}>
           <Plus className="size-4 mr-2" />
-          New Opportunity
+          {MENU_NEW_PROJECT}
         </Button>
       </div>
 
@@ -732,8 +732,8 @@ export default function Presales() {
       <Dialog open={isNewOpen} onOpenChange={setIsNewOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Opportunity</DialogTitle>
-            <DialogDescription>Buat opportunity baru dengan goals yang jelas sebelum masuk ke operasional project.</DialogDescription>
+            <DialogTitle>{MENU_NEW_PROJECT}</DialogTitle>
+            <DialogDescription>Buat project baru dengan goals yang jelas sebelum masuk ke operasional (List Project dan Board).</DialogDescription>
           </DialogHeader>
           <form onSubmit={createOpportunity} className="space-y-4">
             <label className="space-y-2 block">
