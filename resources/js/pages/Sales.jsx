@@ -34,6 +34,14 @@ function formatDurationSeconds(sec) {
   return `${m} mnt`;
 }
 
+/** YYYY-MM-DD in local timezone */
+function getLocalDateYmd(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export default function Sales() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -59,7 +67,6 @@ export default function Sales() {
 
   const [form, setForm] = useState({
     title: '',
-    prospect_name: '',
     company_id: FK_NONE,
     project_category_id: FK_NONE,
     sales_category_project_id: FK_NONE,
@@ -67,7 +74,7 @@ export default function Sales() {
     phone: '',
     estimated_value: '',
     notes: '',
-    lead_started_at: '',
+    lead_started_at: getLocalDateYmd(),
   });
 
   const showFeedback = (title, message) => setFeedback({ open: true, title, message });
@@ -100,7 +107,6 @@ export default function Sales() {
     if (!isNewPitch) return;
     setForm({
       title: '',
-      prospect_name: '',
       company_id: FK_NONE,
       project_category_id: FK_NONE,
       sales_category_project_id: FK_NONE,
@@ -108,7 +114,7 @@ export default function Sales() {
       phone: '',
       estimated_value: '',
       notes: '',
-      lead_started_at: '',
+      lead_started_at: getLocalDateYmd(),
     });
   }, [isNewPitch]);
 
@@ -147,8 +153,7 @@ export default function Sales() {
       const p = res.data;
       setPitch(p);
       setForm({
-        title: p.title || '',
-        prospect_name: p.prospect_name || '',
+        title: p.title || p.prospect_name || '',
         company_id: p.company_id != null ? String(p.company_id) : FK_NONE,
         project_category_id: p.project_category_id != null ? String(p.project_category_id) : FK_NONE,
         sales_category_project_id: p.sales_category_project_id != null ? String(p.sales_category_project_id) : FK_NONE,
@@ -156,7 +161,7 @@ export default function Sales() {
         phone: p.phone || '',
         estimated_value: p.estimated_value != null ? String(p.estimated_value) : '',
         notes: p.notes || '',
-        lead_started_at: p.lead_started_at ? String(p.lead_started_at).slice(0, 16) : '',
+        lead_started_at: p.lead_started_at ? String(p.lead_started_at).slice(0, 10) : getLocalDateYmd(),
       });
     } catch (e) {
       showFeedback('Gagal memuat pitch', e.message);
@@ -189,7 +194,7 @@ export default function Sales() {
         method: 'POST',
         body: JSON.stringify({
           title: form.title,
-          prospect_name: form.prospect_name,
+          prospect_name: form.title.trim(),
           company_id: toFk(form.company_id),
           project_category_id: toFk(form.project_category_id),
           sales_category_project_id: toFk(form.sales_category_project_id),
@@ -197,7 +202,7 @@ export default function Sales() {
           phone: form.phone || null,
           estimated_value: form.estimated_value !== '' ? Number(form.estimated_value) : null,
           notes: form.notes || null,
-          lead_started_at: form.lead_started_at || null,
+          lead_started_at: form.lead_started_at || getLocalDateYmd(),
         }),
       });
       if (res.id) {
@@ -218,7 +223,7 @@ export default function Sales() {
         method: 'PUT',
         body: JSON.stringify({
           title: form.title,
-          prospect_name: form.prospect_name,
+          prospect_name: form.title.trim(),
           company_id: toFk(form.company_id),
           project_category_id: toFk(form.project_category_id),
           sales_category_project_id: toFk(form.sales_category_project_id),
@@ -226,7 +231,7 @@ export default function Sales() {
           phone: form.phone || null,
           estimated_value: form.estimated_value !== '' ? Number(form.estimated_value) : null,
           notes: form.notes || null,
-          lead_started_at: form.lead_started_at || null,
+          lead_started_at: form.lead_started_at || getLocalDateYmd(),
         }),
       });
       await loadPitch();
@@ -334,13 +339,9 @@ export default function Sales() {
           <CardContent>
             <form className="space-y-4" onSubmit={isNewPitch ? createPitch : (e) => { e.preventDefault(); saveDetails(); }}>
               <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-2">
-                  <span className="text-sm font-medium">Judul pitch</span>
+                <label className="space-y-2 md:col-span-2">
+                  <span className="text-sm font-medium">Nama Project</span>
                   <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} required />
-                </label>
-                <label className="space-y-2">
-                  <span className="text-sm font-medium">Nama prospek</span>
-                  <Input value={form.prospect_name} onChange={(e) => setForm((p) => ({ ...p, prospect_name: e.target.value }))} required />
                 </label>
               </div>
               <div className="space-y-2">
@@ -405,8 +406,9 @@ export default function Sales() {
                 <Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
               </label>
               <label className="space-y-2 block">
-                <span className="text-sm font-medium">Mulai lead (opsional, default sekarang)</span>
-                <Input type="datetime-local" value={form.lead_started_at} onChange={(e) => setForm((p) => ({ ...p, lead_started_at: e.target.value }))} />
+                <span className="text-sm font-medium">Mulai lead</span>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Tanggal saja; default hari ini.</p>
+                <Input type="date" value={form.lead_started_at} onChange={(e) => setForm((p) => ({ ...p, lead_started_at: e.target.value }))} />
               </label>
               <label className="space-y-2 block">
                 <span className="text-sm font-medium">Catatan</span>
@@ -501,8 +503,7 @@ export default function Sales() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-slate-500">
-                    <th className="py-2 pr-4">Judul</th>
-                    <th className="py-2 pr-4">Prospek</th>
+                    <th className="py-2 pr-4">Nama Project</th>
                     <th className="py-2 pr-4">Perusahaan</th>
                     <th className="py-2 pr-4">Kat. co.</th>
                     <th className="py-2 pr-4">Kat. proj.</th>
@@ -514,8 +515,7 @@ export default function Sales() {
                 <tbody>
                   {list.map((row) => (
                     <tr key={row.id} className="border-b border-slate-100 dark:border-slate-800">
-                      <td className="py-2 pr-4 font-medium">{row.title}</td>
-                      <td className="py-2 pr-4">{row.prospect_name}</td>
+                      <td className="py-2 pr-4 font-medium">{row.title || row.prospect_name || '—'}</td>
                       <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{row.company_name || '—'}</td>
                       <td className="py-2 pr-4 text-slate-600">{row.company_category_name || '—'}</td>
                       <td className="py-2 pr-4 text-slate-600">{row.category_project_name || '—'}</td>

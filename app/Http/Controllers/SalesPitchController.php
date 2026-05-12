@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\ProjectCategory;
 use App\Models\SalesCategoryProject;
 use App\Models\SalesPitch;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -59,7 +60,7 @@ class SalesPitchController extends Controller
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'prospect_name' => 'required|string|max:255',
+            'prospect_name' => 'nullable|string|max:255',
             'company_id' => 'nullable|integer|exists:companies,id',
             'project_category_id' => 'nullable|integer|exists:project_categories,id',
             'sales_category_project_id' => 'nullable|integer|exists:sales_category_projects,id',
@@ -82,20 +83,26 @@ class SalesPitchController extends Controller
             $companyName = Company::query()->find($companyId)?->name;
         }
 
+        $prospectName = trim((string) ($validated['prospect_name'] ?? $validated['title']));
+        $leadRaw = $validated['lead_started_at'] ?? null;
+        $leadAt = ($leadRaw !== null && $leadRaw !== '')
+            ? Carbon::parse($leadRaw)->startOfDay()
+            : now()->startOfDay();
+
         $pitch = SalesPitch::create([
             'user_id' => $request->user()->id,
             'company_id' => $companyId,
             'project_category_id' => $validated['project_category_id'] ?? null,
             'sales_category_project_id' => $validated['sales_category_project_id'] ?? null,
             'title' => $validated['title'],
-            'prospect_name' => $validated['prospect_name'],
+            'prospect_name' => $prospectName !== '' ? $prospectName : $validated['title'],
             'company_name' => $companyName,
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'estimated_value' => $validated['estimated_value'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'current_step' => $step,
-            'lead_started_at' => isset($validated['lead_started_at']) ? $validated['lead_started_at'] : now(),
+            'lead_started_at' => $leadAt,
             'step_reached_at' => $stepReached,
         ]);
 
@@ -109,7 +116,7 @@ class SalesPitchController extends Controller
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
-            'prospect_name' => 'sometimes|string|max:255',
+            'prospect_name' => 'nullable|sometimes|string|max:255',
             'company_id' => 'nullable|integer|exists:companies,id',
             'project_category_id' => 'nullable|integer|exists:project_categories,id',
             'sales_category_project_id' => 'nullable|integer|exists:sales_category_projects,id',
@@ -123,10 +130,29 @@ class SalesPitchController extends Controller
             'outcome' => ['nullable', Rule::in([SalesPitch::OUTCOME_WIN, SalesPitch::OUTCOME_LOST])],
         ]);
 
-        foreach (['title', 'prospect_name', 'company_name', 'email', 'phone', 'estimated_value', 'notes', 'lead_started_at'] as $field) {
+        foreach (['company_name', 'email', 'phone', 'estimated_value', 'notes'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $pitch->{$field} = $validated[$field];
             }
+        }
+
+        if (array_key_exists('title', $validated)) {
+            $pitch->title = $validated['title'];
+        }
+        if (array_key_exists('prospect_name', $validated)) {
+            $pn = $validated['prospect_name'];
+            $pitch->prospect_name = ($pn !== null && $pn !== '')
+                ? $pn
+                : ((array_key_exists('title', $validated) ? $validated['title'] : null) ?: $pitch->title);
+        } elseif (array_key_exists('title', $validated)) {
+            $pitch->prospect_name = $validated['title'];
+        }
+
+        if (array_key_exists('lead_started_at', $validated)) {
+            $raw = $validated['lead_started_at'];
+            $pitch->lead_started_at = ($raw === null || $raw === '')
+                ? now()->startOfDay()
+                : Carbon::parse($raw)->startOfDay();
         }
 
         foreach (['company_id', 'project_category_id', 'sales_category_project_id'] as $fk) {
