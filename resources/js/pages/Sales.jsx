@@ -23,6 +23,12 @@ const STEPS = [
   { key: 'closed', label: 'Closed' },
 ];
 
+function nextStepKey(key) {
+  const i = STEPS.findIndex((s) => s.key === key);
+  if (i < 0 || i >= STEPS.length - 1) return null;
+  return STEPS[i + 1].key;
+}
+
 function formatDurationSeconds(sec) {
   if (sec == null || !Number.isFinite(Number(sec))) return '-';
   const s = Math.floor(Number(sec));
@@ -75,6 +81,9 @@ export default function Sales() {
     estimated_value: '',
     notes: '',
     lead_started_at: getLocalDateYmd(),
+    compro_url: '',
+    proposal_url: '',
+    quotation_url: '',
   });
 
   const showFeedback = (title, message) => setFeedback({ open: true, title, message });
@@ -115,6 +124,9 @@ export default function Sales() {
       estimated_value: '',
       notes: '',
       lead_started_at: getLocalDateYmd(),
+      compro_url: '',
+      proposal_url: '',
+      quotation_url: '',
     });
   }, [isNewPitch]);
 
@@ -162,6 +174,9 @@ export default function Sales() {
         estimated_value: p.estimated_value != null ? String(p.estimated_value) : '',
         notes: p.notes || '',
         lead_started_at: p.lead_started_at ? String(p.lead_started_at).slice(0, 10) : getLocalDateYmd(),
+        compro_url: p.compro_url || '',
+        proposal_url: p.proposal_url || '',
+        quotation_url: p.quotation_url || '',
       });
     } catch (e) {
       showFeedback('Gagal memuat pitch', e.message);
@@ -232,9 +247,11 @@ export default function Sales() {
           estimated_value: form.estimated_value !== '' ? Number(form.estimated_value) : null,
           notes: form.notes || null,
           lead_started_at: form.lead_started_at || getLocalDateYmd(),
+          compro_url: form.compro_url.trim() || null,
+          proposal_url: form.proposal_url.trim() || null,
+          quotation_url: form.quotation_url.trim() || null,
         }),
       });
-      await loadPitch();
       showFeedback('Tersimpan', 'Detail pitch berhasil disimpan.');
     } catch (e) {
       showFeedback('Gagal simpan', e.message);
@@ -257,6 +274,51 @@ export default function Sales() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const patchPitchFields = async (body) => {
+    if (!pitch?.id) return;
+    setSaving(true);
+    try {
+      await fetchAPI(`/sales-pitches/${pitch.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+      await loadPitch();
+    } catch (e) {
+      showFeedback('Gagal memperbarui status', e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const advanceFromSentCompro = async () => {
+    const u = form.compro_url.trim();
+    if (!u) {
+      showFeedback('URL diperlukan', 'Isi URL Compro sebelum pindah status.');
+      return;
+    }
+    const next = nextStepKey('sent_compro');
+    if (!next) return;
+    await patchPitchFields({ compro_url: u, current_step: next });
+  };
+
+  const advanceFromProposalSent = async () => {
+    const pu = form.proposal_url.trim();
+    const qu = form.quotation_url.trim();
+    if (!pu || !qu) {
+      showFeedback('URL diperlukan', 'Isi link proposal dan quotation sebelum pindah status.');
+      return;
+    }
+    const next = nextStepKey('proposal_sent');
+    if (!next) return;
+    await patchPitchFields({ proposal_url: pu, quotation_url: qu, current_step: next });
+  };
+
+  const advanceGeneric = async (fromKey) => {
+    const next = nextStepKey(fromKey);
+    if (!next) return;
+    await patchPitchFields({ current_step: next });
   };
 
   const finalizeOutcome = async (outcome) => {
@@ -302,10 +364,23 @@ export default function Sales() {
         {!isNewPitch && pitch && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Progress</CardTitle>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle className="text-base">Status pipeline</CardTitle>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1 max-w-xl">
+                    Klik tab step untuk pindah status (bisa loncat). Setelah status berubah, tab aktif mengikuti step saat ini.
+                    Di Sent Compro dan Proposal Sent, isi URL lalu gunakan tombol pindah status ke step berikutnya.
+                  </p>
+                </div>
+                {pitch.outcome && (
+                  <Badge className={pitch.outcome === 'win' ? 'bg-emerald-600 shrink-0' : 'bg-rose-600 shrink-0'}>
+                    {pitch.outcome === 'win' ? 'Win' : 'Lost'}
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
                 {STEPS.map((s, idx) => {
                   const active = s.key === currentStepKey;
                   const done = stepIndex > idx;
@@ -323,11 +398,100 @@ export default function Sales() {
                   );
                 })}
               </div>
-              {pitch.outcome && (
-                <Badge className={pitch.outcome === 'win' ? 'bg-emerald-600' : 'bg-rose-600'}>
-                  {pitch.outcome === 'win' ? 'Win' : 'Lost'}
-                </Badge>
-              )}
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/50 p-4 space-y-4">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {STEPS.find((x) => x.key === currentStepKey)?.label}
+                </p>
+
+                {currentStepKey === 'new_prospect' && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Lead baru. Lanjut ke Sent Compro saat compro sudah dikirim ke klien.
+                    </p>
+                    <Button
+                      type="button"
+                      disabled={!can('sales.update') || !!pitch.outcome || saving}
+                      onClick={() => advanceGeneric('new_prospect')}
+                    >
+                      Pindah status → Sent Compro
+                    </Button>
+                  </div>
+                )}
+
+                {currentStepKey === 'sent_compro' && (
+                  <div className="space-y-3">
+                    <label className="space-y-2 block">
+                      <span className="text-sm font-medium">URL Compro</span>
+                      <Input
+                        type="text"
+                        placeholder="https://..."
+                        value={form.compro_url}
+                        onChange={(e) => setForm((p) => ({ ...p, compro_url: e.target.value }))}
+                        disabled={!can('sales.update') || !!pitch.outcome}
+                      />
+                    </label>
+                    <Button type="button" disabled={!can('sales.update') || !!pitch.outcome || saving} onClick={advanceFromSentCompro}>
+                      Pindah status → Proposal Sent
+                    </Button>
+                  </div>
+                )}
+
+                {currentStepKey === 'proposal_sent' && (
+                  <div className="space-y-3">
+                    <label className="space-y-2 block">
+                      <span className="text-sm font-medium">Link proposal</span>
+                      <Input
+                        type="text"
+                        placeholder="https://..."
+                        value={form.proposal_url}
+                        onChange={(e) => setForm((p) => ({ ...p, proposal_url: e.target.value }))}
+                        disabled={!can('sales.update') || !!pitch.outcome}
+                      />
+                    </label>
+                    <label className="space-y-2 block">
+                      <span className="text-sm font-medium">Link quotation</span>
+                      <Input
+                        type="text"
+                        placeholder="https://..."
+                        value={form.quotation_url}
+                        onChange={(e) => setForm((p) => ({ ...p, quotation_url: e.target.value }))}
+                        disabled={!can('sales.update') || !!pitch.outcome}
+                      />
+                    </label>
+                    <Button type="button" disabled={!can('sales.update') || !!pitch.outcome || saving} onClick={advanceFromProposalSent}>
+                      Pindah status → Meeting
+                    </Button>
+                  </div>
+                )}
+
+                {currentStepKey === 'meeting' && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Meeting dengan klien. Lanjut jika sudah selesai.</p>
+                    <Button type="button" disabled={!can('sales.update') || !!pitch.outcome || saving} onClick={() => advanceGeneric('meeting')}>
+                      Pindah status → Negotiation
+                    </Button>
+                  </div>
+                )}
+
+                {currentStepKey === 'negotiation' && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Negosiasi kontrak / harga.</p>
+                    <Button type="button" disabled={!can('sales.update') || !!pitch.outcome || saving} onClick={() => advanceGeneric('negotiation')}>
+                      Pindah status → Closed
+                    </Button>
+                  </div>
+                )}
+
+                {currentStepKey === 'closed' && !pitch.outcome && (
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Step closed. Tentukan hasil di kartu Win / Lost di bawah.
+                  </p>
+                )}
+
+                {currentStepKey === 'closed' && pitch.outcome && (
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Pitch telah ditutup.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}

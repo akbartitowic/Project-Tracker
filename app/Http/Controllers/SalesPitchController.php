@@ -69,6 +69,9 @@ class SalesPitchController extends Controller
             'phone' => 'nullable|string|max:64',
             'estimated_value' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
+            'compro_url' => 'nullable|string|max:2048',
+            'proposal_url' => 'nullable|string|max:2048',
+            'quotation_url' => 'nullable|string|max:2048',
             'lead_started_at' => 'nullable|date',
             'current_step' => ['nullable', Rule::in(SalesPitch::STEPS_ORDER)],
         ]);
@@ -125,12 +128,15 @@ class SalesPitchController extends Controller
             'phone' => 'nullable|string|max:64',
             'estimated_value' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
+            'compro_url' => 'nullable|string|max:2048',
+            'proposal_url' => 'nullable|string|max:2048',
+            'quotation_url' => 'nullable|string|max:2048',
             'lead_started_at' => 'nullable|date',
             'current_step' => ['sometimes', Rule::in(SalesPitch::STEPS_ORDER)],
             'outcome' => ['nullable', Rule::in([SalesPitch::OUTCOME_WIN, SalesPitch::OUTCOME_LOST])],
         ]);
 
-        foreach (['company_name', 'email', 'phone', 'estimated_value', 'notes'] as $field) {
+        foreach (['company_name', 'email', 'phone', 'estimated_value', 'notes', 'compro_url', 'proposal_url', 'quotation_url'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $pitch->{$field} = $validated[$field];
             }
