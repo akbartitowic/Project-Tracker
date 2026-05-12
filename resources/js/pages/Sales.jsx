@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import { hasPermission } from '../utils/permissions';
 import { useAuth } from '../context/AuthContext';
@@ -51,6 +51,7 @@ function getLocalDateYmd(d = new Date()) {
 export default function Sales() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { pitchId } = useParams();
   const { user } = useAuth();
   const can = (slug) => hasPermission(user, slug);
@@ -262,6 +263,10 @@ export default function Sales() {
 
   const setStep = async (key) => {
     if (!pitch?.id) return;
+    const maxIdx = STEPS.findIndex((s) => s.key === pitch.current_step);
+    const maxReachable = maxIdx >= 0 ? maxIdx : 0;
+    const targetIdx = STEPS.findIndex((s) => s.key === key);
+    if (targetIdx < 0 || targetIdx > maxReachable) return;
     setSaving(true);
     try {
       await fetchAPI(`/sales-pitches/${pitch.id}`, {
@@ -269,6 +274,7 @@ export default function Sales() {
         body: JSON.stringify({ current_step: key }),
       });
       await loadPitch();
+      setSearchParams({ step: key }, { replace: true });
     } catch (e) {
       showFeedback('Gagal ubah step', e.message);
     } finally {
@@ -285,6 +291,9 @@ export default function Sales() {
         body: JSON.stringify(body),
       });
       await loadPitch();
+      if (body.current_step && typeof body.current_step === 'string') {
+        setSearchParams({ step: body.current_step }, { replace: true });
+      }
     } catch (e) {
       showFeedback('Gagal memperbarui status', e.message);
     } finally {
@@ -339,6 +348,15 @@ export default function Sales() {
   };
 
   const stepIndex = useMemo(() => STEPS.findIndex((s) => s.key === currentStepKey), [currentStepKey]);
+  const maxReachableIdx = stepIndex >= 0 ? stepIndex : 0;
+
+  const stepParam = searchParams.get('step');
+
+  useEffect(() => {
+    if (isNewPitch || !pitchId || !pitch?.current_step) return;
+    if (stepParam === pitch.current_step) return;
+    setSearchParams({ step: pitch.current_step }, { replace: true });
+  }, [isNewPitch, pitchId, pitch?.current_step, pitch?.id, stepParam, setSearchParams]);
 
   if (isWizard) {
     if (!isNewPitch && pitchId && loadingPitch) {
@@ -368,7 +386,7 @@ export default function Sales() {
                 <div>
                   <CardTitle className="text-base">Status pipeline</CardTitle>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1 max-w-xl">
-                    Klik tab step untuk pindah status (bisa loncat). Setelah status berubah, tab aktif mengikuti step saat ini.
+                    Tab hanya bisa diklik untuk step yang sudah dicapai (tahap berikutnya tidak aktif). Alamat halaman memakai query ?step= dan ikut berubah saat step berubah.
                     Di Sent Compro dan Proposal Sent, isi URL lalu gunakan tombol pindah status ke step berikutnya.
                   </p>
                 </div>
@@ -383,14 +401,14 @@ export default function Sales() {
               <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
                 {STEPS.map((s, idx) => {
                   const active = s.key === currentStepKey;
-                  const done = stepIndex > idx;
+                  const done = maxReachableIdx > idx;
                   return (
                     <Button
                       key={s.key}
                       type="button"
                       size="sm"
                       variant={active ? 'default' : done ? 'secondary' : 'outline'}
-                      disabled={!can('sales.update') || !!pitch.outcome}
+                      disabled={idx > maxReachableIdx || !can('sales.update') || !!pitch.outcome}
                       onClick={() => setStep(s.key)}
                     >
                       {idx + 1}. {s.label}
