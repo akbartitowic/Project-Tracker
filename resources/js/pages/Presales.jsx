@@ -416,7 +416,7 @@ export default function Presales() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         <Card className="xl:col-span-4">
           <CardHeader>
-            <CardTitle>Opportunity List</CardTitle>
+            <CardTitle>New Project List</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 max-h-[70vh] overflow-y-auto">
             {visiblePresales.length === 0 ? (
