@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, TrendingUp, Building2 } from "lucide-react";
 import { hasPermission } from '../../utils/permissions';
 import { cn } from '@/lib/utils';
+import { MENU_NEW_PROJECT } from '../../constants/menuLabels';
 
 export default function Sidebar({ mobileOpen = false }) {
     const { toggleTheme } = useTheme();
@@ -63,10 +64,10 @@ export default function Sidebar({ mobileOpen = false }) {
                 {canSeeOperationSection && <div className="pt-4 pb-2 px-3">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Operation</p>
                 </div>}
-                {can('presales.read') && <NavLink to="/presales"
+                {can('presales.read') && <NavLink to="/presales" title={MENU_NEW_PROJECT} aria-label={MENU_NEW_PROJECT}
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Activity className="size-5" />
-                    <span className="text-sm">New Project</span>
+                    <span className="text-sm">{MENU_NEW_PROJECT}</span>
                 </NavLink>}
                 {can('list_project.read') && <NavLink to="/create-project"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>

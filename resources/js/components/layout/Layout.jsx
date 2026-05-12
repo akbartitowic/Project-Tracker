@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { MENU_NEW_PROJECT } from '../../constants/menuLabels';
 
 export default function Layout() {
     const location = useLocation();
@@ -21,7 +22,7 @@ export default function Layout() {
         if (pathname === '/reports') return 'Reports';
         if (pathname === '/presales-companies') return 'Bisnis - List Company';
         if (pathname === '/presales-project-categories') return 'Bisnis - Category Company';
-        if (pathname.startsWith('/presales')) return 'New Project';
+        if (pathname.startsWith('/presales')) return MENU_NEW_PROJECT;
         if (pathname === '/finance-realization-report') return 'Finance - Realization Report';
         return 'Overview';
     };

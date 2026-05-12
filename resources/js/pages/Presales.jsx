@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle2, Pencil, Plus } from 'lucide-react';
+import { MENU_NEW_PROJECT } from '../constants/menuLabels';
 
 const TAB_KEYS = ['Business', 'Tech', 'Operation'];
 const TAB_TO_PATH = {
@@ -394,14 +395,14 @@ export default function Presales() {
   };
 
   if (loading) {
-    return <div className="p-4 text-slate-500 sm:p-6 lg:p-8">Memuat New Project...</div>;
+    return <div className="p-4 text-slate-500 sm:p-6 lg:p-8">Memuat {MENU_NEW_PROJECT}...</div>;
   }
 
   return (
     <div className="space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">New Project</h1>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{MENU_NEW_PROJECT}</h1>
           <p className="text-slate-500 mt-1">
             Untuk opportunity dengan goals dan scope yang sudah pasti — alur Business, Tech, dan Operation sampai Proceed ke List Project dan Board.
           </p>
