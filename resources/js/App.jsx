@@ -19,6 +19,7 @@ import FinanceReport from './pages/FinanceReport';
 import RealizationReport from './pages/RealizationReport';
 import CompanyMaster from './pages/CompanyMaster';
 import ProjectCategoryMaster from './pages/ProjectCategoryMaster';
+import SalesCategoryProjectMaster from './pages/SalesCategoryProjectMaster';
 import Sales from './pages/Sales';
 
 import Login from './pages/Auth/Login';
@@ -72,6 +73,7 @@ function App() {
           <Route path="presales/:view?" element={<Presales />} />
           <Route path="presales-companies" element={<CompanyMaster />} />
           <Route path="presales-project-categories" element={<ProjectCategoryMaster />} />
+          <Route path="sales-category-projects" element={<SalesCategoryProjectMaster />} />
           <Route path="create-project" element={<ProjectList />} />
           <Route path="board/:projectId?" element={<ProjectBoard />} />
           <Route path="users" element={<TeamUsers />} />

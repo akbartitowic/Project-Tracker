@@ -1,6 +1,7 @@
 const ROUTE_PERMISSION_MAP = [
     { path: '/presales-companies', permission: 'list_company.read' },
     { path: '/presales-project-categories', permission: 'category_project.read' },
+    { path: '/sales-category-projects', permission: 'sales_category_project.read' },
     { path: '/presales', permission: 'presales.read' },
     { path: '/create-project', permission: 'list_project.read' },
     { path: '/board', permission: 'project_board.read' },

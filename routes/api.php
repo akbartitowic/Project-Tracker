@@ -23,6 +23,7 @@ use App\Http\Controllers\FinancialReportController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\ProjectCategoryController;
 use App\Http\Controllers\SalesPitchController;
+use App\Http\Controllers\SalesCategoryProjectController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/signup', [AuthController::class, 'signup']);
@@ -98,6 +99,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/presales/{id}/operation/acknowledge', [PresaleController::class, 'acknowledgeOperation'])->middleware('permission:presales.update');
     Route::post('/presales/{id}/proceed-project', [PresaleController::class, 'proceedToProject'])->middleware('permission:presales.update');
 
+    Route::get('/sales-pitches/form-options', [SalesPitchController::class, 'formOptions'])->middleware('permission:sales.read');
     Route::get('/sales-pitches', [SalesPitchController::class, 'index'])->middleware('permission:sales.read');
     Route::get('/sales-pitches/{id}', [SalesPitchController::class, 'show'])->middleware('permission:sales.read');
     Route::post('/sales-pitches', [SalesPitchController::class, 'store'])->middleware('permission:sales.create');
@@ -114,6 +116,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/project-categories/{project_category}', [ProjectCategoryController::class, 'update'])->middleware('permission:category_project.update');
     Route::patch('/project-categories/{project_category}', [ProjectCategoryController::class, 'update'])->middleware('permission:category_project.update');
     Route::delete('/project-categories/{project_category}', [ProjectCategoryController::class, 'destroy'])->middleware('permission:category_project.delete');
+
+    Route::get('/sales-category-projects', [SalesCategoryProjectController::class, 'index'])->middleware('permission:sales_category_project.read');
+    Route::post('/sales-category-projects', [SalesCategoryProjectController::class, 'store'])->middleware('permission:sales_category_project.create');
+    Route::put('/sales-category-projects/{id}', [SalesCategoryProjectController::class, 'update'])->middleware('permission:sales_category_project.update');
+    Route::delete('/sales-category-projects/{id}', [SalesCategoryProjectController::class, 'destroy'])->middleware('permission:sales_category_project.delete');
 
     // 6. Finance Categories Routes
     Route::get('/finance-categories', [FinanceCategoryController::class, 'index'])->middleware('permission:finance_categories.read');

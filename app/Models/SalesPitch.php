@@ -35,6 +35,9 @@ class SalesPitch extends Model
 
     protected $fillable = [
         'user_id',
+        'company_id',
+        'project_category_id',
+        'sales_category_project_id',
         'title',
         'prospect_name',
         'company_name',
@@ -62,5 +65,20 @@ class SalesPitch extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'company_id');
+    }
+
+    public function companyCategory(): BelongsTo
+    {
+        return $this->belongsTo(ProjectCategory::class, 'project_category_id');
+    }
+
+    public function salesCategoryProject(): BelongsTo
+    {
+        return $this->belongsTo(SalesCategoryProject::class, 'sales_category_project_id');
     }
 }

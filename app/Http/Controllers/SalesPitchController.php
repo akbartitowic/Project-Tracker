@@ -2,16 +2,33 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Company;
+use App\Models\ProjectCategory;
+use App\Models\SalesCategoryProject;
 use App\Models\SalesPitch;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class SalesPitchController extends Controller
 {
+    public function formOptions()
+    {
+        return response()->json([
+            'companies' => Company::query()->orderBy('name')->get(['id', 'name']),
+            'company_categories' => ProjectCategory::query()->orderBy('name')->get(['id', 'name']),
+            'category_projects' => SalesCategoryProject::query()->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $tab = $request->query('tab', 'pipeline');
-        $query = SalesPitch::query()->with('owner:id,name')->orderByDesc('updated_at');
+        $query = SalesPitch::query()->with([
+            'owner:id,name',
+            'company:id,name',
+            'companyCategory:id,name',
+            'salesCategoryProject:id,name',
+        ])->orderByDesc('updated_at');
 
         if (!$this->isPrivileged($request)) {
             $query->where('user_id', $request->user()->id);
@@ -43,6 +60,9 @@ class SalesPitchController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'prospect_name' => 'required|string|max:255',
+            'company_id' => 'nullable|integer|exists:companies,id',
+            'project_category_id' => 'nullable|integer|exists:project_categories,id',
+            'sales_category_project_id' => 'nullable|integer|exists:sales_category_projects,id',
             'company_name' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:64',
@@ -56,11 +76,20 @@ class SalesPitchController extends Controller
         $now = now()->toIso8601String();
         $stepReached = [$step => $now];
 
+        $companyId = $validated['company_id'] ?? null;
+        $companyName = $validated['company_name'] ?? null;
+        if ($companyId) {
+            $companyName = Company::query()->find($companyId)?->name;
+        }
+
         $pitch = SalesPitch::create([
             'user_id' => $request->user()->id,
+            'company_id' => $companyId,
+            'project_category_id' => $validated['project_category_id'] ?? null,
+            'sales_category_project_id' => $validated['sales_category_project_id'] ?? null,
             'title' => $validated['title'],
             'prospect_name' => $validated['prospect_name'],
-            'company_name' => $validated['company_name'] ?? null,
+            'company_name' => $companyName,
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'estimated_value' => $validated['estimated_value'] ?? null,
@@ -81,6 +110,9 @@ class SalesPitchController extends Controller
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
             'prospect_name' => 'sometimes|string|max:255',
+            'company_id' => 'nullable|integer|exists:companies,id',
+            'project_category_id' => 'nullable|integer|exists:project_categories,id',
+            'sales_category_project_id' => 'nullable|integer|exists:sales_category_projects,id',
             'company_name' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:64',
@@ -94,6 +126,20 @@ class SalesPitchController extends Controller
         foreach (['title', 'prospect_name', 'company_name', 'email', 'phone', 'estimated_value', 'notes', 'lead_started_at'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $pitch->{$field} = $validated[$field];
+            }
+        }
+
+        foreach (['company_id', 'project_category_id', 'sales_category_project_id'] as $fk) {
+            if (array_key_exists($fk, $validated)) {
+                $pitch->{$fk} = $validated[$fk];
+            }
+        }
+
+        if (array_key_exists('company_id', $validated)) {
+            if ($pitch->company_id) {
+                $pitch->company_name = Company::query()->find($pitch->company_id)?->name;
+            } elseif (!array_key_exists('company_name', $validated)) {
+                $pitch->company_name = null;
             }
         }
 
@@ -149,9 +195,17 @@ class SalesPitchController extends Controller
 
     private function serializePitch(SalesPitch $p): array
     {
-        $p->loadMissing('owner:id,name');
+        $p->loadMissing([
+            'owner:id,name',
+            'company:id,name',
+            'companyCategory:id,name',
+            'salesCategoryProject:id,name',
+        ]);
         $arr = $p->toArray();
         $arr['owner_name'] = $p->owner?->name;
+        $arr['company_name'] = $p->company?->name ?? $p->company_name;
+        $arr['company_category_name'] = $p->companyCategory?->name;
+        $arr['category_project_name'] = $p->salesCategoryProject?->name;
         $start = $p->lead_started_at?->getTimestamp();
         $end = $p->closed_at?->getTimestamp() ?? now()->getTimestamp();
         $arr['duration_seconds_open'] = $start ? max(0, $end - $start) : 0;

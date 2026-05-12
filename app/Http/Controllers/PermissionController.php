@@ -24,6 +24,7 @@ class PermissionController extends Controller
             'Sales' => ['create', 'read', 'update', 'delete'],
             'List Company' => ['create', 'read', 'update', 'delete'],
             'Category Project' => ['create', 'read', 'update', 'delete'],
+            'Sales Category Project' => ['create', 'read', 'update', 'delete'],
             'List Project' => ['create', 'read', 'update', 'delete'],
             'Project Board' => ['create', 'read', 'update'],
             'Reports' => ['read'],

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, TrendingUp, Building2, Handshake } from "lucide-react";
+import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, TrendingUp, Building2, Handshake, Layers } from "lucide-react";
 import { hasPermission } from '../../utils/permissions';
 import { cn } from '@/lib/utils';
 import { MENU_NEW_PROJECT } from '../../constants/menuLabels';
@@ -11,7 +11,10 @@ export default function Sidebar({ mobileOpen = false }) {
     const { user, logout } = useAuth();
     const can = (slug) => hasPermission(user, slug);
     const canSeeBisnisSection =
-        can('sales.read') || can('list_company.read') || can('category_project.read');
+        can('sales.read')
+        || can('list_company.read')
+        || can('category_project.read')
+        || can('sales_category_project.read');
     const canSeeOperationSection =
         can('presales.read') || can('list_project.read') || can('project_board.read');
     const canSeeReportSection =
@@ -64,6 +67,11 @@ export default function Sidebar({ mobileOpen = false }) {
                         className={({ isActive }) => `flex items-center gap-3 px-6 py-2 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                         <Tag className="size-4" />
                         <span className="text-xs">Category Company</span>
+                    </NavLink>}
+                    {can('sales_category_project.read') && <NavLink to="/sales-category-projects"
+                        className={({ isActive }) => `flex items-center gap-3 px-6 py-2 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                        <Layers className="size-4" />
+                        <span className="text-xs">Category Project</span>
                     </NavLink>}
                 </>}
 

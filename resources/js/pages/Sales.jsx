@@ -8,8 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Handshake, Plus, ArrowLeft, Check, X } from 'lucide-react';
+import { Plus, ArrowLeft, Check, X } from 'lucide-react';
+
+const FK_NONE = '__none__';
 
 const STEPS = [
   { key: 'new_prospect', label: 'New Prospect' },
@@ -48,11 +51,18 @@ export default function Sales() {
   const [loadingPitch, setLoadingPitch] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState({ open: false, title: '', message: '' });
+  const [formOptions, setFormOptions] = useState({
+    companies: [],
+    company_categories: [],
+    category_projects: [],
+  });
 
   const [form, setForm] = useState({
     title: '',
     prospect_name: '',
-    company_name: '',
+    company_id: FK_NONE,
+    project_category_id: FK_NONE,
+    sales_category_project_id: FK_NONE,
     email: '',
     phone: '',
     estimated_value: '',
@@ -61,6 +71,46 @@ export default function Sales() {
   });
 
   const showFeedback = (title, message) => setFeedback({ open: true, title, message });
+
+  const toFk = (v) => (v && v !== FK_NONE ? Number(v) : null);
+
+  useEffect(() => {
+    if (!isWizard) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchAPI('/sales-pitches/form-options');
+        if (!cancelled) {
+          setFormOptions({
+            companies: res.companies || [],
+            company_categories: res.company_categories || [],
+            category_projects: res.category_projects || [],
+          });
+        }
+      } catch (e) {
+        if (!cancelled) showFeedback('Gagal memuat master data', e.message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isWizard]);
+
+  useEffect(() => {
+    if (!isNewPitch) return;
+    setForm({
+      title: '',
+      prospect_name: '',
+      company_id: FK_NONE,
+      project_category_id: FK_NONE,
+      sales_category_project_id: FK_NONE,
+      email: '',
+      phone: '',
+      estimated_value: '',
+      notes: '',
+      lead_started_at: '',
+    });
+  }, [isNewPitch]);
 
   const loadList = useCallback(async () => {
     if (isWizard) return;
@@ -99,7 +149,9 @@ export default function Sales() {
       setForm({
         title: p.title || '',
         prospect_name: p.prospect_name || '',
-        company_name: p.company_name || '',
+        company_id: p.company_id != null ? String(p.company_id) : FK_NONE,
+        project_category_id: p.project_category_id != null ? String(p.project_category_id) : FK_NONE,
+        sales_category_project_id: p.sales_category_project_id != null ? String(p.sales_category_project_id) : FK_NONE,
         email: p.email || '',
         phone: p.phone || '',
         estimated_value: p.estimated_value != null ? String(p.estimated_value) : '',
@@ -138,7 +190,9 @@ export default function Sales() {
         body: JSON.stringify({
           title: form.title,
           prospect_name: form.prospect_name,
-          company_name: form.company_name || null,
+          company_id: toFk(form.company_id),
+          project_category_id: toFk(form.project_category_id),
+          sales_category_project_id: toFk(form.sales_category_project_id),
           email: form.email || null,
           phone: form.phone || null,
           estimated_value: form.estimated_value !== '' ? Number(form.estimated_value) : null,
@@ -165,7 +219,9 @@ export default function Sales() {
         body: JSON.stringify({
           title: form.title,
           prospect_name: form.prospect_name,
-          company_name: form.company_name || null,
+          company_id: toFk(form.company_id),
+          project_category_id: toFk(form.project_category_id),
+          sales_category_project_id: toFk(form.sales_category_project_id),
           email: form.email || null,
           phone: form.phone || null,
           estimated_value: form.estimated_value !== '' ? Number(form.estimated_value) : null,
@@ -286,10 +342,55 @@ export default function Sales() {
                   <span className="text-sm font-medium">Nama prospek</span>
                   <Input value={form.prospect_name} onChange={(e) => setForm((p) => ({ ...p, prospect_name: e.target.value }))} required />
                 </label>
-                <label className="space-y-2">
-                  <span className="text-sm font-medium">Perusahaan</span>
-                  <Input value={form.company_name} onChange={(e) => setForm((p) => ({ ...p, company_name: e.target.value }))} />
-                </label>
+              </div>
+              <div className="space-y-2">
+                <span className="text-sm font-medium">Perusahaan</span>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Pilih dari master List Company (menu Bisnis).</p>
+                <Select value={form.company_id} onValueChange={(v) => setForm((p) => ({ ...p, company_id: v }))}>
+                  <SelectTrigger className="w-full border-slate-200 dark:border-slate-700">
+                    <SelectValue placeholder="Pilih perusahaan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={FK_NONE}>Tidak dipilih</SelectItem>
+                    {formOptions.companies.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <span className="text-sm font-medium">Kategori company</span>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Master Category Company.</p>
+                  <Select value={form.project_category_id} onValueChange={(v) => setForm((p) => ({ ...p, project_category_id: v }))}>
+                    <SelectTrigger className="w-full border-slate-200 dark:border-slate-700">
+                      <SelectValue placeholder="Pilih kategori" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={FK_NONE}>Tidak dipilih</SelectItem>
+                      {formOptions.company_categories.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <span className="text-sm font-medium">Kategori project</span>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Master Category Project (Sales).</p>
+                  <Select value={form.sales_category_project_id} onValueChange={(v) => setForm((p) => ({ ...p, sales_category_project_id: v }))}>
+                    <SelectTrigger className="w-full border-slate-200 dark:border-slate-700">
+                      <SelectValue placeholder="Pilih kategori project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={FK_NONE}>Tidak dipilih</SelectItem>
+                      {formOptions.category_projects.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2">
                   <span className="text-sm font-medium">Estimasi nilai (opsional)</span>
                   <Input type="number" min="0" value={form.estimated_value} onChange={(e) => setForm((p) => ({ ...p, estimated_value: e.target.value }))} />
@@ -298,11 +399,11 @@ export default function Sales() {
                   <span className="text-sm font-medium">Email</span>
                   <Input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
                 </label>
-                <label className="space-y-2">
-                  <span className="text-sm font-medium">Telepon</span>
-                  <Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
-                </label>
               </div>
+              <label className="space-y-2 block">
+                <span className="text-sm font-medium">Telepon</span>
+                <Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+              </label>
               <label className="space-y-2 block">
                 <span className="text-sm font-medium">Mulai lead (opsional, default sekarang)</span>
                 <Input type="datetime-local" value={form.lead_started_at} onChange={(e) => setForm((p) => ({ ...p, lead_started_at: e.target.value }))} />
@@ -402,6 +503,9 @@ export default function Sales() {
                   <tr className="border-b text-left text-slate-500">
                     <th className="py-2 pr-4">Judul</th>
                     <th className="py-2 pr-4">Prospek</th>
+                    <th className="py-2 pr-4">Perusahaan</th>
+                    <th className="py-2 pr-4">Kat. co.</th>
+                    <th className="py-2 pr-4">Kat. proj.</th>
                     <th className="py-2 pr-4">Step</th>
                     <th className="py-2 pr-4">Durasi</th>
                     <th className="py-2 text-right"></th>
@@ -412,6 +516,9 @@ export default function Sales() {
                     <tr key={row.id} className="border-b border-slate-100 dark:border-slate-800">
                       <td className="py-2 pr-4 font-medium">{row.title}</td>
                       <td className="py-2 pr-4">{row.prospect_name}</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{row.company_name || '—'}</td>
+                      <td className="py-2 pr-4 text-slate-600">{row.company_category_name || '—'}</td>
+                      <td className="py-2 pr-4 text-slate-600">{row.category_project_name || '—'}</td>
                       <td className="py-2 pr-4">
                         <Badge variant="outline">{STEPS.find((s) => s.key === row.current_step)?.label || row.current_step}</Badge>
                       </td>
