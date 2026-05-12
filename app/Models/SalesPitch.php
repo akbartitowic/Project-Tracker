@@ -48,6 +48,9 @@ class SalesPitch extends Model
         'compro_url',
         'proposal_url',
         'quotation_url',
+        'meeting_at',
+        'meeting_location',
+        'meeting_mode',
         'current_step',
         'outcome',
         'lead_started_at',
@@ -60,6 +63,7 @@ class SalesPitch extends Model
         return [
             'estimated_value' => 'decimal:2',
             'lead_started_at' => 'datetime',
+            'meeting_at' => 'datetime',
             'closed_at' => 'datetime',
             'step_reached_at' => 'array',
         ];

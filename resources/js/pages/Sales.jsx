@@ -42,6 +42,14 @@ function getLocalDateYmd(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+/** ISO / SQL datetime → value for datetime-local input */
+function toDatetimeLocalValue(iso) {
+  if (!iso) return '';
+  const s = String(iso).replace(' ', 'T');
+  if (s.length >= 16) return s.slice(0, 16);
+  return `${s.slice(0, 10)}T09:00`;
+}
+
 export default function Sales() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -79,6 +87,9 @@ export default function Sales() {
     compro_url: '',
     proposal_url: '',
     quotation_url: '',
+    meeting_at: '',
+    meeting_location: '',
+    meeting_mode: FK_NONE,
   });
 
   const showFeedback = (title, message) => setFeedback({ open: true, title, message });
@@ -122,6 +133,9 @@ export default function Sales() {
       compro_url: '',
       proposal_url: '',
       quotation_url: '',
+      meeting_at: '',
+      meeting_location: '',
+      meeting_mode: FK_NONE,
     });
   }, [isNewPitch]);
 
@@ -172,6 +186,9 @@ export default function Sales() {
         compro_url: p.compro_url || '',
         proposal_url: p.proposal_url || '',
         quotation_url: p.quotation_url || '',
+        meeting_at: toDatetimeLocalValue(p.meeting_at),
+        meeting_location: p.meeting_location || '',
+        meeting_mode: p.meeting_mode === 'online' || p.meeting_mode === 'offline' ? p.meeting_mode : FK_NONE,
       });
     } catch (e) {
       showFeedback('Gagal memuat pitch', e.message);
@@ -245,6 +262,9 @@ export default function Sales() {
           compro_url: form.compro_url.trim() || null,
           proposal_url: form.proposal_url.trim() || null,
           quotation_url: form.quotation_url.trim() || null,
+          meeting_at: form.meeting_at?.trim() || null,
+          meeting_location: form.meeting_location.trim() || null,
+          meeting_mode: form.meeting_mode !== FK_NONE ? form.meeting_mode : null,
         }),
       });
       await loadPitch();
@@ -315,6 +335,22 @@ export default function Sales() {
         return;
       }
       await patchPitchFields({ proposal_url: pu, quotation_url: qu, current_step: next });
+      return;
+    }
+    if (pitch.current_step === 'meeting') {
+      const at = (form.meeting_at || '').trim() || (pitch.meeting_at ? toDatetimeLocalValue(pitch.meeting_at) : '');
+      const loc = (form.meeting_location || '').trim() || String(pitch.meeting_location || '').trim();
+      const mode = (form.meeting_mode !== FK_NONE ? form.meeting_mode : '') || String(pitch.meeting_mode || '');
+      if (!at || !loc || (mode !== 'online' && mode !== 'offline')) {
+        showFeedback('Data meeting', 'Lengkapi tanggal & jam, lokasi, dan online/offline sebelum maju (atau simpan lewat Simpan detail).');
+        return;
+      }
+      await patchPitchFields({
+        meeting_at: at,
+        meeting_location: loc,
+        meeting_mode: mode,
+        current_step: next,
+      });
       return;
     }
     await setStepInternal(next);
@@ -498,6 +534,35 @@ export default function Sales() {
                           </div>
                         </>
                       )}
+                      {stepIndex >= 4 && (
+                        <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-600 space-y-1.5">
+                          <p className="text-slate-600 dark:text-slate-400 font-medium">Meeting</p>
+                          <div>
+                            <span className="text-slate-500">Waktu: </span>
+                            <span>
+                              {(() => {
+                                const raw = (form.meeting_at || '').trim() || (pitch.meeting_at ? String(pitch.meeting_at) : '');
+                                return raw ? raw.replace('T', ' ').slice(0, 16) : '—';
+                              })()}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Lokasi: </span>
+                            <span>{((form.meeting_location || '').trim() || String(pitch.meeting_location || '').trim()) || '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Mode: </span>
+                            <span>
+                              {(() => {
+                                const m = (form.meeting_mode !== FK_NONE ? form.meeting_mode : '') || String(pitch.meeting_mode || '');
+                                if (m === 'online') return 'Online';
+                                if (m === 'offline') return 'Offline';
+                                return '—';
+                              })()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -553,8 +618,47 @@ export default function Sales() {
                 )}
 
                 {currentStepKey === 'meeting' && (
-                  <div className="space-y-3">
-                    <p className="text-sm text-slate-600 dark:text-slate-400">Meeting dengan klien. Ringkasan dokumen tahap awal ada di atas.</p>
+                  <div className="space-y-4">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Jadwalkan meeting dengan klien. Data di bawah ikut ke tahap berikutnya setelah disimpan atau saat Maju.
+                    </p>
+                    <label className="space-y-2 block">
+                      <span className="text-sm font-medium">Tanggal & jam meeting</span>
+                      <Input
+                        type="datetime-local"
+                        value={form.meeting_at}
+                        onChange={(e) => setForm((p) => ({ ...p, meeting_at: e.target.value }))}
+                        disabled={!can('sales.update') || !!pitch.outcome}
+                      />
+                    </label>
+                    <label className="space-y-2 block">
+                      <span className="text-sm font-medium">Lokasi</span>
+                      <Input
+                        type="text"
+                        placeholder="Alamat / link ruang / nama gedung"
+                        value={form.meeting_location}
+                        onChange={(e) => setForm((p) => ({ ...p, meeting_location: e.target.value }))}
+                        disabled={!can('sales.update') || !!pitch.outcome}
+                      />
+                    </label>
+                    <div className="space-y-2">
+                      <span className="text-sm font-medium">Online atau offline</span>
+                      <Select
+                        value={form.meeting_mode}
+                        onValueChange={(v) => setForm((p) => ({ ...p, meeting_mode: v }))}
+                        disabled={!can('sales.update') || !!pitch.outcome}
+                      >
+                        <SelectTrigger className="w-full max-w-md border-slate-200 dark:border-slate-700">
+                          <SelectValue placeholder="Online atau offline" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={FK_NONE}>Pilih mode</SelectItem>
+                          <SelectItem value="online">Online</SelectItem>
+                          <SelectItem value="offline">Offline</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Gunakan Simpan detail untuk menyimpan tanpa pindah step, atau Maju ke Negosiasi jika sudah lengkap.</p>
                   </div>
                 )}
 
