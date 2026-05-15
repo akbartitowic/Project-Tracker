@@ -2,24 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Traits\LogActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class SystemController extends Controller
 {
+    use LogActivity;
+
     /**
      * Resets transactional data but keeps users, roles, and permissions.
      */
-    public function resetData()
+    public function resetData(Request $request)
     {
         try {
             DB::beginTransaction();
 
-            // Disable foreign key checks for truncation
             Schema::disableForeignKeyConstraints();
 
-            // Tables to truncate (transactional data)
             $tables = [
                 'activity_logs',
                 'financial_records',
@@ -42,16 +43,24 @@ class SystemController extends Controller
             Schema::enableForeignKeyConstraints();
             DB::commit();
 
+            $actor = $request->user();
+            $this->log(
+                'System',
+                'Reset Transactional Data',
+                'Full data reset executed by ' . ($actor?->email ?? 'unknown')
+            );
+
             return response()->json([
                 'status' => 'success',
-                'message' => 'All transactional data has been successfully reset.'
+                'message' => 'All transactional data has been successfully reset.',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
             Schema::enableForeignKeyConstraints();
+
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to reset data: ' . $e->getMessage()
+                'message' => 'Failed to reset data: ' . $e->getMessage(),
             ], 500);
         }
     }

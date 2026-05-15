@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchAPI } from '../services/api';
+import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
 import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus } from 'lucide-react';
@@ -572,8 +572,38 @@ export default function ProjectBoard() {
         }
     };
 
-    const handleDownloadTemplate = () => {
-        window.open(`${import.meta.env.VITE_API_URL || '/api'}/tasks/template`, '_blank');
+    const handleDownloadTemplate = async () => {
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+            alert('Please log in to download the template.');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${getApiUrl()}/tasks/template`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'text/csv',
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || 'Failed to download template');
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'task-import-template.csv';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            alert(error.message || 'Failed to download template');
+        }
     };
 
     const handleDragEnd = async (event) => {

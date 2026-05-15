@@ -25,10 +25,11 @@ use App\Http\Controllers\ProjectCategoryController;
 use App\Http\Controllers\SalesPitchController;
 use App\Http\Controllers\SalesCategoryProjectController;
 
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/signup', [AuthController::class, 'signup']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/signup', [AuthController::class, 'signup'])
+    ->middleware(['throttle:5,1', 'signup.enabled']);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profile', [AuthController::class, 'updateProfile'])->middleware('permission:profile.update');
@@ -46,7 +47,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 1.5 System Log Routes
     Route::get('/activity-logs', [ActivityLogController::class, 'index'])->middleware('permission:system_log.read');
-    Route::post('/activity-logs/cleanup', [ActivityLogController::class, 'cleanup'])->middleware('permission:system_log.delete');
+    Route::post('/activity-logs/cleanup', [ActivityLogController::class, 'cleanup'])
+        ->middleware(['permission:system_log.delete', 'throttle:5,1']);
 
     // 2. Users Routes
     Route::get('/users', [UserController::class, 'index'])->middleware('permission:teams_users.read');
@@ -75,10 +77,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/tasks/bulk-edit', [TaskController::class, 'bulkEditManhours'])->middleware('permission:project_board.update');
     Route::put('/tasks/{id}', [TaskController::class, 'update'])->middleware('permission:project_board.update');
     Route::put('/tasks/{id}/status', [TaskController::class, 'updateStatus'])->middleware('permission:project_board.update');
-});
-
-Route::get('/tasks/template', [TaskController::class, 'downloadTemplate']);
-Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/tasks/template', [TaskController::class, 'downloadTemplate'])->middleware('permission:project_board.read');
     Route::post('/tasks/import', [TaskController::class, 'import'])->middleware('permission:project_board.create');
 
     // 4. Manhours Routes
@@ -155,9 +154,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 10. System Management
     Route::get('/settings/all', [SettingController::class, 'getSettings'])->middleware('permission:settings.read');
-    Route::post('/settings/update', [SettingController::class, 'updateSettings'])->middleware('permission:settings.update');
-    Route::post('/settings/test-smtp', [SettingController::class, 'testSmtp'])->middleware('permission:settings.update');
-    Route::post('/system/reset', [SystemController::class, 'resetData'])->middleware('permission:settings.update');
+    Route::post('/settings/update', [SettingController::class, 'updateSettings'])
+        ->middleware(['permission:settings.update', 'throttle:20,1']);
+    Route::post('/settings/test-smtp', [SettingController::class, 'testSmtp'])
+        ->middleware(['permission:settings.update', 'throttle:10,1']);
+    Route::post('/system/reset', [SystemController::class, 'resetData'])
+        ->middleware(['permission:settings.reset', 'throttle:3,1']);
 
     // 11. Financial Reports
     Route::get('/financial-reports/summary', [FinancialReportController::class, 'getSummary'])->middleware('permission:finance_report.read');

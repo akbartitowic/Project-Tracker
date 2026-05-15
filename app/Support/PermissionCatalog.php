@@ -33,7 +33,7 @@ class PermissionCatalog
             'Access Control' => ['create', 'read', 'update', 'delete'],
             'Project Roles' => ['create', 'read', 'update', 'delete'],
             'System Log' => ['read', 'delete'],
-            'Settings' => ['read', 'update'],
+            'Settings' => ['read', 'update', 'reset'],
             'Profile' => ['read', 'update'],
         ];
     }
@@ -44,6 +44,17 @@ class PermissionCatalog
         return [
             'project_board.read',
             'project_board.create',
+            'project_board.update',
+            'profile.read',
+            'profile.update',
+        ];
+    }
+
+    /** Freelance: board visibility and status updates only (no manhour logging). */
+    public static function freelancePermissionSlugs(): array
+    {
+        return [
+            'project_board.read',
             'project_board.update',
             'profile.read',
             'profile.update',

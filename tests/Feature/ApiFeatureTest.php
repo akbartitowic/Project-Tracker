@@ -26,6 +26,7 @@ class ApiFeatureTest extends TestCase
             '/api/presales',
             '/api/finance-categories',
             '/api/project-allocations',
+            '/api/tasks/template',
             '/api/stats',
             '/api/reports/efficiency',
             '/api/reports/revenue-trend',

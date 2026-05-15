@@ -2,28 +2,46 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Role;
 use App\Models\User;
+use App\Support\UserAccess;
 use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
-    private function isAdminUser($user): bool
+    private function isProtectedAccount(User $user): bool
     {
-        if (!$user) {
-            return false;
-        }
-        if (strtolower((string) ($user->email ?? '')) === 'tito@noohtify.com') {
-            return true;
-        }
-        $user->loadMissing('role');
-        $roleName = strtolower((string) ($user->role->name ?? $user->role ?? ''));
+        return UserAccess::isPrivileged($user);
+    }
 
-        return $roleName === 'admin';
+    private function assertCanManageUser(Request $request, User $target): void
+    {
+        $actor = $request->user();
+
+        if ($this->isProtectedAccount($target) && !UserAccess::isPrivileged($actor)) {
+            abort(403, 'You cannot modify this user account.');
+        }
+    }
+
+    private function assertValidRoleAssignment(Request $request, int $roleId): void
+    {
+        if (UserAccess::isPrivileged($request->user())) {
+            return;
+        }
+
+        $role = Role::find($roleId);
+        if ($role && strtolower((string) $role->name) === 'admin') {
+            abort(403, 'Only administrators can assign the Admin role.');
+        }
     }
 
     public function index()
     {
-        return response()->json(['data' => User::with('role')->get()]);
+        return response()->json([
+            'data' => User::with('role')
+                ->select('id', 'name', 'email', 'phone_number', 'status', 'role_id', 'role', 'created_at', 'updated_at')
+                ->get(),
+        ]);
     }
 
     public function store(Request $request)
@@ -33,19 +51,24 @@ class UserController extends Controller
             'role_id' => 'required|exists:roles,id',
             'email' => 'required|email|unique:users',
             'phone_number' => 'nullable|string',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|min:8',
             'status' => 'required|string',
         ]);
 
-        $validated['role'] = \App\Models\Role::find($validated['role_id'])->name; // For legacy compatibility if still needed
+        $this->assertValidRoleAssignment($request, (int) $validated['role_id']);
+
+        $validated['role'] = Role::find($validated['role_id'])->name;
         $user = User::create($validated);
+
         return response()->json(['id' => $user->id]);
     }
 
     public function update(Request $request, string $id)
     {
         $user = User::findOrFail($id);
-        if ($request->filled('password') && !$this->isAdminUser($request->user())) {
+        $this->assertCanManageUser($request, $user);
+
+        if ($request->filled('password') && !UserAccess::isPrivileged($request->user())) {
             return response()->json(['message' => 'Only administrators can set or change user passwords.'], 403);
         }
 
@@ -54,24 +77,39 @@ class UserController extends Controller
             'role_id' => 'required|exists:roles,id',
             'email' => 'required|email|unique:users,email,' . $user->id,
             'phone_number' => 'nullable|string',
-            'password' => 'nullable|string|min:6',
+            'password' => 'nullable|string|min:8',
             'status' => 'required|string',
         ]);
 
-        if (!empty($validated['password'])) {
-            // User model 'password' => 'hashed' cast applies on set
-        } else {
+        $this->assertValidRoleAssignment($request, (int) $validated['role_id']);
+
+        if (empty($validated['password'])) {
             unset($validated['password']);
         }
 
-        $validated['role'] = \App\Models\Role::find($validated['role_id'])->name;
+        $validated['role'] = Role::find($validated['role_id'])->name;
         $changes = $user->update($validated) ? 1 : 0;
+
         return response()->json(['changes' => $changes]);
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        $deleted = User::destroy($id);
-        return response()->json(['deleted' => $deleted]);
+        $actor = $request->user();
+        $user = User::find($id);
+
+        if (!$user) {
+            return response()->json(['deleted' => 0]);
+        }
+
+        if ((int) $user->id === (int) $actor->id) {
+            return response()->json(['message' => 'You cannot delete your own account.'], 422);
+        }
+
+        $this->assertCanManageUser($request, $user);
+
+        $deleted = $user->delete();
+
+        return response()->json(['deleted' => $deleted ? 1 : 0]);
     }
 }

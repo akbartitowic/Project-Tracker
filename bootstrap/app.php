@@ -14,7 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'permission' => \App\Http\Middleware\CheckPermission::class,
+            'token.lifetime' => \App\Http\Middleware\ValidateSanctumTokenLifetime::class,
+            'signup.enabled' => \App\Http\Middleware\RestrictPublicSignup::class,
         ]);
+
 
         // Return JSON 401 for unauthenticated API requests instead of redirecting
         $middleware->redirectGuestsTo(fn ($request) =>

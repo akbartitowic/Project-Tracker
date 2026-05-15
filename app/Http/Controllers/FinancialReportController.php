@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FinancialRecord;
+use App\Support\ProjectAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -11,8 +12,31 @@ class FinancialReportController extends Controller
 {
     public function projectRealizationSummary(Request $request)
     {
-        $projects = DB::table('projects as p')
-            ->leftJoin('project_allocations as pa', 'pa.project_id', '=', 'p.id')
+        $scopedProjectIds = ProjectAccess::metricsProjectIds($request->user());
+
+        if ($scopedProjectIds !== null && $scopedProjectIds === []) {
+            return response()->json([
+                'data' => [],
+                'totals' => [
+                    'initial_income' => 0,
+                    'topup_income' => 0,
+                    'planning_income' => 0,
+                    'planning_expense' => 0,
+                    'final_expense' => 0,
+                    'remaining_margin' => 0,
+                    'margin_percentage' => 0,
+                ],
+            ]);
+        }
+
+        $query = DB::table('projects as p')
+            ->leftJoin('project_allocations as pa', 'pa.project_id', '=', 'p.id');
+
+        if ($scopedProjectIds !== null) {
+            $query->whereIn('p.id', $scopedProjectIds);
+        }
+
+        $projects = $query
             ->select(
                 'p.id',
                 'p.name',
@@ -22,7 +46,7 @@ class FinancialReportController extends Controller
             ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 1 THEN pa.amount ELSE 0 END), 0) as topup_income")
             ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 0 THEN pa.amount ELSE 0 END), 0) as planning_expense")
             ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 0 THEN COALESCE(pa.realized_amount, pa.amount) ELSE 0 END), 0) as final_expense")
-            ->groupBy('p.id', 'p.name', 'p.methodology', 'p.quotation_value')
+        ->groupBy('p.id', 'p.name', 'p.methodology', 'p.quotation_value')
             ->orderBy('p.name')
             ->get()
             ->map(function ($project) {

@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Models\Manhour;
 use App\Models\ProjectRoleQuota;
 use App\Models\Task;
+use App\Support\ProjectAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -59,13 +60,19 @@ class ProjectAllocationController extends Controller
 
     public function index(Request $request)
     {
+        $user = $request->user();
+
         $query = DB::table('project_allocations as pa')
             ->join('finance_categories as fc', 'pa.category_id', '=', 'fc.id')
             ->join('projects as p', 'pa.project_id', '=', 'p.id')
             ->select('pa.*', 'fc.name as category_name', 'p.name as project_name', 'p.quotation_value');
 
+        ProjectAccess::applyProjectScope($query, 'pa.project_id', $user);
+
         if ($request->has('project_id')) {
-            $query->where('pa.project_id', $request->query('project_id'));
+            $projectId = (int) $request->query('project_id');
+            ProjectAccess::assertCanAccessProjectFinance($user, $projectId);
+            $query->where('pa.project_id', $projectId);
         }
 
         return response()->json(['data' => $query->get()]);
@@ -80,14 +87,24 @@ class ProjectAllocationController extends Controller
             'description' => 'nullable|string'
         ]);
 
+        ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $validated['project_id']);
+
         $allocation = ProjectAllocation::create($validated);
         return response()->json(['id' => $allocation->id]);
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        $deleted = ProjectAllocation::destroy($id);
-        return response()->json(['deleted' => $deleted]);
+        $allocation = ProjectAllocation::find($id);
+        if (!$allocation) {
+            return response()->json(['error' => 'Allocation not found'], 404);
+        }
+
+        ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $allocation->project_id);
+
+        $deleted = $allocation->delete();
+
+        return response()->json(['deleted' => $deleted ? 1 : 0]);
     }
 
     public function realize(Request $request, string $id)
@@ -96,6 +113,8 @@ class ProjectAllocationController extends Controller
         if (!$allocation) {
             return response()->json(['error' => 'Allocation not found'], 404);
         }
+
+        ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $allocation->project_id);
 
         if ($allocation->is_topup) {
             return response()->json(['error' => 'Realization hanya berlaku untuk data pengeluaran.'], 422);
@@ -117,6 +136,8 @@ class ProjectAllocationController extends Controller
 
     public function topUp(Request $request, $id)
     {
+        ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $id);
+
         $project = Project::find($id);
         if (!$project) return response()->json(['error' => 'Project not found'], 404);
         if ($project->methodology === 'Waterfall') {
@@ -167,6 +188,8 @@ class ProjectAllocationController extends Controller
 
     public function changeRequest(Request $request, $id)
     {
+        ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $id);
+
         $project = Project::find($id);
         if (!$project) {
             return response()->json(['error' => 'Project not found'], 404);
@@ -206,8 +229,10 @@ class ProjectAllocationController extends Controller
         }
     }
 
-    public function financeSummary($id)
+    public function financeSummary(Request $request, $id)
     {
+        ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $id);
+
         $project = Project::find($id);
         if (!$project) return response()->json(['error' => 'Project not found'], 404);
 
@@ -266,6 +291,8 @@ class ProjectAllocationController extends Controller
 
     public function transferQuota(Request $request, $id)
     {
+        ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $id);
+
         $project = Project::find($id);
         if (!$project) {
             return response()->json(['error' => 'Project not found'], 404);
@@ -336,8 +363,10 @@ class ProjectAllocationController extends Controller
         }
     }
 
-    public function deactivateRoleQuota($id, $quotaId)
+    public function deactivateRoleQuota(Request $request, $id, $quotaId)
     {
+        ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $id);
+
         $project = Project::find($id);
         if (!$project) {
             return response()->json(['error' => 'Project not found'], 404);

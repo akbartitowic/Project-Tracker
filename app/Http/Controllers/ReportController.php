@@ -2,16 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Project;
-use App\Models\Task;
 use App\Models\Manhour;
+use App\Models\Project;
+use App\Models\Setting;
+use App\Models\Task;
+use App\Support\ProjectAccess;
+use App\Support\UserAccess;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
-use App\Models\Setting;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class ReportController extends Controller
 {
@@ -51,15 +53,23 @@ class ReportController extends Controller
 
     public function generate(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'project_id' => 'required|exists:projects,id',
             'range' => 'required|in:weekly,biweekly,monthly,manual',
             'start_date' => 'nullable|date|required_if:range,manual',
             'end_date' => 'nullable|date|required_if:range,manual|after_or_equal:start_date',
-            'preview' => 'nullable|boolean'
+            'preview' => 'nullable|boolean',
         ]);
 
-        $data = $this->getReportData($request->project_id, $request->range, $request->start_date, $request->end_date);
+        ProjectAccess::assertCanAccessProject($request->user(), (int) $validated['project_id']);
+
+        $data = $this->getReportData(
+            (int) $validated['project_id'],
+            $validated['range'],
+            $request->user(),
+            $validated['start_date'] ?? null,
+            $validated['end_date'] ?? null
+        );
         $pdf = Pdf::loadView('reports.project_report', $data);
 
         if ($request->preview) {
@@ -71,27 +81,33 @@ class ReportController extends Controller
 
     public function sendEmail(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'project_id' => 'required|exists:projects,id',
             'range' => 'required|in:weekly,biweekly,monthly,manual',
             'start_date' => 'nullable|date|required_if:range,manual',
             'end_date' => 'nullable|date|required_if:range,manual|after_or_equal:start_date',
-            'emails' => 'required|string', // Comma separated
+            'emails' => 'required|string',
             'subject' => 'required|string|max:255',
-            'body' => 'required|string'
+            'body' => 'required|string',
         ]);
 
-        $data = $this->getReportData($request->project_id, $request->range, $request->start_date, $request->end_date);
+        ProjectAccess::assertCanAccessProject($request->user(), (int) $validated['project_id']);
+
+        $data = $this->getReportData(
+            (int) $validated['project_id'],
+            $validated['range'],
+            $request->user(),
+            $validated['start_date'] ?? null,
+            $validated['end_date'] ?? null
+        );
         $pdf = Pdf::loadView('reports.project_report', $data);
         $pdfContent = $pdf->output();
 
-        // 2. Set SMTP Configuration from Database
         $this->applyMailSettings();
 
-        // 3. Send Email
-        $emails = array_map('trim', explode(',', $request->emails));
-        $subject = $request->subject;
-        $body = $request->body;
+        $emails = array_map('trim', explode(',', $validated['emails']));
+        $subject = $validated['subject'];
+        $body = $validated['body'];
         $fileName = "Report-{$data['project']->name}-{$data['range']}.pdf";
 
         try {
@@ -105,18 +121,19 @@ class ReportController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Report sent successfully to ' . count($emails) . ' recipients.'
+                'message' => 'Report sent successfully to ' . count($emails) . ' recipients.',
             ]);
         } catch (\Exception $e) {
-            Log::error("Mail Error: " . $e->getMessage());
+            Log::error('Mail Error: ' . $e->getMessage());
+
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to send email: ' . $e->getMessage()
+                'message' => 'Failed to send email: ' . $e->getMessage(),
             ], 500);
         }
     }
 
-    private function getReportData($projectId, $range, $manualStartDate = null, $manualEndDate = null)
+    private function getReportData(int $projectId, string $range, $user, $manualStartDate = null, $manualEndDate = null)
     {
         $project = Project::findOrFail($projectId);
         $endDate = null;
@@ -135,7 +152,6 @@ class ReportController extends Controller
             };
         }
 
-        // 1. Task List Worked on in Range (Updated in the range)
         $tasksInRange = Task::where('project_id', $project->id)
             ->whereBetween('updated_at', [$startDate, $endDate])
             ->get();
@@ -143,9 +159,7 @@ class ReportController extends Controller
             $task->normalized_status = $this->normalizeTaskStatus($task->status);
         });
 
-        // 2. Tasks currently in progress (In Progress or Re-open)
-        $inProgressTasks = Task::where('project_id', $project->id)
-            ->get();
+        $inProgressTasks = Task::where('project_id', $project->id)->get();
         $inProgressTasks = $inProgressTasks
             ->filter(function ($task) {
                 $normalized = $this->normalizeTaskStatus($task->status);
@@ -154,7 +168,6 @@ class ReportController extends Controller
             })
             ->values();
 
-        // 3. Scrum Manhours (task estimates; To Do status is excluded from usage)
         $projectTasksForStats = Task::where('project_id', $project->id)->get();
         $usedInRange = (float) $tasksInRange->sum(fn ($task) => $this->taskEstimatedHoursForStats($task));
         $totalUsed = (float) $projectTasksForStats->sum(fn ($task) => $this->taskEstimatedHoursForStats($task));
@@ -164,6 +177,8 @@ class ReportController extends Controller
             ['In Progress', 'Review', 'Reopen']
         );
         $totalQuota = (float) ($project->total_manhours ?? 0);
+
+        $canViewManhours = UserAccess::canViewManhours($user);
         $stats = [
             'used_in_range' => $usedInRange,
             'total_used' => $totalUsed,
@@ -171,19 +186,22 @@ class ReportController extends Controller
             'in_progress_hours' => $inProgressHours,
             'total_quota' => $totalQuota,
             'remaining' => $totalQuota - $totalUsed,
-            'actual_logged_in_range' => (float) Manhour::where('project_id', $project->id)
-                ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
-                ->sum('hours'),
-            'actual_logged_total' => (float) Manhour::where('project_id', $project->id)->sum('hours'),
+            'actual_logged_in_range' => $canViewManhours
+                ? (float) Manhour::where('project_id', $project->id)
+                    ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+                    ->sum('hours')
+                : 0.0,
+            'actual_logged_total' => $canViewManhours
+                ? (float) Manhour::where('project_id', $project->id)->sum('hours')
+                : 0.0,
         ];
 
-        // 4. Category Progress Breakdown (dynamic from existing tasks categories)
         $weights = [
             'To Do' => 0,
             'In Progress' => 25,
             'Reopen' => 50,
             'Review' => 75,
-            'Done' => 100
+            'Done' => 100,
         ];
         $categoryProgress = [];
         $projectTasks = Task::where('project_id', $project->id)->get();
@@ -200,14 +218,14 @@ class ReportController extends Controller
                 return $taskCategory === $cat;
             })->values();
             $totalCatTasks = $tasks->count();
-            
+
             $weightedSum = 0;
             $statusCounts = [
                 'To Do' => 0,
                 'In Progress' => 0,
                 'Reopen' => 0,
                 'Review' => 0,
-                'Done' => 0
+                'Done' => 0,
             ];
 
             foreach ($tasks as $task) {
@@ -224,7 +242,7 @@ class ReportController extends Controller
             $categoryProgress[$cat] = [
                 'weighted_total' => $weightedTotal,
                 'total' => $totalCatTasks,
-                'counts' => $statusCounts
+                'counts' => $statusCounts,
             ];
         }
 
@@ -236,38 +254,47 @@ class ReportController extends Controller
             'tasksInRange' => $tasksInRange,
             'inProgressTasks' => $inProgressTasks,
             'stats' => $stats,
-            'categoryProgress' => $categoryProgress
+            'categoryProgress' => $categoryProgress,
         ];
     }
 
     private function applyMailSettings()
     {
         $settings = Setting::whereIn('key', [
-            'mail_host', 'mail_port', 'mail_username', 'mail_password', 
-            'mail_encryption', 'mail_from_address', 'mail_from_name'
+            'mail_host', 'mail_port', 'mail_username', 'mail_password',
+            'mail_encryption', 'mail_from_address', 'mail_from_name',
         ])->get()->pluck('value', 'key');
 
         if ($settings->has('mail_host')) {
-            // Force the default mailer to smtp and transport to smtp
             Config::set('mail.default', 'smtp');
             Config::set('mail.mailers.smtp.transport', 'smtp');
-            
+
             Config::set('mail.mailers.smtp.host', $settings['mail_host']);
             Config::set('mail.mailers.smtp.port', $settings['mail_port']);
             Config::set('mail.mailers.smtp.username', $settings['mail_username']);
             Config::set('mail.mailers.smtp.password', $settings['mail_password']);
             Config::set('mail.mailers.smtp.encryption', $settings['mail_encryption']);
-            
+
             Config::set('mail.from.address', $settings['mail_from_address']);
             Config::set('mail.from.name', $settings['mail_from_name']);
 
-            // Purge the SMTP mailer to ensure it re-reads the configuration
             Mail::purge('smtp');
         }
     }
 
-    public function getProjects()
+    public function getProjects(Request $request)
     {
-        return response()->json(['data' => Project::all()]);
+        $user = $request->user();
+        $query = Project::query()->select('id', 'name', 'methodology')->orderBy('name');
+
+        $memberIds = ProjectAccess::memberProjectIds($user);
+        if ($memberIds !== null) {
+            if ($memberIds === []) {
+                return response()->json(['data' => []]);
+            }
+            $query->whereIn('id', $memberIds);
+        }
+
+        return response()->json(['data' => $query->get()]);
     }
 }

@@ -123,4 +123,6 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'allow_public_signup' => filter_var(env('ALLOW_PUBLIC_SIGNUP', false), FILTER_VALIDATE_BOOL),
+
 ];

@@ -75,15 +75,25 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        if (!Auth::attempt($request->only('email', 'password'))) {
+        $credentials = $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string',
+        ]);
+
+        if (!Auth::attempt($credentials)) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Invalid login credentials'
             ], 401);
         }
 
-        $user = User::where('email', $request['email'])->firstOrFail();
+        $user = User::where('email', $credentials['email'])->firstOrFail();
+
+        // Single active session per user (reduces stolen-token window).
+        $user->tokens()->delete();
         $token = $user->createToken('auth_token')->plainTextToken;
+
+        $this->log('Auth', 'User Login', "User logged in: {$user->email}");
 
         return response()->json([
             'status' => 'success',

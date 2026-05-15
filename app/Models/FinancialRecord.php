@@ -9,5 +9,14 @@ class FinancialRecord extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'type',
+        'amount',
+        'date',
+        'description',
+    ];
+
+    protected $casts = [
+        'date' => 'date',
+    ];
 }

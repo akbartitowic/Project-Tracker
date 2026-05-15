@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { hasPermission } from '../utils/permissions';
 import { Settings, Database, AlertTriangle, RefreshCcw, CheckCircle2, ShieldAlert, Mail, Save, Loader2, Send } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,6 +10,9 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 export default function SystemSettings() {
+    const { user } = useAuth();
+    const canResetData = hasPermission(user, 'settings.reset');
+
     const [isResetModalOpen, setIsResetModalOpen] = useState(false);
     const [resetStep, setResetStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
@@ -191,6 +196,7 @@ export default function SystemSettings() {
                 </Card>
 
                 {/* Data Maintenance */}
+                {canResetData && (
                 <Card className="border-rose-100 dark:border-rose-900/30 overflow-hidden shadow-xl shadow-rose-200/5 bg-white dark:bg-[#1e2532]">
                     <CardHeader className="bg-rose-50/50 dark:bg-rose-900/10 border-b border-rose-100 dark:border-rose-900/20">
                         <div className="flex items-center gap-3 text-rose-600">
@@ -215,9 +221,11 @@ export default function SystemSettings() {
                         </div>
                     </CardContent>
                 </Card>
+                )}
             </div>
 
             {/* Reset Confirmation Dialog */}
+            {canResetData && (
             <Dialog open={isResetModalOpen} onOpenChange={setIsResetModalOpen}>
                 <DialogContent className="sm:max-w-[425px]">
                     {resetStep === 1 && (
@@ -277,6 +285,7 @@ export default function SystemSettings() {
                     )}
                 </DialogContent>
             </Dialog>
+            )}
         </div>
     );
 }

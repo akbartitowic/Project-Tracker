@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class FinanceCategory extends Model
 {
-    protected $guarded = [];
-    //
+    protected $fillable = [
+        'name',
+    ];
 }

@@ -9,5 +9,13 @@ class Manhour extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'user_id',
+        'project_id',
+        'project_role_id',
+        'date',
+        'hours',
+        'amount_idr',
+        'description',
+    ];
 }

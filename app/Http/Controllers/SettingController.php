@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Setting;
+use App\Support\SettingKeys;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Config;
@@ -20,17 +21,28 @@ class SettingController extends Controller
             $settings = Setting::all();
         }
 
+        $data = SettingKeys::filterForRead($settings->pluck('value', 'key')->all());
+
         return response()->json([
             'status' => 'success',
-            'data' => $settings->pluck('value', 'key')
+            'data' => $data,
         ]);
     }
 
     public function updateSettings(Request $request)
     {
-        $settings = $request->all();
-        
-        foreach ($settings as $key => $value) {
+        $incoming = $request->all();
+        $unknown = array_diff(array_keys($incoming), SettingKeys::UPDATABLE);
+
+        if ($unknown !== []) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'One or more settings keys are not allowed.',
+                'invalid_keys' => array_values($unknown),
+            ], 422);
+        }
+
+        foreach ($incoming as $key => $value) {
             Setting::updateOrCreate(
                 ['key' => $key],
                 ['value' => $value]
@@ -39,15 +51,22 @@ class SettingController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Settings updated successfully'
+            'message' => 'Settings updated successfully',
         ]);
     }
 
     public function testSmtp(Request $request)
     {
-        $settings = $request->all();
-        
-        // 1. Apply provided settings temporarily
+        $settings = $request->validate([
+            'mail_host' => 'required|string',
+            'mail_port' => 'required',
+            'mail_username' => 'required|string',
+            'mail_password' => 'required|string',
+            'mail_encryption' => 'nullable|string',
+            'mail_from_address' => 'required|email',
+            'mail_from_name' => 'required|string',
+        ]);
+
         Config::set('mail.default', 'smtp');
         Config::set('mail.mailers.smtp.transport', 'smtp');
         Config::set('mail.mailers.smtp.host', $settings['mail_host']);
@@ -55,7 +74,7 @@ class SettingController extends Controller
         Config::set('mail.mailers.smtp.username', $settings['mail_username']);
         Config::set('mail.mailers.smtp.password', $settings['mail_password']);
         Config::set('mail.mailers.smtp.encryption', $settings['mail_encryption'] ?? 'tls');
-        
+
         Config::set('mail.from.address', $settings['mail_from_address']);
         Config::set('mail.from.name', $settings['mail_from_name']);
 
@@ -69,13 +88,14 @@ class SettingController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Test email sent successfully to ' . $settings['mail_from_address']
+                'message' => 'Test email sent successfully to ' . $settings['mail_from_address'],
             ]);
         } catch (\Exception $e) {
-            Log::error("SMTP Test Error: " . $e->getMessage());
+            Log::error('SMTP Test Error: ' . $e->getMessage());
+
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to send test email: ' . $e->getMessage()
+                'message' => 'Failed to send test email: ' . $e->getMessage(),
             ], 500);
         }
     }

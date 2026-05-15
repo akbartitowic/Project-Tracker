@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Support\ProjectAccess;
 use App\Support\UserAccess;
 use App\Traits\LogActivity;
 
@@ -35,20 +36,6 @@ class TaskController extends Controller
         'due_date' => ['due date', 'due_date'],
         'rush_hour' => ['rush hour', 'rush_hour'],
     ];
-
-    private function isPrivilegedUser($user): bool
-    {
-        return UserAccess::isPrivileged($user);
-    }
-
-    private function canAccessProject($user, int $projectId): bool
-    {
-        if ($this->isPrivilegedUser($user)) return true;
-        return DB::table('project_members')
-            ->where('project_id', $projectId)
-            ->where('user_id', $user->id)
-            ->exists();
-    }
 
     /**
      * When a user is assigned to a task, ensure they are on the project member list.
@@ -303,16 +290,11 @@ class TaskController extends Controller
             ->select('tasks.*')
             ->selectRaw('users.name as assignee_name');
 
-        if (!$this->isPrivilegedUser($user)) {
-            $assignedProjectIds = DB::table('project_members')
-                ->where('user_id', $user->id)
-                ->pluck('project_id');
-            $query->whereIn('project_id', $assignedProjectIds);
-        }
+        ProjectAccess::applyMemberProjectScope($query, 'tasks.project_id', $user);
 
         if ($request->has('project_id')) {
             $projectId = (int) $request->query('project_id');
-            if (!$this->canAccessProject($user, $projectId)) {
+            if (!ProjectAccess::canAccessProject($user, $projectId)) {
                 return response()->json(['error' => 'Forbidden'], 403);
             }
             $query->where('project_id', $projectId);
@@ -370,7 +352,7 @@ class TaskController extends Controller
             'file' => 'required|file|mimes:csv,txt'
         ]);
 
-        if (!$this->canAccessProject($authUser, (int) $request->project_id)) {
+        if (!ProjectAccess::canAccessProject($authUser, (int) $request->project_id)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
@@ -579,7 +561,7 @@ class TaskController extends Controller
             $validated['project_role_id'] = null;
         }
 
-        if (!$this->canAccessProject($user, (int) $validated['project_id'])) {
+        if (!ProjectAccess::canAccessProject($user, (int) $validated['project_id'])) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
@@ -646,7 +628,7 @@ class TaskController extends Controller
             'status' => 'required|string'
         ]);
         $task = Task::findOrFail($id);
-        if (!$this->canAccessProject($user, (int) $task->project_id)) {
+        if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
         $oldStatus = $task->status;
@@ -661,7 +643,7 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $task = Task::findOrFail($id);
-        if (!$this->canAccessProject($user, (int) $task->project_id)) {
+        if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
         $validated = $request->validate([
@@ -718,13 +700,10 @@ class TaskController extends Controller
             return response()->json(['error' => 'No tasks selected.'], 400);
         }
 
-        if (!$this->isPrivilegedUser($user)) {
+        if (!ProjectAccess::isPrivileged($user)) {
+            $memberIds = ProjectAccess::memberProjectIds($user) ?? [];
             $unauthorizedExists = Task::whereIn('id', $validated['task_ids'])
-                ->whereNotIn('project_id', function ($q) use ($user) {
-                    $q->select('project_id')
-                        ->from('project_members')
-                        ->where('user_id', $user->id);
-                })
+                ->whereNotIn('project_id', $memberIds)
                 ->exists();
 
             if ($unauthorizedExists) {

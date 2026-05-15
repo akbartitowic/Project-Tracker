@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ProjectAccess;
+use App\Support\UserAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -9,27 +11,6 @@ use Carbon\Carbon;
 
 class StatController extends Controller
 {
-    private function isPrivilegedUser($user): bool
-    {
-        if (!$user) return false;
-        $email = strtolower((string) ($user->email ?? ''));
-        if ($email === 'tito@noohtify.com') return true;
-
-        $roleText = strtolower((string) ($user->role ?? ''));
-        if ($roleText === 'admin') return true;
-
-        try {
-            $roleModel = $user->role()->first();
-            if ($roleModel && strtolower((string) $roleModel->name) === 'admin') {
-                return true;
-            }
-        } catch (\Throwable $e) {
-            // Ignore relation issues and continue fallback.
-        }
-
-        return false;
-    }
-
     private function normalizeTaskStatus(?string $status): string
     {
         $value = trim((string) $status);
@@ -85,40 +66,58 @@ class StatController extends Controller
         ];
     }
 
-    public function stats()
+    public function stats(Request $request)
     {
-        return response()->json(['data' => $this->getStatsData()]);
+        $projectIds = ProjectAccess::metricsProjectIds($request->user());
+
+        return response()->json(['data' => $this->getStatsData($projectIds)]);
     }
 
-    private function getStatsData()
+    /**
+     * @param  null|array<int>  $projectIds  null = all projects; [] = none
+     */
+    private function getStatsData(?array $projectIds = null): array
     {
+        if ($projectIds !== null && $projectIds === []) {
+            return $this->emptyStatsPayload();
+        }
+
+        $projectFilter = $this->sqlProjectIdFilter($projectIds, 'projects');
+        $projectFilterAlias = $this->sqlProjectIdFilter($projectIds, 'p');
+        $taskFilter = $this->sqlProjectIdFilter($projectIds, 'tasks', 'project_id');
+        $manhourFilter = $this->sqlProjectIdFilter($projectIds, 'manhours', 'project_id');
+        $allocationFilter = $this->sqlProjectIdFilter($projectIds, 'project_allocations', 'project_id');
+
         $stats = DB::selectOne("
             SELECT 
-                (SELECT COUNT(*) FROM projects) as totalProjects,
+                (SELECT COUNT(*) FROM projects WHERE 1=1{$projectFilter}) as totalProjects,
                 (SELECT COUNT(*) FROM projects p
-                    WHERE NOT (
+                    WHERE 1=1{$projectFilterAlias}
+                    AND NOT (
                         (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) > 0
                         AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'Done') = 0
                     )
                 ) as activeProjects,
                 (SELECT COUNT(*) FROM projects p
-                    WHERE (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) > 0
+                    WHERE 1=1{$projectFilterAlias}
+                    AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) > 0
                     AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'Done') = 0
                 ) as doneProjects,
-                (SELECT COUNT(*) FROM projects WHERE lower(coalesce(methodology, '')) LIKE '%waterfall%') as waterfallProjects,
-                (SELECT COUNT(*) FROM projects WHERE lower(coalesce(methodology, '')) LIKE '%scrum%' OR lower(coalesce(methodology, '')) LIKE '%agile%') as scrumProjects,
-                (SELECT COUNT(*) FROM tasks WHERE status != 'Done') as activeTasks,
-                (SELECT SUM(hours) FROM manhours) as totalHours,
-                (SELECT SUM(quotation_value) FROM projects) as totalRevenue,
-                (SELECT SUM(amount) FROM project_allocations WHERE is_topup = 0) as totalAllocated,
-                (SELECT SUM(amount) FROM financial_records WHERE type = 'OPEX') as opexTotal,
-                (SELECT SUM(amount) FROM financial_records WHERE type = 'CAPEX') as capexTotal
+                (SELECT COUNT(*) FROM projects WHERE lower(coalesce(methodology, '')) LIKE '%waterfall%'{$projectFilter}) as waterfallProjects,
+                (SELECT COUNT(*) FROM projects WHERE lower(coalesce(methodology, '')) LIKE '%scrum%' OR lower(coalesce(methodology, '')) LIKE '%agile%'{$projectFilter}) as scrumProjects,
+                (SELECT COUNT(*) FROM tasks WHERE status != 'Done'{$taskFilter}) as activeTasks,
+                (SELECT COALESCE(SUM(hours), 0) FROM manhours WHERE 1=1{$manhourFilter}) as totalHours,
+                (SELECT COALESCE(SUM(quotation_value), 0) FROM projects WHERE 1=1{$projectFilter}) as totalRevenue,
+                (SELECT COALESCE(SUM(amount), 0) FROM project_allocations WHERE is_topup = 0{$allocationFilter}) as totalAllocated,
+                (SELECT COALESCE(SUM(amount), 0) FROM financial_records WHERE type = 'OPEX') as opexTotal,
+                (SELECT COALESCE(SUM(amount), 0) FROM financial_records WHERE type = 'CAPEX') as capexTotal
         ");
 
         $totalRevenue = $stats->totalRevenue ?: 0;
         $totalAllocated = $stats->totalAllocated ?: 0;
-        $opexTotal = $stats->opexTotal ?: 0;
-        $capexTotal = $stats->capexTotal ?: 0;
+        $includeCompanyFinancials = $projectIds === null;
+        $opexTotal = $includeCompanyFinancials ? ($stats->opexTotal ?: 0) : 0;
+        $capexTotal = $includeCompanyFinancials ? ($stats->capexTotal ?: 0) : 0;
 
         $totalMargin = $totalRevenue - $totalAllocated - $opexTotal - $capexTotal;
         $marginPercentage = $totalRevenue > 0 ? ($totalMargin / $totalRevenue) * 100 : 0;
@@ -130,10 +129,12 @@ class StatController extends Controller
             'Reopen' => 0,
             'Done' => 0,
         ];
-        $statusRows = DB::table('tasks')
-            ->select('status', DB::raw('COUNT(*) as total'))
-            ->groupBy('status')
-            ->get();
+        $statusQuery = DB::table('tasks')
+            ->select('status', DB::raw('COUNT(*) as total'));
+        if ($projectIds !== null) {
+            $statusQuery->whereIn('project_id', $projectIds);
+        }
+        $statusRows = $statusQuery->groupBy('status')->get();
         foreach ($statusRows as $row) {
             $normalized = $this->normalizeTaskStatus($row->status ?? null);
             if (!array_key_exists($normalized, $taskStatusCounts)) {
@@ -158,14 +159,28 @@ class StatController extends Controller
         ];
     }
 
-    public function recentLogs()
+    public function recentLogs(Request $request)
     {
-        return response()->json(['data' => $this->getRecentLogsData()]);
+        $user = $request->user();
+        if (!UserAccess::canViewManhours($user)) {
+            return response()->json(['data' => []]);
+        }
+
+        $projectIds = ProjectAccess::metricsProjectIds($user);
+
+        return response()->json(['data' => $this->getRecentLogsData($projectIds)]);
     }
 
-    private function getRecentLogsData()
+    /**
+     * @param  null|array<int>  $projectIds
+     */
+    private function getRecentLogsData(?array $projectIds = null)
     {
-        return DB::table('manhours as m')
+        if ($projectIds !== null && $projectIds === []) {
+            return collect();
+        }
+
+        $query = DB::table('manhours as m')
             ->join('users as u', 'm.user_id', '=', 'u.id')
             ->join('projects as p', 'm.project_id', '=', 'p.id')
             ->leftJoin('project_roles as pr', 'm.project_role_id', '=', 'pr.id')
@@ -179,30 +194,53 @@ class StatController extends Controller
                 'pr.name as role_name'
             )
             ->orderBy('m.created_at', 'desc')
-            ->limit(10)
-            ->get();
+            ->limit(10);
+
+        if ($projectIds !== null) {
+            $query->whereIn('m.project_id', $projectIds);
+        }
+
+        return $query->get();
     }
 
-    public function efficiency()
+    public function efficiency(Request $request)
     {
-        return response()->json(['data' => $this->getEfficiencyData()]);
+        $projectIds = ProjectAccess::metricsProjectIds($request->user());
+
+        return response()->json(['data' => $this->getEfficiencyData($projectIds)]);
     }
 
-    private function getEfficiencyData()
+    /**
+     * @param  null|array<int>  $projectIds
+     */
+    private function getEfficiencyData(?array $projectIds = null)
     {
-        $projects = DB::table('projects')
-            ->select('id', 'name', 'methodology', 'total_manhours as estimated_hours')
-            ->get();
+        if ($projectIds !== null && $projectIds === []) {
+            return collect();
+        }
 
-        $taskSums = DB::table('tasks')
-            ->select('project_id', DB::raw('SUM(estimated_hours) as allocated'))
-            ->groupBy('project_id')
-            ->pluck('allocated', 'project_id');
+        $projectsQuery = DB::table('projects')
+            ->select('id', 'name', 'methodology', 'total_manhours as estimated_hours');
 
-        $manhourSums = DB::table('manhours')
-            ->select('project_id', DB::raw('SUM(hours) as actual'))
-            ->groupBy('project_id')
-            ->pluck('actual', 'project_id');
+        if ($projectIds !== null) {
+            $projectsQuery->whereIn('id', $projectIds);
+        }
+
+        $projects = $projectsQuery->get();
+
+        $taskSumsQuery = DB::table('tasks')
+            ->select('project_id', DB::raw('SUM(estimated_hours) as allocated'));
+        if ($projectIds !== null) {
+            $taskSumsQuery->whereIn('project_id', $projectIds);
+        }
+        $taskSums = $taskSumsQuery->groupBy('project_id')->pluck('allocated', 'project_id');
+
+        $manhourSumsQuery = DB::table('manhours')
+            ->select('project_id', DB::raw('SUM(hours) as actual'));
+        if ($projectIds !== null) {
+            $manhourSumsQuery->whereIn('project_id', $projectIds);
+        }
+        $manhourSums = $manhourSumsQuery->groupBy('project_id')->pluck('actual', 'project_id');
 
         return $projects->map(function($p) use ($taskSums, $manhourSums) {
             $p->allocated_hours = $taskSums[$p->id] ?? 0;
@@ -212,21 +250,38 @@ class StatController extends Controller
         })->sortByDesc('burn_percentage')->values();
     }
 
-    public function revenueTrend()
+    public function revenueTrend(Request $request)
     {
-        return response()->json(['data' => $this->getRevenueTrendData()]);
+        $projectIds = ProjectAccess::metricsProjectIds($request->user());
+
+        return response()->json(['data' => $this->getRevenueTrendData($projectIds)]);
     }
 
-    public function companyProjects()
+    public function companyProjects(Request $request)
     {
-        return response()->json(['data' => $this->getCompanyProjectsData()]);
+        $projectIds = ProjectAccess::metricsProjectIds($request->user());
+
+        return response()->json(['data' => $this->getCompanyProjectsData($projectIds)]);
     }
 
-    private function getCompanyProjectsData(): array
+    /**
+     * @param  null|array<int>  $scopedProjectIds
+     */
+    private function getCompanyProjectsData(?array $scopedProjectIds = null): array
     {
-        $pairs = DB::table('presales as pr')
+        if ($scopedProjectIds !== null && $scopedProjectIds === []) {
+            return [];
+        }
+
+        $pairsQuery = DB::table('presales as pr')
             ->join('companies as c', 'c.id', '=', 'pr.company_id')
-            ->whereNotNull('pr.converted_project_id')
+            ->whereNotNull('pr.converted_project_id');
+
+        if ($scopedProjectIds !== null) {
+            $pairsQuery->whereIn('pr.converted_project_id', $scopedProjectIds);
+        }
+
+        $pairs = $pairsQuery
             ->select(
                 'c.id as company_id',
                 'c.name as company_name',
@@ -297,12 +352,24 @@ class StatController extends Controller
         return $result;
     }
 
-    private function getRevenueTrendData()
+    /**
+     * @param  null|array<int>  $scopedProjectIds
+     */
+    private function getRevenueTrendData(?array $scopedProjectIds = null)
     {
-        $projects = DB::table('projects')
+        if ($scopedProjectIds !== null && $scopedProjectIds === []) {
+            return [];
+        }
+
+        $projectsQuery = DB::table('projects')
             ->select('id', 'created_at', 'quotation_value')
-            ->orderBy('created_at', 'asc')
-            ->get();
+            ->orderBy('created_at', 'asc');
+
+        if ($scopedProjectIds !== null) {
+            $projectsQuery->whereIn('id', $scopedProjectIds);
+        }
+
+        $projects = $projectsQuery->get();
 
         if ($projects->isEmpty()) {
             return [];
@@ -336,21 +403,23 @@ class StatController extends Controller
             ->groupBy('project_id')
             ->pluck('cost', 'project_id');
 
-        $firstMonth = $monthList->first();
-        $financialRows = DB::table('financial_records')
-            ->select('date', 'amount')
-            ->when($firstMonth, function ($q) use ($firstMonth) {
-                $q->whereDate('date', '>=', $firstMonth . '-01');
-            })
-            ->get();
-
         $financialByMonth = [];
-        foreach ($financialRows as $row) {
-            $month = Carbon::parse($row->date)->format('Y-m');
-            if (!$monthList->contains($month)) {
-                continue;
+        if ($scopedProjectIds === null) {
+            $firstMonth = $monthList->first();
+            $financialRows = DB::table('financial_records')
+                ->select('date', 'amount')
+                ->when($firstMonth, function ($q) use ($firstMonth) {
+                    $q->whereDate('date', '>=', $firstMonth . '-01');
+                })
+                ->get();
+
+            foreach ($financialRows as $row) {
+                $month = Carbon::parse($row->date)->format('Y-m');
+                if (!$monthList->contains($month)) {
+                    continue;
+                }
+                $financialByMonth[$month] = ($financialByMonth[$month] ?? 0) + (float) ($row->amount ?? 0);
             }
-            $financialByMonth[$month] = ($financialByMonth[$month] ?? 0) + (float) ($row->amount ?? 0);
         }
 
         return $monthList->map(function ($month) use ($projectRows, $allocByProject, $financialByMonth) {
@@ -373,7 +442,9 @@ class StatController extends Controller
     public function dashboardOverview(Request $request)
     {
         $user = $request->user();
-        if ($user && !$this->isPrivilegedUser($user)) {
+        $projectIds = ProjectAccess::metricsProjectIds($user);
+
+        if ($user && !ProjectAccess::canViewGlobalFinanceMetrics($user) && !UserAccess::isPrivileged($user)) {
             return response()->json([
                 'mode' => 'member',
                 'userStats' => $this->getMemberDashboardData($user),
@@ -382,7 +453,7 @@ class StatController extends Controller
 
         // Fail-safe: if one section errors, keep dashboard stats available.
         try {
-            $stats = $this->getStatsData();
+            $stats = $this->getStatsData($projectIds);
         } catch (\Throwable $e) {
             $stats = [
                 'totalProjects' => 0,
@@ -400,19 +471,21 @@ class StatController extends Controller
         }
 
         try {
-            $efficiency = $this->getEfficiencyData();
+            $efficiency = $this->getEfficiencyData($projectIds);
         } catch (\Throwable $e) {
             $efficiency = [];
         }
 
         try {
-            $recentLogs = $this->getRecentLogsData();
+            $recentLogs = UserAccess::canViewManhours($user)
+                ? $this->getRecentLogsData($projectIds)
+                : [];
         } catch (\Throwable $e) {
             $recentLogs = [];
         }
 
         try {
-            $revenueTrend = $this->getRevenueTrendData();
+            $revenueTrend = $this->getRevenueTrendData($projectIds);
         } catch (\Throwable $e) {
             $revenueTrend = [];
         }
@@ -423,5 +496,48 @@ class StatController extends Controller
             'recentLogs' => $recentLogs,
             'revenueTrend' => $revenueTrend
         ]);
+    }
+
+    /**
+     * @param  null|array<int>  $projectIds
+     */
+    private function sqlProjectIdFilter(?array $projectIds, string $table, string $column = 'id'): string
+    {
+        if ($projectIds === null) {
+            return '';
+        }
+
+        if ($projectIds === []) {
+            return ' AND 1=0';
+        }
+
+        $ids = implode(',', array_map('intval', $projectIds));
+        $qualified = $table === 'p' ? "p.{$column}" : "{$table}.{$column}";
+
+        return " AND {$qualified} IN ({$ids})";
+    }
+
+    private function emptyStatsPayload(): array
+    {
+        return [
+            'totalProjects' => 0,
+            'activeProjects' => 0,
+            'doneProjects' => 0,
+            'scrumProjects' => 0,
+            'waterfallProjects' => 0,
+            'activeTasks' => 0,
+            'totalHours' => 0,
+            'totalRevenue' => 0,
+            'totalAllocated' => 0,
+            'totalMargin' => 0,
+            'marginPercentage' => 0,
+            'taskStatusCounts' => [
+                'To Do' => 0,
+                'In Progress' => 0,
+                'Review' => 0,
+                'Reopen' => 0,
+                'Done' => 0,
+            ],
+        ];
     }
 }

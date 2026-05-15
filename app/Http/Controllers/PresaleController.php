@@ -412,10 +412,39 @@ class PresaleController extends Controller
     {
         $presale = Presale::findOrFail($id);
         $oldStatus = $presale->status;
-        $changes = $presale->update($request->all()) ? 1 : 0;
 
-        if (isset($request->status) && $request->status !== $oldStatus) {
-            $this->log('Presales', 'Updated Pipeline Status', "Moved '{$presale->name}' from {$oldStatus} to {$request->status}");
+        $validated = $request->validate([
+            'company_id' => 'sometimes|nullable|exists:companies,id',
+            'project_name' => 'sometimes|string|max:255',
+            'project_category_id' => 'sometimes|nullable|exists:project_categories,id',
+            'estimated_budget' => 'sometimes|nullable|numeric|min:0',
+            'project_description' => 'sometimes|nullable|string',
+            'name' => 'sometimes|string|max:255',
+            'estimated_value' => 'sometimes|nullable|numeric|min:0',
+            'description' => 'sometimes|nullable|string',
+            'status' => 'sometimes|string|max:100',
+            'sales_pitch_id' => [
+                'sometimes',
+                'nullable',
+                Rule::exists('sales_pitches', 'id')->where(fn ($q) => $q->where('outcome', SalesPitch::OUTCOME_WIN)),
+                Rule::unique('presales', 'sales_pitch_id')->ignore($presale->id),
+            ],
+        ]);
+
+        if (isset($validated['project_name']) && !isset($validated['name'])) {
+            $validated['name'] = $validated['project_name'];
+        }
+        if (isset($validated['estimated_budget']) && !isset($validated['estimated_value'])) {
+            $validated['estimated_value'] = $validated['estimated_budget'];
+        }
+        if (isset($validated['project_description']) && !isset($validated['description'])) {
+            $validated['description'] = $validated['project_description'];
+        }
+
+        $changes = $presale->update($validated) ? 1 : 0;
+
+        if (isset($validated['status']) && $validated['status'] !== $oldStatus) {
+            $this->log('Presales', 'Updated Pipeline Status', "Moved '{$presale->name}' from {$oldStatus} to {$validated['status']}");
         } else {
             $this->log('Presales', 'Updated Lead Details', "Modified data for '{$presale->name}'");
         }

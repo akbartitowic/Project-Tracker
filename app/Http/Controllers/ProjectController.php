@@ -12,17 +12,13 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Support\ProjectAccess;
 use App\Support\UserAccess;
 use App\Traits\LogActivity;
 
 class ProjectController extends Controller
 {
     use LogActivity;
-
-    private function isPrivilegedUser($user): bool
-    {
-        return UserAccess::isPrivileged($user);
-    }
 
     public function index()
     {
@@ -71,7 +67,7 @@ class ProjectController extends Controller
                 LIMIT 1
             ) as company_logo_path");
 
-        if (!$this->isPrivilegedUser($user)) {
+        if (!ProjectAccess::isPrivileged($user)) {
             $query->whereExists(function ($sub) use ($user) {
                 $sub->select(DB::raw(1))
                     ->from('project_members as pm')
@@ -104,6 +100,11 @@ class ProjectController extends Controller
         $ids = $request->input('ids');
         if (!$ids || !is_array($ids) || empty($ids)) {
             return response()->json(['error' => 'Please provide an array of project IDs to delete.'], 400);
+        }
+
+        $user = $request->user();
+        foreach ($ids as $projectId) {
+            ProjectAccess::assertCanAccessProject($user, (int) $projectId);
         }
 
         $projects = Project::whereIn('id', $ids)->get();
@@ -139,6 +140,18 @@ class ProjectController extends Controller
         $members = $validated['members'] ?? [];
         $roleQuotas = $validated['role_quotas'] ?? [];
         unset($validated['members'], $validated['role_quotas']);
+
+        $actor = $request->user();
+        if (!ProjectAccess::isPrivileged($actor)) {
+            $includesActor = collect($members)->contains(
+                fn ($member) => (int) ($member['user_id'] ?? 0) === (int) $actor->id
+            );
+            if (!$includesActor) {
+                return response()->json([
+                    'error' => 'You must include yourself in the project members list.',
+                ], 422);
+            }
+        }
 
         DB::beginTransaction();
         try {
@@ -199,15 +212,7 @@ class ProjectController extends Controller
         if (!$project) {
             return response()->json(['error' => 'Project not found'], 404);
         }
-        if (!$this->isPrivilegedUser($user)) {
-            $isAssigned = DB::table('project_members')
-                ->where('project_id', $id)
-                ->where('user_id', $user->id)
-                ->exists();
-            if (!$isAssigned) {
-                return response()->json(['error' => 'Forbidden'], 403);
-            }
-        }
+        ProjectAccess::assertCanAccessProject($user, (int) $id);
 
         $quotas = DB::table('project_role_quotas as pq')
             ->join('project_roles as pr', 'pq.project_role_id', '=', 'pr.id')
@@ -297,15 +302,7 @@ class ProjectController extends Controller
                 ],
             ]);
         }
-        if (!$this->isPrivilegedUser($user)) {
-            $isAssigned = DB::table('project_members')
-                ->where('project_id', $id)
-                ->where('user_id', $user->id)
-                ->exists();
-            if (!$isAssigned) {
-                return response()->json(['error' => 'Forbidden'], 403);
-            }
-        }
+        ProjectAccess::assertCanAccessProject($user, (int) $id);
 
         $allocatedHours = Task::where('project_id', $id)->sum('estimated_hours');
         $actualHours = Manhour::where('project_id', $id)->sum('hours');
@@ -329,15 +326,7 @@ class ProjectController extends Controller
     public function members($id)
     {
         $user = request()->user();
-        if (!$this->isPrivilegedUser($user)) {
-            $isAssigned = DB::table('project_members')
-                ->where('project_id', $id)
-                ->where('user_id', $user->id)
-                ->exists();
-            if (!$isAssigned) {
-                return response()->json(['error' => 'Forbidden'], 403);
-            }
-        }
+        ProjectAccess::assertCanAccessProject($user, (int) $id);
 
         $members = DB::table('project_members as pm')
             ->join('users as u', 'pm.user_id', '=', 'u.id')
@@ -357,20 +346,20 @@ class ProjectController extends Controller
         }
 
         $user = request()->user();
-        if (!$this->isPrivilegedUser($user)) {
-            $isAssigned = DB::table('project_members')
+        ProjectAccess::assertCanAccessProject($user, (int) $id);
+
+        $usersQuery = User::query()
+            ->select('id', 'name', 'email')
+            ->orderBy('name', 'asc');
+
+        if (!ProjectAccess::isPrivileged($user)) {
+            $memberUserIds = DB::table('project_members')
                 ->where('project_id', $id)
-                ->where('user_id', $user->id)
-                ->exists();
-            if (!$isAssigned) {
-                return response()->json(['error' => 'Forbidden'], 403);
-            }
+                ->pluck('user_id');
+            $usersQuery->whereIn('id', $memberUserIds);
         }
 
-        $users = User::query()
-            ->select('id', 'name', 'email')
-            ->orderBy('name', 'asc')
-            ->get();
+        $users = $usersQuery->get();
 
         $roles = ProjectRole::query()
             ->select('id', 'name')
@@ -391,6 +380,8 @@ class ProjectController extends Controller
         if (!$project) {
             return response()->json(['error' => 'Project not found'], 404);
         }
+
+        ProjectAccess::assertCanAccessProject($request->user(), (int) $id);
 
         $validated = $request->validate([
             'members' => 'required|array|min:1',

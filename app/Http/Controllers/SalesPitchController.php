@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\ProjectCategory;
 use App\Models\SalesCategoryProject;
 use App\Models\SalesPitch;
+use App\Support\UserAccess;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -31,7 +32,7 @@ class SalesPitchController extends Controller
             'salesCategoryProject:id,name',
         ])->orderByDesc('updated_at');
 
-        if (!$this->isPrivileged($request)) {
+        if (!UserAccess::isPrivileged($request->user())) {
             $query->where('user_id', $request->user()->id);
         }
 
@@ -229,18 +230,9 @@ class SalesPitchController extends Controller
         return response()->json(['deleted' => 1]);
     }
 
-    private function isPrivileged(Request $request): bool
-    {
-        if (strtolower((string) ($request->user()->email ?? '')) === 'tito@noohtify.com') {
-            return true;
-        }
-
-        return strtolower((string) ($request->user()->role?->name ?? $request->user()->role ?? '')) === 'admin';
-    }
-
     private function authorizePitch(SalesPitch $pitch, Request $request): void
     {
-        if ($this->isPrivileged($request)) {
+        if (UserAccess::isPrivileged($request->user())) {
             return;
         }
         if ((int) $pitch->user_id !== (int) $request->user()->id) {

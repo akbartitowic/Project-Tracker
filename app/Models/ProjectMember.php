@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class ProjectMember extends Model
 {
-    protected $guarded = [];
-    //
+    protected $fillable = [
+        'project_id',
+        'user_id',
+        'project_role_id',
+    ];
 }
