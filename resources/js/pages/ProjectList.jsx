@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { isFreelanceUser } from '../utils/permissions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,7 +69,7 @@ export default function ProjectList() {
         const totalReopen = filteredProjects.reduce((acc, p) => acc + Number(p.reopen_tasks || 0), 0);
         return { total, active, done, totalTasks, totalReopen };
     }, [filteredProjects]);
-    const isFreelance = ((user?.role?.name || user?.role || '').toString().trim().toLowerCase() === 'freelance');
+    const isFreelance = isFreelanceUser(user);
 
     return (
         <div className="mx-auto max-w-[1400px] p-4 pb-16 sm:p-6 sm:pb-20 lg:p-8">

@@ -19,6 +19,7 @@ class FinanceCategorySeeder extends Seeder
             ['name' => 'Operational', 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'License & Subscription', 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'Others', 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Change Request', 'created_at' => now(), 'updated_at' => now()],
         ];
 
         foreach ($categories as $cat) {

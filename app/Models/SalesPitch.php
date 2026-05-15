@@ -44,6 +44,7 @@ class SalesPitch extends Model
         'email',
         'phone',
         'estimated_value',
+        'final_deal_value',
         'notes',
         'compro_url',
         'proposal_url',
@@ -62,6 +63,7 @@ class SalesPitch extends Model
     {
         return [
             'estimated_value' => 'decimal:2',
+            'final_deal_value' => 'decimal:2',
             'lead_started_at' => 'datetime',
             'meeting_at' => 'datetime',
             'closed_at' => 'datetime',

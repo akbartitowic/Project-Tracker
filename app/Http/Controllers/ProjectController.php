@@ -11,6 +11,8 @@ use App\Models\Manhour;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use App\Support\UserAccess;
 use App\Traits\LogActivity;
 
 class ProjectController extends Controller
@@ -19,11 +21,7 @@ class ProjectController extends Controller
 
     private function isPrivilegedUser($user): bool
     {
-        if (!$user) return false;
-        $email = strtolower((string) ($user->email ?? ''));
-        if ($email === 'tito@noohtify.com') return true;
-        $roleName = strtolower((string) ($user->role->name ?? $user->role ?? ''));
-        return $roleName === 'admin';
+        return UserAccess::isPrivileged($user);
     }
 
     public function index()
@@ -62,7 +60,16 @@ class ProjectController extends Controller
                         THEN ROUND(((SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status = 'Done') * 100.0) / (SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id), 2)
                     ELSE 0
                 END as waterfall_progress_percentage
-            ");
+            ")
+            ->selectRaw("(
+                SELECT companies.logo_path
+                FROM presales
+                INNER JOIN companies ON companies.id = presales.company_id
+                WHERE presales.converted_project_id = projects.id
+                  AND companies.logo_path IS NOT NULL
+                ORDER BY presales.id DESC
+                LIMIT 1
+            ) as company_logo_path");
 
         if (!$this->isPrivilegedUser($user)) {
             $query->whereExists(function ($sub) use ($user) {
@@ -74,10 +81,19 @@ class ProjectController extends Controller
         }
 
         $projects = $query->get();
-            
+
+        $stripManhours = UserAccess::isFreelance($user);
+
         // Cast jobs back to array (or rely on Model casting)
-        $projects->each(function($p) {
+        $projects->each(function ($p) use ($stripManhours) {
             $p->jobs = is_string($p->jobs) ? json_decode($p->jobs) : $p->jobs;
+            $p->company_logo_url = $p->company_logo_path
+                ? Storage::disk('public')->url($p->company_logo_path)
+                : null;
+            unset($p->company_logo_path);
+            if ($stripManhours) {
+                UserAccess::stripProjectManhourFields($p);
+            }
         });
 
         return response()->json(['data' => $projects]);
@@ -174,11 +190,15 @@ class ProjectController extends Controller
 
     public function quotas($id)
     {
+        $user = request()->user();
+        if (UserAccess::isFreelance($user)) {
+            return response()->json(['data' => [], 'meta' => null]);
+        }
+
         $project = Project::find($id);
         if (!$project) {
             return response()->json(['error' => 'Project not found'], 404);
         }
-        $user = request()->user();
         if (!$this->isPrivilegedUser($user)) {
             $isAssigned = DB::table('project_members')
                 ->where('project_id', $id)
@@ -194,7 +214,10 @@ class ProjectController extends Controller
             ->select('pq.*', 'pr.name as role_name')
             ->selectRaw("(SELECT CAST(COALESCE(SUM(estimated_hours), 0) AS FLOAT) FROM tasks WHERE project_id = pq.project_id AND project_role_id = pq.project_role_id) as allocated_hours")
             ->selectRaw("(SELECT CAST(COALESCE(SUM(hours), 0) AS FLOAT) FROM manhours WHERE project_id = pq.project_id AND project_role_id = pq.project_role_id) as actual_hours")
+            ->selectRaw("(SELECT COUNT(*) FROM tasks WHERE project_id = pq.project_id AND project_role_id = pq.project_role_id) as task_count")
             ->where('pq.project_id', $id)
+            ->orderByDesc('pq.is_active')
+            ->orderBy('pr.name')
             ->get();
 
         $topupByRole = DB::table('project_allocations')
@@ -221,8 +244,9 @@ class ProjectController extends Controller
             ]);
         });
 
-        $baseRoleQuotaTotal = (float) $quotasWithSplit->sum('base_quota_hours');
-        $topupRoleQuotaTotal = (float) $quotasWithSplit->sum('topup_hours');
+        $activeQuotas = $quotasWithSplit->filter(fn ($q) => (bool) ($q->is_active ?? true));
+        $baseRoleQuotaTotal = (float) $activeQuotas->sum('base_quota_hours');
+        $topupRoleQuotaTotal = (float) $activeQuotas->sum('topup_hours');
 
         $totalManhours = (float) ($project->total_manhours ?? 0);
         $baseTotalManhours = max(0, $totalManhours - $topupHoursTotal);
@@ -266,6 +290,13 @@ class ProjectController extends Controller
         $project = Project::find($id);
         if (!$project) return response()->json(['error' => 'Project not found'], 404);
         $user = request()->user();
+        if (UserAccess::isFreelance($user)) {
+            return response()->json([
+                'data' => [
+                    'methodology' => $project->methodology,
+                ],
+            ]);
+        }
         if (!$this->isPrivilegedUser($user)) {
             $isAssigned = DB::table('project_members')
                 ->where('project_id', $id)

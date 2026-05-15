@@ -1,15 +1,33 @@
 import { useEffect, useState } from 'react';
 import { fetchAPI } from '../services/api';
-import { FolderTree, Plus, Pencil, Trash2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { hasPermission } from '../utils/permissions';
+import { FolderTree, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 export default function ProjectCategoryMaster() {
+  const { user } = useAuth();
+  const canCreate = hasPermission(user, 'category_project.create');
+  const canUpdate = hasPermission(user, 'category_project.update');
+  const canDelete = hasPermission(user, 'category_project.delete');
+
   const [categories, setCategories] = useState([]);
-  const [name, setName] = useState('');
-  const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [name, setName] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -17,7 +35,7 @@ export default function ProjectCategoryMaster() {
       const res = await fetchAPI('/project-categories');
       setCategories(res.data || []);
     } catch (error) {
-      alert('Gagal memuat category company: ' + error.message);
+      alert('Failed to load categories: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -27,103 +45,209 @@ export default function ProjectCategoryMaster() {
     load();
   }, []);
 
+  const resetForm = () => setName('');
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingItem(null);
+    resetForm();
+  };
+
+  const openCreateModal = () => {
+    if (!canCreate) {
+      alert('You do not have permission to add categories.');
+      return;
+    }
+    setEditingItem(null);
+    resetForm();
+    setModalOpen(true);
+  };
+
+  const openEditModal = (item) => {
+    if (!canUpdate) {
+      alert('You do not have permission to edit categories.');
+      return;
+    }
+    setEditingItem(item);
+    setName(item.name);
+    setModalOpen(true);
+  };
+
   const submit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    if (editingItem && !canUpdate) {
+      alert('You do not have permission to edit categories.');
+      return;
+    }
+    if (!editingItem && !canCreate) {
+      alert('You do not have permission to add categories.');
+      return;
+    }
+
+    setSaving(true);
     try {
-      if (editing) {
-        await fetchAPI(`/project-categories/${editing}`, {
+      if (editingItem) {
+        await fetchAPI(`/project-categories/${editingItem.id}`, {
           method: 'PUT',
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name: trimmed }),
         });
       } else {
         await fetchAPI('/project-categories', {
           method: 'POST',
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name: trimmed }),
         });
       }
-      setName('');
-      setEditing(null);
-      load();
+      closeModal();
+      await load();
     } catch (error) {
-      alert(error.message);
+      alert(error.message || 'Failed to save category.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const remove = async (id) => {
-    if (!window.confirm('Hapus category company ini?')) return;
+    if (!canDelete) {
+      alert('You do not have permission to delete categories.');
+      return;
+    }
+    if (!window.confirm('Delete this category?')) return;
     try {
       await fetchAPI(`/project-categories/${id}`, { method: 'DELETE' });
+      if (editingItem?.id === id) closeModal();
       load();
     } catch (error) {
-      alert(error.message);
+      alert(error.message || 'Failed to delete category.');
     }
   };
 
+  const isEdit = Boolean(editingItem);
+
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Category Company</h1>
-        <p className="text-slate-500 mt-1">Master data category company untuk Presales.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Category Company</h1>
+          <p className="text-slate-500 mt-1 text-sm">Company category master data for Presales.</p>
+        </div>
+        {canCreate && (
+          <Button onClick={openCreateModal} className="gap-2 shrink-0">
+            <Plus className="size-4" />
+            Add category
+          </Button>
+        )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{editing ? 'Edit Category Company' : 'Tambah Category Company'}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={submit} className="flex gap-3">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Masukkan category company"
-            />
-            <Button type="submit">
-              <Plus className="size-4 mr-2" />
-              {editing ? 'Simpan' : 'Tambah'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      {!canUpdate && !canCreate && (
+        <p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
+          You have read-only access. Editing requires the <strong>Update Category Project</strong> permission in Access Control.
+        </p>
+      )}
 
-      <Card>
+      <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
         <CardHeader>
-          <CardTitle>Data Category Company</CardTitle>
+          <CardTitle className="text-base">Categories</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-slate-500">Loading...</p>
+            <p className="text-slate-500 text-sm flex items-center gap-2">
+              <Loader2 className="size-4 animate-spin" /> Loading…
+            </p>
           ) : categories.length === 0 ? (
-            <p className="text-slate-500">Belum ada category company.</p>
+            <p className="text-slate-500 text-sm">No categories yet.</p>
           ) : (
-            <div className="space-y-2">
-              {categories.map((item) => (
-                <div key={item.id} className="flex items-center justify-between border rounded-lg p-3">
-                  <div className="flex items-center gap-2">
-                    <FolderTree className="size-4 text-primary" />
-                    <span className="font-medium">{item.name}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setEditing(item.id);
-                        setName(item.name);
-                      }}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => remove(item.id)}>
-                      <Trash2 className="size-4 text-red-500" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Name</th>
+                    {(canUpdate || canDelete) && (
+                      <th className="px-4 py-3 font-medium text-right w-28">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {categories.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 font-medium text-slate-900 dark:text-white">
+                          <FolderTree className="size-4 text-primary shrink-0" />
+                          {item.name}
+                        </div>
+                      </td>
+                      {(canUpdate || canDelete) && (
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-1">
+                            {canUpdate && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openEditModal(item)}
+                                title="Edit"
+                              >
+                                <Pencil className="size-4" />
+                              </Button>
+                            )}
+                            {canDelete && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => remove(item.id)}
+                                title="Delete"
+                              >
+                                <Trash2 className="size-4 text-red-500" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={modalOpen} onOpenChange={(open) => !open && closeModal()}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>{isEdit ? 'Edit category' : 'Add category'}</DialogTitle>
+            <DialogDescription>
+              {isEdit ? 'Update the category company name.' : 'Enter a name for the new category company.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Category name</label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Category name"
+                required
+                autoFocus
+              />
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={closeModal} disabled={saving}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving && <Loader2 className="size-4 mr-2 animate-spin" />}
+                {isEdit ? 'Save changes' : 'Add category'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

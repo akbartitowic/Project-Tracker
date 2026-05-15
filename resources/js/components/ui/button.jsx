@@ -43,12 +43,14 @@ function Button({
   variant = "default",
   size = "default",
   asChild = false,
+  type,
   ...props
 }) {
   const Comp = asChild ? Slot.Root : "button"
 
   return (
     <Comp
+      type={asChild ? undefined : (type ?? "button")}
       data-slot="button"
       data-variant={variant}
       data-size={size}

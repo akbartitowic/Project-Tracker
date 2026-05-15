@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
 class StatController extends Controller
@@ -214,6 +215,86 @@ class StatController extends Controller
     public function revenueTrend()
     {
         return response()->json(['data' => $this->getRevenueTrendData()]);
+    }
+
+    public function companyProjects()
+    {
+        return response()->json(['data' => $this->getCompanyProjectsData()]);
+    }
+
+    private function getCompanyProjectsData(): array
+    {
+        $pairs = DB::table('presales as pr')
+            ->join('companies as c', 'c.id', '=', 'pr.company_id')
+            ->whereNotNull('pr.converted_project_id')
+            ->select(
+                'c.id as company_id',
+                'c.name as company_name',
+                'c.logo_path',
+                'pr.converted_project_id as project_id'
+            )
+            ->distinct()
+            ->get();
+
+        if ($pairs->isEmpty()) {
+            return [];
+        }
+
+        $projectIds = $pairs->pluck('project_id')->unique()->map(fn ($id) => (int) $id)->values();
+
+        $doneProjectIds = DB::table('projects as p')
+            ->whereIn('p.id', $projectIds)
+            ->whereRaw('(SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) > 0')
+            ->whereRaw("(SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'Done') = 0")
+            ->pluck('p.id')
+            ->flip()
+            ->all();
+
+        $byCompany = [];
+        foreach ($pairs as $row) {
+            $companyId = (int) $row->company_id;
+            $projectId = (int) $row->project_id;
+
+            if (!isset($byCompany[$companyId])) {
+                $byCompany[$companyId] = [
+                    'company_id' => $companyId,
+                    'company_name' => $row->company_name,
+                    'logo_path' => $row->logo_path,
+                    'project_ids' => [],
+                ];
+            }
+            $byCompany[$companyId]['project_ids'][$projectId] = true;
+        }
+
+        $result = [];
+        foreach ($byCompany as $company) {
+            $projectIds = array_keys($company['project_ids']);
+            $total = count($projectIds);
+            $done = 0;
+            foreach ($projectIds as $projectId) {
+                if (array_key_exists($projectId, $doneProjectIds)) {
+                    $done++;
+                }
+            }
+            $active = $total - $done;
+
+            $result[] = [
+                'company_id' => $company['company_id'],
+                'company_name' => $company['company_name'],
+                'logo_url' => $company['logo_path']
+                    ? Storage::disk('public')->url($company['logo_path'])
+                    : null,
+                'total_projects' => $total,
+                'active_projects' => $active,
+                'done_projects' => $done,
+                'status' => $active === 0 ? 'All done' : 'Active',
+            ];
+        }
+
+        usort($result, fn ($a, $b) => $b['total_projects'] <=> $a['total_projects']
+            ?: strcasecmp($a['company_name'], $b['company_name']));
+
+        return $result;
     }
 
     private function getRevenueTrendData()

@@ -1,23 +1,32 @@
 import { useState, useEffect } from 'react';
 import { fetchAPI } from '../services/api';
-import { 
-    TrendingUp, 
-    Calendar, 
-    ArrowUpRight, 
-    ArrowDownRight, 
-    Plus, 
-    Trash2, 
+import {
+    TrendingUp,
+    Calendar,
+    Plus,
+    Trash2,
     Filter,
     DollarSign,
     Briefcase,
     Activity,
     CreditCard,
     LayoutDashboard,
-    AlertCircle
+    AlertCircle,
+    Loader2,
+    Info,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+
+function SectionTable({ children, className = '' }) {
+    return (
+        <div className={`overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 ${className}`}>
+            <table className="w-full text-sm">{children}</table>
+        </div>
+    );
+}
 
 export default function FinanceReport() {
     const [loading, setLoading] = useState(true);
@@ -31,22 +40,22 @@ export default function FinanceReport() {
         capex_total: 0,
         net_revenue: 0,
         net_revenue_realized: 0,
-        records: []
+        records: [],
     });
 
     const [filters, setFilters] = useState({
-        start_date: new Date(new Date().getFullYear(), 0, 2).toISOString().split('T')[0], // Jan 1st (UTC fix)
-        end_date: new Date().toISOString().split('T')[0]
+        start_date: new Date(new Date().getFullYear(), 0, 2).toISOString().split('T')[0],
+        end_date: new Date().toISOString().split('T')[0],
     });
 
     const [newRecord, setNewRecord] = useState({
         type: 'OPEX',
-        duration: 1, // 1 to 12 months
+        duration: 1,
         amount: '',
         monthly_amount: '',
         yearly_amount: '',
         date: new Date().toISOString().split('T')[0],
-        description: ''
+        description: '',
     });
 
     const loadData = async () => {
@@ -73,7 +82,7 @@ export default function FinanceReport() {
                 type: newRecord.type,
                 date: newRecord.date,
                 description: newRecord.description,
-                amount: parseFloat(newRecord.amount)
+                amount: parseFloat(newRecord.amount),
             };
 
             if (newRecord.type === 'OPEX') {
@@ -82,7 +91,7 @@ export default function FinanceReport() {
 
             await fetchAPI('/financial-reports/records', {
                 method: 'POST',
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
             });
             setNewRecord({ ...newRecord, amount: '', monthly_amount: '', yearly_amount: '', description: '' });
             loadData();
@@ -94,18 +103,18 @@ export default function FinanceReport() {
     const handleAmountChange = (val, source) => {
         const num = parseFloat(val) || 0;
         if (source === 'amount' || source === 'monthly') {
-            setNewRecord({ 
-                ...newRecord, 
-                monthly_amount: val, 
+            setNewRecord({
+                ...newRecord,
+                monthly_amount: val,
                 yearly_amount: (num * 12).toString(),
-                amount: val 
+                amount: val,
             });
         } else if (source === 'yearly') {
-            setNewRecord({ 
-                ...newRecord, 
-                yearly_amount: val, 
+            setNewRecord({
+                ...newRecord,
+                yearly_amount: val,
                 monthly_amount: (num / 12).toFixed(0),
-                amount: (num / 12).toFixed(0)
+                amount: (num / 12).toFixed(0),
             });
         }
     };
@@ -124,406 +133,455 @@ export default function FinanceReport() {
         return new Intl.NumberFormat('id-ID', {
             style: 'currency',
             currency: 'IDR',
-            minimumFractionDigits: 0
+            minimumFractionDigits: 0,
         }).format(val || 0);
     };
 
+    const projectExpensesRealized = summary.project_expenses_realized ?? summary.project_expenses;
+    const incomeAfterRealized = summary.income_after_project_expenses_realized ?? summary.income_after_project_expenses;
+    const netRevenueRealized = summary.net_revenue_realized ?? summary.net_revenue;
+
+    const plRows = [
+        {
+            label: 'Gross income',
+            hint: 'Total project quotation created within the filter date range (forecast, not cash-in).',
+            forecast: summary.gross_income,
+            realized: null,
+            emphasis: false,
+        },
+        {
+            label: 'Project expenses',
+            hint: 'Allocation costs excluding top-up rows. Realized uses Finance Monitoring values when set.',
+            forecast: summary.project_expenses,
+            realized: projectExpensesRealized,
+            emphasis: false,
+            negative: true,
+        },
+        {
+            label: 'Income after project expenses',
+            hint: 'Gross income minus project expenses (each basis).',
+            forecast: summary.income_after_project_expenses,
+            realized: incomeAfterRealized,
+            emphasis: true,
+        },
+        {
+            label: 'OPEX',
+            hint: 'Full calendar year of the filter start date (not limited to the date range).',
+            forecast: summary.opex_total,
+            realized: null,
+            negative: true,
+        },
+        {
+            label: 'CAPEX',
+            hint: 'Full calendar year of the filter start date (not limited to the date range).',
+            forecast: summary.capex_total,
+            realized: null,
+            negative: true,
+        },
+        {
+            label: 'Net revenue',
+            hint: 'Income after project (forecast/realized) minus OPEX and CAPEX for that year.',
+            forecast: summary.net_revenue,
+            realized: netRevenueRealized,
+            emphasis: true,
+            total: true,
+        },
+    ];
+
     return (
-        <div className="mx-auto max-w-[1400px] animate-in fade-in p-4 pb-16 duration-500 sm:p-6 sm:pb-20 lg:p-8">
-            {/* Header omitted for brevity in chunking but fully present in original */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                <div className="flex flex-col gap-2">
-                    <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white flex items-center gap-3 italic tracking-tight">
-                       <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                            <TrendingUp className="size-8" />
-                       </div>
-                        FINANCE REPORT
+        <div className="mx-auto max-w-[1280px] animate-in fade-in p-4 pb-16 duration-500 sm:p-6 sm:pb-20 lg:p-8 space-y-8">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
+                        <span className="p-2 rounded-lg bg-primary/10 text-primary">
+                            <TrendingUp className="size-6" />
+                        </span>
+                        Finance Report
                     </h1>
-                    <p className="text-slate-500 dark:text-slate-400 font-medium tracking-wide flex items-center gap-2">
-                        Ringkasan keuangan: bagian project memakai <strong className="text-slate-700 dark:text-slate-200 font-semibold">planning vs realisasi</strong> alokasi sesuai monitoring finance.
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
+                        Profit &amp; loss summary with planning vs realization for project costs, plus OPEX and CAPEX entries.
                     </p>
                 </div>
 
-                {/* Filters */}
-                <Card className="border-primary/20 bg-primary/5 backdrop-blur-sm">
-                    <CardContent className="p-3 flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <Calendar className="size-4 text-primary" />
-                            <Input 
-                                type="date" 
-                                value={filters.start_date}
-                                onChange={(e) => setFilters({...filters, start_date: e.target.value})}
-                                className="h-9 w-40 bg-white dark:bg-slate-900 border-none shadow-sm font-medium"
-                            />
-                        </div>
-                        <span className="text-slate-400 font-bold">TO</span>
-                        <div className="flex items-center gap-2">
-                            <Input 
-                                type="date" 
-                                value={filters.end_date}
-                                onChange={(e) => setFilters({...filters, end_date: e.target.value})}
-                                className="h-9 w-40 bg-white dark:bg-slate-900 border-none shadow-sm font-medium"
-                            />
-                        </div>
-                        <Button size="icon" variant="ghost" className="size-9 rounded-lg hover:bg-white dark:hover:bg-slate-800" onClick={loadData}>
-                            <Filter className="size-4 text-primary" />
+                <Card className="border-slate-200 dark:border-slate-800 shadow-sm shrink-0">
+                    <CardContent className="p-3 flex flex-wrap items-center gap-2 sm:gap-3">
+                        <Calendar className="size-4 text-slate-500 shrink-0" />
+                        <Input
+                            type="date"
+                            value={filters.start_date}
+                            onChange={(e) => setFilters({ ...filters, start_date: e.target.value })}
+                            className="h-9 w-[140px] sm:w-36"
+                        />
+                        <span className="text-xs text-slate-400 font-medium">to</span>
+                        <Input
+                            type="date"
+                            value={filters.end_date}
+                            onChange={(e) => setFilters({ ...filters, end_date: e.target.value })}
+                            className="h-9 w-[140px] sm:w-36"
+                        />
+                        <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={loadData} disabled={loading}>
+                            {loading ? <Loader2 className="size-4 animate-spin" /> : <Filter className="size-4" />}
+                            Apply
                         </Button>
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="mb-8 rounded-xl border border-blue-200/80 bg-blue-50/60 p-4 text-sm text-slate-700 shadow-sm dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-slate-300">
-                <p className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                    <AlertCircle className="size-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                    Cara membaca angka di halaman ini
-                </p>
-                <ul className="list-disc list-inside space-y-1.5 text-[13px] leading-relaxed pl-1">
-                    <li><strong className="font-semibold">Pendapatan kotor:</strong> jumlah nilai quotation project yang <strong className="font-semibold">tanggal dibuatnya</strong> masuk dalam rentang filter — ini angka forecasting (rencana deal), bukan penerimaan kas.</li>
-                    <li><strong className="font-semibold">Pengeluaran project · Planning:</strong> total nominal alokasi biaya (<code className="text-xs rounded bg-white/70 dark:bg-slate-800 px-1">amount</code>) untuk baris selain top-up, yang dibuat dalam periode tersebut.</li>
-                    <li><strong className="font-semibold">Pengeluaran project · Realisasi:</strong> total <code className="text-xs rounded bg-white/70 dark:bg-slate-800 px-1">realized_amount</code> jika sudah diisi di monitoring, atau mengikuti <code className="text-xs rounded bg-white/70 dark:bg-slate-800 px-1">amount</code> — konsisten dengan laporan Realization Report.</li>
-                    <li><strong className="font-semibold">Top-up Scrum</strong> tidak dimasukkan ke pengeluaran project di sini (itu menambah quotation/MH).</li>
-                    <li><strong className="font-semibold">OPEX / CAPEX:</strong> dihitung untuk <strong className="font-semibold">satu tahun kalender penuh</strong> (tahun dari tanggal mulai filter), bukan hanya antara tanggal dari–sampai.</li>
+            <details className="group rounded-xl border border-blue-200/80 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/20">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200 [&::-webkit-details-marker]:hidden">
+                    <Info className="size-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    How to read these numbers
+                    <span className="ml-auto text-xs text-slate-500 group-open:hidden">Show</span>
+                    <span className="ml-auto text-xs text-slate-500 hidden group-open:inline">Hide</span>
+                </summary>
+                <ul className="px-4 pb-4 pt-0 text-[13px] text-slate-600 dark:text-slate-400 space-y-1.5 list-disc list-inside border-t border-blue-200/50 dark:border-blue-900/30">
+                    <li>
+                        <strong className="font-medium text-slate-800 dark:text-slate-200">Gross income</strong> — quotation value for projects created in the filter range (forecast).
+                    </li>
+                    <li>
+                        <strong className="font-medium text-slate-800 dark:text-slate-200">Project expenses</strong> — planning uses allocation amount; realization uses realized amount from monitoring when available.
+                    </li>
+                    <li>
+                        <strong className="font-medium text-slate-800 dark:text-slate-200">Top-up Scrum</strong> is excluded from project expenses here.
+                    </li>
+                    <li>
+                        <strong className="font-medium text-slate-800 dark:text-slate-200">OPEX / CAPEX</strong> — summed for the full calendar year of the filter start date.
+                    </li>
                 </ul>
-            </div>
+            </details>
 
-            {/* Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
-                {/* 1. Gross Income */}
-                <Card className="overflow-hidden border-none bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none transition-all hover:-translate-y-1">
-                    <div className="h-1 bg-blue-500"></div>
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-500">
-                                <DollarSign className="size-5" />
-                            </div>
-                            <span className="text-[10px] font-black italic tracking-widest text-slate-400 uppercase">Gross Revenue</span>
-                        </div>
-                        <CardTitle className="text-3xl font-black text-slate-900 dark:text-white">
-                            {formatCurrency(summary.gross_income)}
-                        </CardTitle>
-                        <CardDescription className="text-xs font-bold text-slate-400">
-                            Forecast: total quotation untuk project baru dalam rentang tanggal filter (bukan cash-in aktual).
-                        </CardDescription>
-                    </CardHeader>
-                </Card>
-
-                {/* 2. Project Expenses */}
-                <Card className="overflow-hidden border-none bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none transition-all hover:-translate-y-1">
-                    <div className="h-1 bg-amber-500"></div>
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-500">
-                                <Briefcase className="size-5" />
-                            </div>
-                            <span className="text-[10px] font-black italic tracking-widest text-slate-400 uppercase">Project Expenses</span>
-                        </div>
-                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-700/90 dark:text-amber-400/90 mb-1">Planning (anggaran)</p>
-                        <CardTitle className="text-3xl font-black text-slate-900 dark:text-white text-amber-600 dark:text-amber-400">
-                            {formatCurrency(summary.project_expenses)}
-                        </CardTitle>
-                        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-orange-700/90 dark:text-orange-400/90">Realisasi</p>
-                            <p className="text-xl font-black text-orange-700 dark:text-orange-400 tabular-nums">{formatCurrency(summary.project_expenses_realized ?? summary.project_expenses)}</p>
-                        </div>
-                        <CardDescription className="text-xs font-bold text-slate-400 mt-2">
-                            Tanpa baris top-up. Realisasi = nilai realization di Finance Monitoring atau amount jika belum direalisasi.
-                        </CardDescription>
-                    </CardHeader>
-                </Card>
-
-                {/* 3. Income After Project Expenses */}
-                <Card className="overflow-hidden border-none bg-slate-900 dark:bg-slate-800 shadow-2xl transition-all hover:-translate-y-1 ring-4 ring-primary/10">
-                    <div className="h-1 bg-primary"></div>
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-lg bg-primary/20 text-primary">
-                                <Activity className="size-5" />
-                            </div>
-                            <span className="text-[10px] font-black italic tracking-widest text-slate-500 uppercase">Margin After Project</span>
-                        </div>
-                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Forecast (gunakan planning expense)</p>
-                        <CardTitle className="text-3xl font-black text-white">
-                            {formatCurrency(summary.income_after_project_expenses)}
-                        </CardTitle>
-                        <div className="mt-3 pt-3 border-t border-slate-700/60 space-y-1">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Setelah realisasi</p>
-                            <p className="text-xl font-black text-emerald-300 tabular-nums">{formatCurrency(summary.income_after_project_expenses_realized ?? summary.income_after_project_expenses)}</p>
-                        </div>
-                        <CardDescription className="text-xs font-bold text-slate-400 mt-2">Pendapatan kotor − pengeluaran project (masing-masing basis)</CardDescription>
-                    </CardHeader>
-                </Card>
-
-                {/* 4. OPEX */}
-                <Card className="overflow-hidden border-none bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none transition-all hover:-translate-y-1">
-                    <div className="h-1 bg-rose-500"></div>
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-500">
-                                <CreditCard className="size-5" />
-                            </div>
-                            <span className="text-[10px] font-black italic tracking-widest text-slate-400 uppercase">OPEX Total</span>
-                        </div>
-                        <CardTitle className="text-3xl font-black text-slate-900 dark:text-white text-rose-500">
-                            {formatCurrency(summary.opex_total)}
-                        </CardTitle>
-                        <CardDescription className="text-xs font-bold text-slate-400">Tahun kalender tahun tanggal mulai filter (full year)</CardDescription>
-                    </CardHeader>
-                </Card>
-
-                {/* 5. CAPEX */}
-                <Card className="overflow-hidden border-none bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none transition-all hover:-translate-y-1">
-                    <div className="h-1 bg-indigo-500"></div>
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500">
-                                <LayoutDashboard className="size-5" />
-                            </div>
-                            <span className="text-[10px] font-black italic tracking-widest text-slate-400 uppercase">CAPEX Total</span>
-                        </div>
-                        <CardTitle className="text-3xl font-black text-slate-900 dark:text-white text-indigo-500">
-                            {formatCurrency(summary.capex_total)}
-                        </CardTitle>
-                        <CardDescription className="text-xs font-bold text-slate-400">Tahun kalender tahun tanggal mulai filter (full year)</CardDescription>
-                    </CardHeader>
-                </Card>
-
-                {/* 6. Net Revenue */}
-                <Card className={`overflow-hidden border-none shadow-xl transition-all hover:-translate-y-1 ${summary.net_revenue >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-600 text-white'}`}>
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-lg bg-white/20 text-white">
-                                <TrendingUp className="size-5" />
-                            </div>
-                            <span className="text-[10px] font-black italic tracking-widest text-white/60 uppercase">Net Revenue</span>
-                        </div>
-                        <p className="text-[10px] font-black uppercase tracking-wider text-white/65 mb-1">Forecast (− planning expense − OPEX − CAPEX)</p>
-                        <CardTitle className="text-4xl font-black">
-                            {formatCurrency(summary.net_revenue)}
-                        </CardTitle>
-                        <div className="mt-3 pt-3 border-t border-white/25 space-y-1">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-white/65">Setelah realisasi project</p>
-                            <p className="text-2xl font-black text-white tabular-nums">{formatCurrency(summary.net_revenue_realized ?? summary.net_revenue)}</p>
-                        </div>
-                        <CardDescription className="text-xs font-bold text-white/75 mt-2">Margin project (basis masing-masing) dikurangi OPEX+CAPEX tahun tersebut</CardDescription>
-                    </CardHeader>
-                </Card>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-                {/* Management Table */}
-                <div className="lg:col-span-8 flex flex-col gap-6">
-                    <Card className="border-none shadow-2xl dark:bg-slate-900/50 backdrop-blur-md">
-                        <CardHeader className="border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between pb-6">
-                            <div>
-                                <CardTitle className="text-xl font-black italic tracking-tight text-slate-900 dark:text-white">FINANCIAL RECORDS</CardTitle>
-                                <CardDescription className="font-medium text-slate-500">Listing all OPEX and CAPEX entries in the selected range.</CardDescription>
-                            </div>
-                            <Button size="sm" className="bg-primary hover:bg-primary/90 text-white font-bold rounded-xl flex items-center gap-2 px-4 h-10 shadow-lg shadow-primary/20">
-                                <Plus className="size-4" /> ADD SYSTEM ENTRY
-                            </Button>
+            {loading ? (
+                <div className="flex items-center justify-center py-20 text-slate-500">
+                    <Loader2 className="size-8 animate-spin text-primary mr-3" />
+                    Loading report…
+                </div>
+            ) : (
+                <>
+                    <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base font-semibold">Profit &amp; loss summary</CardTitle>
+                            <CardDescription>
+                                Period: {filters.start_date} — {filters.end_date}
+                            </CardDescription>
                         </CardHeader>
-                        <CardContent className="p-0">
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-black italic tracking-[0.2em] text-slate-400 uppercase">
-                                            <th className="px-6 py-4 text-left">Date</th>
-                                            <th className="px-6 py-4 text-left">Type</th>
-                                            <th className="px-6 py-4 text-left">Description</th>
-                                            <th className="px-6 py-4 text-right">Monthly</th>
-                                            <th className="px-6 py-4 text-right">Yearly</th>
-                                            <th className="px-6 py-4 text-center">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
-                                        {summary.records.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="6" className="px-6 py-12 text-center text-slate-400 italic font-medium">No records found for this period. Use the form to add one.</td>
-                                            </tr>
-                                        ) : (
-                                            summary.records.map((record) => (
-                                                <tr key={record.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                                                    <td className="px-6 py-4 text-sm font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                                                        {new Date(record.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric'})}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <span className={`text-[10px] font-black italic tracking-widest px-2.5 py-1 rounded-lg ${record.type === 'OPEX' ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'}`}>
-                                                            {record.type}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-sm font-medium text-slate-700 dark:text-slate-300">
-                                                        {record.description}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right text-sm font-black text-slate-900 dark:text-white tabular-nums">
-                                                        {record.type === 'OPEX' ? formatCurrency(record.amount) : '-'}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right text-sm font-black text-slate-900 dark:text-white tabular-nums">
-                                                        {record.type === 'OPEX' ? formatCurrency(record.amount * 12) : '-'}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <button 
-                                                            onClick={() => handleDeleteRecord(record.id)}
-                                                            className="p-2 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all opacity-0 group-hover:opacity-100"
+                        <CardContent className="p-0 pb-2">
+                            <SectionTable>
+                                <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                                    <tr>
+                                        <th className="px-4 py-3 font-medium text-left w-[40%]">Line item</th>
+                                        <th className="px-4 py-3 font-medium text-right">Forecast / planning</th>
+                                        <th className="px-4 py-3 font-medium text-right">Realization</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                    {plRows.map((row) => (
+                                        <tr
+                                            key={row.label}
+                                            className={
+                                                row.total
+                                                    ? 'bg-slate-50/90 dark:bg-slate-800/40 font-semibold'
+                                                    : row.emphasis
+                                                      ? 'bg-primary/5 dark:bg-primary/10'
+                                                      : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/20'
+                                            }
+                                        >
+                                            <td className="px-4 py-3 align-top">
+                                                <div className="font-medium text-slate-900 dark:text-white">{row.label}</div>
+                                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug max-w-md">
+                                                    {row.hint}
+                                                </p>
+                                            </td>
+                                            <td
+                                                className={`px-4 py-3 text-right tabular-nums align-top whitespace-nowrap ${
+                                                    row.negative ? 'text-amber-700 dark:text-amber-400' : 'text-slate-900 dark:text-white'
+                                                } ${row.total && summary.net_revenue >= 0 ? 'text-emerald-600 dark:text-emerald-400' : ''} ${
+                                                    row.total && summary.net_revenue < 0 ? 'text-rose-600 dark:text-rose-400' : ''
+                                                }`}
+                                            >
+                                                {row.negative && row.forecast ? '− ' : ''}
+                                                {formatCurrency(row.forecast)}
+                                            </td>
+                                            <td className="px-4 py-3 text-right tabular-nums align-top whitespace-nowrap text-slate-700 dark:text-slate-300">
+                                                {row.realized != null ? (
+                                                    <>
+                                                        {row.negative && row.realized ? '− ' : ''}
+                                                        <span
+                                                            className={
+                                                                row.total
+                                                                    ? netRevenueRealized >= 0
+                                                                        ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                                                                        : 'text-rose-600 dark:text-rose-400 font-semibold'
+                                                                    : ''
+                                                            }
                                                         >
-                                                            <Trash2 className="size-4" />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                            {formatCurrency(row.realized)}
+                                                        </span>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-slate-400">—</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </SectionTable>
                         </CardContent>
                     </Card>
-                </div>
 
-                {/* Side Entry Form */}
-                <div className="lg:col-span-4 flex flex-col gap-6">
-                    <Card className="border-none shadow-2xl bg-white dark:bg-slate-900 transition-all hover:shadow-primary/10">
-                        <CardHeader className="pb-4">
-                            <CardTitle className="text-lg font-black italic tracking-tight flex items-center gap-2 text-slate-900 dark:text-white">
-                                <Plus className="size-5 text-primary" /> NEW ENTRY
-                            </CardTitle>
-                            <CardDescription className="text-slate-500 dark:text-slate-400 font-medium tracking-tight">Record new operational or capital expenses.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <form onSubmit={handleAddRecord} className="flex flex-col gap-5">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black italic tracking-widest text-slate-400 dark:text-slate-500 uppercase">Entry Type</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setNewRecord({...newRecord, type: 'OPEX'})}
-                                            className={`py-3 rounded-xl font-black italic tracking-widest text-xs transition-all ${newRecord.type === 'OPEX' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-white'}`}
-                                        >
-                                            OPEX
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setNewRecord({...newRecord, type: 'CAPEX', frequency: 'one-time'})}
-                                            className={`py-3 rounded-xl font-black italic tracking-widest text-xs transition-all ${newRecord.type === 'CAPEX' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-white'}`}
-                                        >
-                                            CAPEX
-                                        </button>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                        {[
+                            { icon: DollarSign, label: 'Gross', value: formatCurrency(summary.gross_income), color: 'text-blue-600' },
+                            { icon: Briefcase, label: 'Project (plan)', value: formatCurrency(summary.project_expenses), color: 'text-amber-600' },
+                            { icon: Briefcase, label: 'Project (real)', value: formatCurrency(projectExpensesRealized), color: 'text-orange-600' },
+                            { icon: Activity, label: 'Margin (plan)', value: formatCurrency(summary.income_after_project_expenses), color: 'text-slate-700 dark:text-slate-200' },
+                            { icon: CreditCard, label: 'OPEX', value: formatCurrency(summary.opex_total), color: 'text-rose-600' },
+                            { icon: LayoutDashboard, label: 'Net (real)', value: formatCurrency(netRevenueRealized), color: netRevenueRealized >= 0 ? 'text-emerald-600' : 'text-rose-600' },
+                        ].map(({ icon: Icon, label, value, color }) => (
+                            <Card key={label} className="border-slate-200 dark:border-slate-800 shadow-sm">
+                                <CardContent className="p-3">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Icon className={`size-4 ${color}`} />
+                                        <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">{label}</span>
                                     </div>
-                                </div>
+                                    <p className={`text-sm font-bold tabular-nums truncate ${color}`}>{value}</p>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
 
-                                {newRecord.type === 'OPEX' && (
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-[10px] font-black italic tracking-widest text-slate-400 dark:text-slate-500 uppercase">Input Duration</label>
-                                            <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-lg border border-primary/20">{newRecord.duration} {newRecord.duration > 1 ? 'Months' : 'Month'}</span>
-                                        </div>
-                                        <div className="px-1">
-                                            <input 
-                                                type="range"
-                                                min="1"
-                                                max="12"
-                                                step="1"
-                                                value={newRecord.duration}
-                                                onChange={(e) => setNewRecord({...newRecord, duration: e.target.value})}
-                                                className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
-                                            />
-                                            <div className="flex justify-between text-[8px] font-black text-slate-400 uppercase tracking-tighter mt-1 opacity-50">
-                                                <span>1 MO</span>
-                                                <span>6 MO</span>
-                                                <span>12 MO</span>
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        <div className="lg:col-span-8">
+                            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                                <CardHeader className="border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between gap-3 pb-4">
+                                    <div>
+                                        <CardTitle className="text-base font-semibold">OPEX &amp; CAPEX records</CardTitle>
+                                        <CardDescription>Entries in the selected date range</CardDescription>
+                                    </div>
+                                    <Button size="sm" className="gap-2 shrink-0">
+                                        <Plus className="size-4" />
+                                        Add system entry
+                                    </Button>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <SectionTable className="border-0 rounded-none">
+                                        <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-xs uppercase tracking-wide">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left font-medium">Date</th>
+                                                <th className="px-4 py-3 text-left font-medium">Type</th>
+                                                <th className="px-4 py-3 text-left font-medium">Description</th>
+                                                <th className="px-4 py-3 text-right font-medium">Monthly</th>
+                                                <th className="px-4 py-3 text-right font-medium">Yearly</th>
+                                                <th className="px-4 py-3 text-center font-medium w-16"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            {summary.records.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={6} className="px-4 py-12 text-center text-slate-400 text-sm">
+                                                        No records in this period. Add one using the form on the right.
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                summary.records.map((record) => (
+                                                    <tr
+                                                        key={record.id}
+                                                        className="group hover:bg-slate-50 dark:hover:bg-slate-800/30"
+                                                    >
+                                                        <td className="px-4 py-3 whitespace-nowrap text-slate-600 dark:text-slate-400">
+                                                            {new Date(record.date).toLocaleDateString('id-ID', {
+                                                                day: '2-digit',
+                                                                month: 'short',
+                                                                year: 'numeric',
+                                                            })}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={
+                                                                    record.type === 'OPEX'
+                                                                        ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400'
+                                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400'
+                                                                }
+                                                            >
+                                                                {record.type}
+                                                            </Badge>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300 max-w-[200px] truncate" title={record.description}>
+                                                            {record.description}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right tabular-nums font-medium">
+                                                            {record.type === 'OPEX' ? formatCurrency(record.amount) : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right tabular-nums font-medium">
+                                                            {record.type === 'OPEX' ? formatCurrency(record.amount * 12) : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteRecord(record.id)}
+                                                                className="p-2 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                                                aria-label="Delete record"
+                                                            >
+                                                                <Trash2 className="size-4" />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </SectionTable>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <div className="lg:col-span-4">
+                            <Card className="border-slate-200 dark:border-slate-800 shadow-sm sticky top-4">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                                        <Plus className="size-4 text-primary" />
+                                        New entry
+                                    </CardTitle>
+                                    <CardDescription>Record operational (OPEX) or capital (CAPEX) expense</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <form onSubmit={handleAddRecord} className="flex flex-col gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Entry type</label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNewRecord({ ...newRecord, type: 'OPEX' })}
+                                                    className={`py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                                                        newRecord.type === 'OPEX'
+                                                            ? 'bg-primary text-white'
+                                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                                    }`}
+                                                >
+                                                    OPEX
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNewRecord({ ...newRecord, type: 'CAPEX', frequency: 'one-time' })}
+                                                    className={`py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                                                        newRecord.type === 'CAPEX'
+                                                            ? 'bg-primary text-white'
+                                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                                    }`}
+                                                >
+                                                    CAPEX
+                                                </button>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
 
-                                <div className="space-y-4">
-                                    {newRecord.duration == 1 ? (
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black italic tracking-widest text-slate-400 dark:text-slate-500 uppercase">Amount (IDR)</label>
-                                            <Input 
-                                                type="number"
-                                                placeholder="0"
-                                                value={newRecord.amount}
-                                                onChange={(e) => handleAmountChange(e.target.value, 'amount')}
-                                                className="bg-slate-50 dark:bg-slate-800 border-none h-12 rounded-xl text-lg font-black tracking-tight focus-visible:ring-primary text-slate-900 dark:text-white"
+                                        {newRecord.type === 'OPEX' && (
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Duration</label>
+                                                    <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">
+                                                        {newRecord.duration} {newRecord.duration > 1 ? 'months' : 'month'}
+                                                    </span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="12"
+                                                    step="1"
+                                                    value={newRecord.duration}
+                                                    onChange={(e) => setNewRecord({ ...newRecord, duration: e.target.value })}
+                                                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                                                />
+                                                <div className="flex justify-between text-[10px] text-slate-400">
+                                                    <span>1 mo</span>
+                                                    <span>6 mo</span>
+                                                    <span>12 mo</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-3">
+                                            {newRecord.duration == 1 ? (
+                                                <div className="space-y-1.5">
+                                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Amount (IDR)</label>
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="0"
+                                                        value={newRecord.amount}
+                                                        onChange={(e) => handleAmountChange(e.target.value, 'amount')}
+                                                        required
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Monthly</label>
+                                                        <Input
+                                                            type="number"
+                                                            placeholder="0"
+                                                            value={newRecord.monthly_amount}
+                                                            onChange={(e) => handleAmountChange(e.target.value, 'monthly')}
+                                                            required
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Yearly</label>
+                                                        <Input
+                                                            type="number"
+                                                            placeholder="0"
+                                                            value={newRecord.yearly_amount}
+                                                            onChange={(e) => handleAmountChange(e.target.value, 'yearly')}
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                {newRecord.frequency === 'one-time' ? 'Transaction date' : 'Start date'}
+                                            </label>
+                                            <Input
+                                                type="date"
+                                                value={newRecord.date}
+                                                onChange={(e) => setNewRecord({ ...newRecord, date: e.target.value })}
+                                                required
+                                            />
+                                            {newRecord.frequency !== 'one-time' && (
+                                                <p className="text-[11px] text-slate-500">
+                                                    Generates 12 monthly records from this date.
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+                                            <Input
+                                                placeholder="What was this for?"
+                                                value={newRecord.description}
+                                                onChange={(e) => setNewRecord({ ...newRecord, description: e.target.value })}
                                                 required
                                             />
                                         </div>
-                                    ) : (
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black italic tracking-widest text-slate-400 dark:text-slate-500 uppercase">Monthly (IDR)</label>
-                                                <Input 
-                                                    type="number"
-                                                    placeholder="0"
-                                                    value={newRecord.monthly_amount}
-                                                    onChange={(e) => handleAmountChange(e.target.value, 'monthly')}
-                                                    className="bg-slate-50 dark:bg-slate-800 border-none h-12 rounded-xl text-sm font-black tracking-tight focus-visible:ring-primary text-slate-900 dark:text-white"
-                                                    required
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black italic tracking-widest text-slate-400 dark:text-slate-500 uppercase">Yearly (IDR)</label>
-                                                <Input 
-                                                    type="number"
-                                                    placeholder="0"
-                                                    value={newRecord.yearly_amount}
-                                                    onChange={(e) => handleAmountChange(e.target.value, 'yearly')}
-                                                    className="bg-slate-50 dark:bg-slate-800 border-none h-12 rounded-xl text-sm font-black tracking-tight focus-visible:ring-primary text-slate-900 dark:text-white"
-                                                    required
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black italic tracking-widest text-slate-400 dark:text-slate-500 uppercase">
-                                        {newRecord.frequency === 'one-time' ? 'Transaction Date' : 'Start Date'}
-                                    </label>
-                                    <Input 
-                                        type="date"
-                                        value={newRecord.date}
-                                        onChange={(e) => setNewRecord({...newRecord, date: e.target.value})}
-                                        className="bg-slate-50 dark:bg-slate-800 border-none h-12 rounded-xl font-bold tracking-tight focus-visible:ring-primary text-slate-900 dark:text-white"
-                                        required
-                                    />
-                                    {newRecord.frequency !== 'one-time' && (
-                                        <p className="text-[10px] text-slate-400 font-bold italic mt-1">
-                                            * This will generate 12 monthly records starting from this date.
-                                        </p>
-                                    )}
-                                </div>
+                                        <Button type="submit" className="w-full">
+                                            {newRecord.frequency === 'one-time' ? 'Save entry' : 'Save recurring entries'}
+                                        </Button>
+                                    </form>
+                                </CardContent>
+                            </Card>
 
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black italic tracking-widest text-slate-400 dark:text-slate-500 uppercase">Description</label>
-                                    <Input 
-                                        placeholder="What was this for?"
-                                        value={newRecord.description}
-                                        onChange={(e) => setNewRecord({...newRecord, description: e.target.value})}
-                                        className="bg-slate-50 dark:bg-slate-800 border-none h-12 rounded-xl font-bold tracking-tight focus-visible:ring-primary text-slate-900 dark:text-white"
-                                        required
-                                    />
-                                </div>
-
-                                <Button type="submit" className="w-full h-14 rounded-xl bg-primary hover:bg-primary/90 text-white font-black italic tracking-widest text-sm shadow-xl shadow-primary/20 mt-2">
-                                    {newRecord.frequency === 'one-time' ? 'SECURE TRANSACTION' : 'SECURE RECURRING ENTRIES'}
-                                </Button>
-                            </form>
-                        </CardContent>
-                    </Card>
-
-                    <div className="p-5 rounded-2xl bg-primary/5 border border-primary/10 flex items-start gap-4">
-                        <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
-                            <AlertCircle className="size-5" />
-                        </div>
-                        <div className="space-y-1">
-                            <h4 className="text-xs font-black italic text-slate-800 dark:text-white uppercase tracking-tight">Pro Tip</h4>
-                            <p className="text-[11px] font-medium text-slate-500 leading-relaxed">
-                                Pakai Forecast untuk budgeting; bandingkan dengan baris Realisasi setelah mengisi nominal realization di Finance Monitoring. Detail per project ada di Finance → Realization Report.
-                            </p>
+                            <div className="mt-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 flex gap-3">
+                                <AlertCircle className="size-5 text-primary shrink-0 mt-0.5" />
+                                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                    Use <strong className="font-medium">Forecast</strong> for budgeting; compare with{' '}
+                                    <strong className="font-medium">Realization</strong> after filling amounts in Finance Monitoring.
+                                    Per-project detail is in Realization Report.
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
+                </>
+            )}
         </div>
     );
 }

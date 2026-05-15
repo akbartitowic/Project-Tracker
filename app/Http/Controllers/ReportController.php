@@ -28,6 +28,27 @@ class ReportController extends Controller
         };
     }
 
+    private function taskEstimatedHoursForStats(Task $task): float
+    {
+        if ($this->normalizeTaskStatus($task->status) === 'To Do') {
+            return 0.0;
+        }
+
+        return (float) ($task->estimated_hours ?? 0);
+    }
+
+    private function sumEstimatedHoursByStatuses($tasks, array $statuses): float
+    {
+        return (float) $tasks->sum(function ($task) use ($statuses) {
+            $normalized = $this->normalizeTaskStatus($task->status);
+            if (!in_array($normalized, $statuses, true)) {
+                return 0.0;
+            }
+
+            return (float) ($task->estimated_hours ?? 0);
+        });
+    }
+
     public function generate(Request $request)
     {
         $request->validate([
@@ -133,15 +154,21 @@ class ReportController extends Controller
             })
             ->values();
 
-        // 3. Scrum Manhours (aligned with project quota usage based on task estimates)
-        $usedInRange = (float) $tasksInRange->sum(function ($task) {
-            return (float) ($task->estimated_hours ?? 0);
-        });
-        $totalUsed = (float) Task::where('project_id', $project->id)->sum('estimated_hours');
+        // 3. Scrum Manhours (task estimates; To Do status is excluded from usage)
+        $projectTasksForStats = Task::where('project_id', $project->id)->get();
+        $usedInRange = (float) $tasksInRange->sum(fn ($task) => $this->taskEstimatedHoursForStats($task));
+        $totalUsed = (float) $projectTasksForStats->sum(fn ($task) => $this->taskEstimatedHoursForStats($task));
+        $doneHours = $this->sumEstimatedHoursByStatuses($projectTasksForStats, ['Done']);
+        $inProgressHours = $this->sumEstimatedHoursByStatuses(
+            $projectTasksForStats,
+            ['In Progress', 'Review', 'Reopen']
+        );
         $totalQuota = (float) ($project->total_manhours ?? 0);
         $stats = [
             'used_in_range' => $usedInRange,
             'total_used' => $totalUsed,
+            'done_hours' => $doneHours,
+            'in_progress_hours' => $inProgressHours,
             'total_quota' => $totalQuota,
             'remaining' => $totalQuota - $totalUsed,
             'actual_logged_in_range' => (float) Manhour::where('project_id', $project->id)

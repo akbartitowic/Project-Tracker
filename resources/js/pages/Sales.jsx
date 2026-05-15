@@ -50,6 +50,24 @@ function toDatetimeLocalValue(iso) {
   return `${s.slice(0, 10)}T09:00`;
 }
 
+function formatMeetingDateTime(iso) {
+  if (!iso) return '';
+  const normalized = String(iso).replace(' ', 'T');
+  const d = new Date(normalized);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleString('id-ID', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+  // Fallback for unexpected formats
+  const raw = normalized.replace('T', ' ');
+  return raw.length >= 16 ? raw.slice(0, 16) : raw;
+}
+
 export default function Sales() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -82,6 +100,7 @@ export default function Sales() {
     email: '',
     phone: '',
     estimated_value: '',
+    final_deal_value: '',
     notes: '',
     lead_started_at: getLocalDateYmd(),
     compro_url: '',
@@ -128,6 +147,7 @@ export default function Sales() {
       email: '',
       phone: '',
       estimated_value: '',
+      final_deal_value: '',
       notes: '',
       lead_started_at: getLocalDateYmd(),
       compro_url: '',
@@ -181,6 +201,7 @@ export default function Sales() {
         email: p.email || '',
         phone: p.phone || '',
         estimated_value: p.estimated_value != null ? String(p.estimated_value) : '',
+        final_deal_value: p.final_deal_value != null ? String(p.final_deal_value) : '',
         notes: p.notes || '',
         lead_started_at: p.lead_started_at ? String(p.lead_started_at).slice(0, 10) : getLocalDateYmd(),
         compro_url: p.compro_url || '',
@@ -202,7 +223,16 @@ export default function Sales() {
     loadPitch();
   }, [loadPitch]);
 
-  const currentStepKey = pitch?.current_step || 'new_prospect';
+  const stepParam = searchParams.get('step');
+  const currentStepKey = useMemo(() => {
+    const reachedKey = pitch?.current_step || 'new_prospect';
+    const reachedIdx = STEPS.findIndex((s) => s.key === reachedKey);
+    if (!stepParam) return reachedKey;
+    const wantedIdx = STEPS.findIndex((s) => s.key === stepParam);
+    // Only allow viewing valid steps that have already been reached.
+    if (wantedIdx >= 0 && wantedIdx <= reachedIdx) return stepParam;
+    return reachedKey;
+  }, [pitch?.current_step, stepParam]);
 
   const goTab = (next) => {
     setTab(next);
@@ -244,6 +274,13 @@ export default function Sales() {
 
   const saveDetails = async () => {
     if (!pitch?.id) return;
+    const fallbackMeetingAt = toDatetimeLocalValue(new Date().toISOString());
+    const meetingAtPayload = (() => {
+      const raw = form.meeting_at?.trim() || '';
+      if (raw) return raw;
+      if (currentStepKey === 'meeting') return fallbackMeetingAt;
+      return null;
+    })();
     setSaving(true);
     try {
       await fetchAPI(`/sales-pitches/${pitch.id}`, {
@@ -257,12 +294,13 @@ export default function Sales() {
           email: form.email || null,
           phone: form.phone || null,
           estimated_value: form.estimated_value !== '' ? Number(form.estimated_value) : null,
+          final_deal_value: form.final_deal_value !== '' ? Number(form.final_deal_value) : null,
           notes: form.notes || null,
           lead_started_at: form.lead_started_at || getLocalDateYmd(),
           compro_url: form.compro_url.trim() || null,
           proposal_url: form.proposal_url.trim() || null,
           quotation_url: form.quotation_url.trim() || null,
-          meeting_at: form.meeting_at?.trim() || null,
+          meeting_at: meetingAtPayload,
           meeting_location: form.meeting_location.trim() || null,
           meeting_mode: form.meeting_mode !== FK_NONE ? form.meeting_mode : null,
         }),
@@ -305,6 +343,15 @@ export default function Sales() {
     await setStepInternal(key);
   };
 
+  const goToStepFromFlow = (key) => {
+    if (!pitch?.id) return;
+    const reachedIdx = STEPS.findIndex((s) => s.key === (pitch.current_step || 'new_prospect'));
+    const targetIdx = STEPS.findIndex((s) => s.key === key);
+    if (targetIdx < 0 || targetIdx > reachedIdx) return;
+    if (!can('sales.update') || pitch.outcome) return;
+    setSearchParams({ step: key }, { replace: true });
+  };
+
   const stepMundur = async () => {
     if (!pitch) return;
     const curIdx = STEPS.findIndex((s) => s.key === pitch.current_step);
@@ -342,7 +389,7 @@ export default function Sales() {
       const loc = (form.meeting_location || '').trim() || String(pitch.meeting_location || '').trim();
       const mode = (form.meeting_mode !== FK_NONE ? form.meeting_mode : '') || String(pitch.meeting_mode || '');
       if (!at || !loc || (mode !== 'online' && mode !== 'offline')) {
-        showFeedback('Data meeting', 'Lengkapi tanggal & jam, lokasi, dan online/offline sebelum maju (atau simpan lewat Simpan detail).');
+        showFeedback('Data meeting', 'Lengkapi tanggal & jam, lokasi, dan online/offline sebelum maju (atau simpan lewat Simpan draft).');
         return;
       }
       await patchPitchFields({
@@ -377,14 +424,41 @@ export default function Sales() {
 
   const finalizeOutcome = async (outcome) => {
     if (!pitch?.id) return;
+    if (outcome === 'win') {
+      const raw = String(form.final_deal_value ?? '').trim();
+      const fromSaved =
+        pitch.final_deal_value != null && pitch.final_deal_value !== ''
+          ? String(pitch.final_deal_value)
+          : '';
+      const valStr = raw !== '' ? raw : fromSaved;
+      const num = valStr === '' ? NaN : Number(valStr);
+      if (!Number.isFinite(num) || num < 0) {
+        showFeedback('Harga final', 'Isi harga final deal (angka ≥ 0) sebelum Win.');
+        return;
+      }
+      setSaving(true);
+      try {
+        await fetchAPI(`/sales-pitches/${pitch.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ outcome: 'win', final_deal_value: num }),
+        });
+        showFeedback('Berhasil', 'Pitch ditandai sebagai Win.');
+        navigate('/sales?tab=win');
+      } catch (e) {
+        showFeedback('Gagal', e.message);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     setSaving(true);
     try {
       await fetchAPI(`/sales-pitches/${pitch.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ outcome }),
+        body: JSON.stringify({ outcome: 'lost' }),
       });
-      showFeedback('Berhasil', outcome === 'win' ? 'Pitch ditandai sebagai Win.' : 'Pitch ditandai sebagai Lost.');
-      navigate('/sales?tab=' + (outcome === 'win' ? 'win' : 'lost'));
+      showFeedback('Berhasil', 'Pitch ditandai sebagai Lost.');
+      navigate('/sales?tab=lost');
     } catch (e) {
       showFeedback('Gagal', e.message);
     } finally {
@@ -392,16 +466,66 @@ export default function Sales() {
     }
   };
 
-  const stepIndex = useMemo(() => STEPS.findIndex((s) => s.key === currentStepKey), [currentStepKey]);
-  const maxReachableIdx = stepIndex >= 0 ? stepIndex : 0;
+  const deleteDraftForCurrentStep = async () => {
+    if (!pitch?.id) return;
+    let payload = null;
+    if (currentStepKey === 'sent_compro') {
+      payload = { compro_url: null };
+    } else if (currentStepKey === 'proposal_sent') {
+      payload = { proposal_url: null, quotation_url: null };
+    } else if (currentStepKey === 'meeting') {
+      payload = { meeting_at: null, meeting_location: null, meeting_mode: null };
+    } else if (currentStepKey === 'negotiation' || currentStepKey === 'closed') {
+      payload = { final_deal_value: null };
+    }
+    if (!payload) {
+      showFeedback('Tidak ada draft', 'Step ini tidak memiliki field draft yang bisa dihapus.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await fetchAPI(`/sales-pitches/${pitch.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      await loadPitch();
+      showFeedback('Draft dihapus', 'Draft pada step aktif berhasil dihapus.');
+    } catch (e) {
+      showFeedback('Gagal hapus draft', e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  const stepParam = searchParams.get('step');
+  const stepIndex = useMemo(() => STEPS.findIndex((s) => s.key === currentStepKey), [currentStepKey]);
+  const maxReachableIdx = useMemo(() => {
+    const reached = STEPS.findIndex((s) => s.key === (pitch?.current_step || 'new_prospect'));
+    return reached >= 0 ? reached : 0;
+  }, [pitch?.current_step]);
+  // Summary should reflect saved draft from backend, not unsaved local edits.
+  const comproHref = String(pitch?.compro_url || '').trim();
+  const proposalHref = String(pitch?.proposal_url || '').trim();
+  const quotationHref = String(pitch?.quotation_url || '').trim();
+  const meetingAtSummary = pitch?.meeting_at ? String(pitch.meeting_at) : '';
+  const meetingLocationSummary = String(pitch?.meeting_location || '').trim();
+  const meetingModeSummary = String(pitch?.meeting_mode || '');
+  const finalDealSummary = pitch?.final_deal_value != null ? String(pitch.final_deal_value) : '';
+  const leadStartedSummary = pitch?.lead_started_at ? String(pitch.lead_started_at).slice(0, 10) : '';
+  const isStepGroupDisabled = (stepKey) => {
+    if (isNewPitch || !pitch) return false;
+    const idx = STEPS.findIndex((s) => s.key === stepKey);
+    return idx >= 0 && idx < maxReachableIdx;
+  };
 
   useEffect(() => {
     if (isNewPitch || !pitchId || !pitch?.current_step) return;
-    if (stepParam === pitch.current_step) return;
-    setSearchParams({ step: pitch.current_step }, { replace: true });
-  }, [isNewPitch, pitchId, pitch?.current_step, pitch?.id, stepParam, setSearchParams]);
+    const reachedIdx = STEPS.findIndex((s) => s.key === pitch.current_step);
+    const wantedIdx = stepParam ? STEPS.findIndex((s) => s.key === stepParam) : -1;
+    const invalidParam = !stepParam || wantedIdx < 0 || wantedIdx > reachedIdx;
+    if (invalidParam) {
+      setSearchParams({ step: pitch.current_step }, { replace: true });
+    }
+  }, [isNewPitch, pitchId, pitch?.current_step, stepParam, setSearchParams]);
 
   if (isWizard) {
     if (!isNewPitch && pitchId && loadingPitch) {
@@ -420,7 +544,9 @@ export default function Sales() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{isNewPitch ? 'New Pitch' : 'Detail Pitch'}</h1>
           <p className="text-slate-500 mt-1 text-sm">
-            Mundur / Maju memindahkan satu tahap sekaligus membawa data URL. Tab hanya untuk kembali ke step yang sudah pernah dicapai. Simpan detail secara berkala. Pada step Closed, pilih Win atau Lost.
+            {isNewPitch
+              ? 'Isi data lead baru. Setelah disimpan, lanjutkan ke step berikutnya (Sent Compro, Proposal, dan seterusnya) satu per satu.'
+              : 'Prev / Next memindahkan satu tahap sekaligus membawa data URL. Klik step yang sudah dicapai pada progress flow untuk meninjau. Simpan draft secara berkala. Pada step Closed: Win memerlukan harga final; Lost langsung ke tab Lost.'}
           </p>
         </div>
 
@@ -431,8 +557,7 @@ export default function Sales() {
                 <div>
                   <CardTitle className="text-base">Status pipeline</CardTitle>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1 max-w-xl">
-                    Tab: hanya ke step yang sudah pernah dicapai (tidak loncat maju). Gunakan tombol Mundur / Maju untuk pindah satu tahap; data URL dari step sebelumnya ikut dibawa.
-                    Alamat memakai query ?step=.
+                    Progress flow menunjukkan tahap pipeline. Klik step yang sudah dicapai untuk meninjau; gunakan Prev / Next untuk maju satu tahap.
                   </p>
                 </div>
                 {pitch.outcome && (
@@ -443,234 +568,265 @@ export default function Sales() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
-                {STEPS.map((s, idx) => {
-                  const active = s.key === currentStepKey;
-                  const done = maxReachableIdx > idx;
-                  return (
-                    <Button
-                      key={s.key}
-                      type="button"
-                      size="sm"
-                      variant={active ? 'default' : done ? 'secondary' : 'outline'}
-                      disabled={idx > maxReachableIdx || !can('sales.update') || !!pitch.outcome}
-                      onClick={() => goToStepFromTab(s.key)}
-                    >
-                      {idx + 1}. {s.label}
-                    </Button>
-                  );
-                })}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={stepIndex <= 0 || !can('sales.update') || !!pitch.outcome || saving}
-                  onClick={stepMundur}
-                >
-                  <ChevronLeft className="size-4 mr-1" />
-                  Mundur
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={stepIndex < 0 || stepIndex >= STEPS.length - 1 || !can('sales.update') || !!pitch.outcome || saving}
-                  onClick={stepMaju}
-                >
-                  Maju
-                  <ChevronRight className="size-4 ml-1" />
-                </Button>
-              </div>
+              <nav aria-label="Progress pipeline" className="border-b border-slate-200 dark:border-slate-700 pb-6">
+                <ol className="flex w-full items-start">
+                  {STEPS.map((s, idx) => {
+                    const isActive = s.key === currentStepKey;
+                    const isLocked = idx > maxReachableIdx;
+                    const isComplete = idx < maxReachableIdx || (idx === maxReachableIdx && !isActive);
+                    const isClickable = !isLocked && !pitch.outcome && can('sales.update');
+                    const connectorDone = idx < maxReachableIdx;
+
+                    return (
+                      <li key={s.key} className="flex flex-1 min-w-0 items-start last:flex-none">
+                        <div className="flex flex-col items-center flex-1 min-w-0">
+                          <button
+                            type="button"
+                            disabled={!isClickable}
+                            onClick={() => goToStepFromFlow(s.key)}
+                            className={[
+                              'relative z-10 flex size-9 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-all',
+                              isActive && 'border-primary bg-primary text-white shadow-md shadow-primary/25 scale-110',
+                              !isActive && isComplete && 'border-emerald-500 bg-emerald-500 text-white',
+                              !isActive && !isComplete && !isLocked && 'border-slate-300 bg-white text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300',
+                              isLocked && 'border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500',
+                              isClickable && !isActive && 'cursor-pointer hover:border-primary/60 hover:bg-primary/5',
+                              !isClickable && 'cursor-default',
+                            ].filter(Boolean).join(' ')}
+                          >
+                            {isComplete && !isActive ? (
+                              <Check className="size-4" strokeWidth={3} />
+                            ) : (
+                              idx + 1
+                            )}
+                          </button>
+                          <div className="mt-2 w-full px-1 text-center">
+                            <p
+                              className={[
+                                'text-[10px] sm:text-xs font-semibold leading-tight',
+                                isActive && 'text-primary',
+                                isComplete && !isActive && 'text-emerald-600 dark:text-emerald-400',
+                                isLocked && 'text-slate-400 dark:text-slate-500',
+                                !isActive && !isComplete && !isLocked && 'text-slate-600 dark:text-slate-400',
+                              ].filter(Boolean).join(' ')}
+                            >
+                              {s.label}
+                            </p>
+                          </div>
+                        </div>
+                        {idx < STEPS.length - 1 && (
+                          <div
+                            className={[
+                              'mt-[18px] h-0.5 flex-1 min-w-[8px] mx-0.5 sm:mx-1 rounded-full transition-colors',
+                              connectorDone ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700',
+                            ].join(' ')}
+                            aria-hidden
+                          />
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </nav>
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/50 p-4 space-y-4">
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                   {STEPS.find((x) => x.key === currentStepKey)?.label}
                 </p>
 
-                {stepIndex >= 2 && (
-                  <div className="rounded-md border border-slate-200 bg-white/90 dark:border-slate-600 dark:bg-slate-950/50 p-3 space-y-2 text-sm">
-                    <p className="font-medium text-slate-700 dark:text-slate-200">Data tahap sebelumnya</p>
-                    <div className="space-y-1.5 text-slate-600 dark:text-slate-300">
-                      <div className="flex flex-wrap gap-x-2 gap-y-1 items-baseline">
-                        <span className="text-slate-500 shrink-0">URL Compro</span>
-                        {(() => {
-                          const href = ((form.compro_url || '').trim() || String(pitch.compro_url || '').trim());
-                          return href ? (
-                            <a href={href.startsWith('http') ? href : `https://${href}`} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">
-                              {href}
-                            </a>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          );
-                        })()}
+                {stepIndex > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ringkasan step sebelumnya</p>
+                    <div className="rounded-md border border-slate-200 bg-white/90 dark:border-slate-600 dark:bg-slate-950/50 p-3 space-y-1.5 text-sm">
+                      <p className="font-medium text-slate-700 dark:text-slate-200">1. New Prospect</p>
+                      <div className="text-slate-600 dark:text-slate-300">Nama project: {(form.title || pitch?.title || pitch?.prospect_name || '—')}</div>
+                      <div className="text-slate-600 dark:text-slate-300">Perusahaan: {(pitch?.company_name || '—')}</div>
+                      <div className="text-slate-600 dark:text-slate-300">Kategori company: {(pitch?.company_category_name || '—')}</div>
+                      <div className="text-slate-600 dark:text-slate-300">Kategori project: {(pitch?.category_project_name || '—')}</div>
+                      <div className="text-slate-600 dark:text-slate-300">
+                        Estimasi nilai: {pitch?.estimated_value != null ? Number(pitch.estimated_value).toLocaleString('id-ID') : '—'}
                       </div>
-                      {stepIndex >= 3 && (
-                        <>
-                          <div className="flex flex-wrap gap-x-2 gap-y-1 items-baseline">
-                            <span className="text-slate-500 shrink-0">Link proposal</span>
-                            {(() => {
-                              const href = ((form.proposal_url || '').trim() || String(pitch.proposal_url || '').trim());
-                              return href ? (
-                                <a href={href.startsWith('http') ? href : `https://${href}`} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">
-                                  {href}
-                                </a>
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              );
-                            })()}
-                          </div>
-                          <div className="flex flex-wrap gap-x-2 gap-y-1 items-baseline">
-                            <span className="text-slate-500 shrink-0">Link quotation</span>
-                            {(() => {
-                              const href = ((form.quotation_url || '').trim() || String(pitch.quotation_url || '').trim());
-                              return href ? (
-                                <a href={href.startsWith('http') ? href : `https://${href}`} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">
-                                  {href}
-                                </a>
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              );
-                            })()}
-                          </div>
-                        </>
-                      )}
-                      {stepIndex >= 4 && (
-                        <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-600 space-y-1.5">
-                          <p className="text-slate-600 dark:text-slate-400 font-medium">Meeting</p>
-                          <div>
-                            <span className="text-slate-500">Waktu: </span>
-                            <span>
-                              {(() => {
-                                const raw = (form.meeting_at || '').trim() || (pitch.meeting_at ? String(pitch.meeting_at) : '');
-                                return raw ? raw.replace('T', ' ').slice(0, 16) : '—';
-                              })()}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Lokasi: </span>
-                            <span>{((form.meeting_location || '').trim() || String(pitch.meeting_location || '').trim()) || '—'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Mode: </span>
-                            <span>
-                              {(() => {
-                                const m = (form.meeting_mode !== FK_NONE ? form.meeting_mode : '') || String(pitch.meeting_mode || '');
-                                if (m === 'online') return 'Online';
-                                if (m === 'offline') return 'Offline';
-                                return '—';
-                              })()}
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                      <div className="text-slate-600 dark:text-slate-300">Email: {(form.email || pitch?.email || '—')}</div>
+                      <div className="text-slate-600 dark:text-slate-300">Telepon: {(form.phone || pitch?.phone || '—')}</div>
+                      <div className="text-slate-600 dark:text-slate-300">Mulai lead: {(leadStartedSummary || '—')}</div>
+                      <div className="text-slate-600 dark:text-slate-300">Catatan: {(form.notes || pitch?.notes || '—')}</div>
                     </div>
+                    {stepIndex > 1 && comproHref && (
+                      <div className="rounded-md border border-slate-200 bg-white/90 dark:border-slate-600 dark:bg-slate-950/50 p-3 space-y-1.5 text-sm">
+                        <p className="font-medium text-slate-700 dark:text-slate-200">2. Sent Compro</p>
+                        <div className="text-slate-600 dark:text-slate-300">
+                          URL Compro:{' '}
+                          <a href={comproHref.startsWith('http') ? comproHref : `https://${comproHref}`} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">
+                            {comproHref}
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                    {stepIndex > 2 && (proposalHref || quotationHref) && (
+                      <div className="rounded-md border border-slate-200 bg-white/90 dark:border-slate-600 dark:bg-slate-950/50 p-3 space-y-1.5 text-sm">
+                        <p className="font-medium text-slate-700 dark:text-slate-200">3. Proposal Sent</p>
+                        {proposalHref && (
+                          <div className="text-slate-600 dark:text-slate-300">
+                            Link proposal:{' '}
+                            <a href={proposalHref.startsWith('http') ? proposalHref : `https://${proposalHref}`} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">
+                              {proposalHref}
+                            </a>
+                          </div>
+                        )}
+                        {quotationHref && (
+                          <div className="text-slate-600 dark:text-slate-300">
+                            Link quotation:{' '}
+                            <a href={quotationHref.startsWith('http') ? quotationHref : `https://${quotationHref}`} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">
+                              {quotationHref}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {stepIndex > 3 && (meetingAtSummary || meetingLocationSummary || meetingModeSummary) && (
+                      <div className="rounded-md border border-slate-200 bg-white/90 dark:border-slate-600 dark:bg-slate-950/50 p-3 space-y-1.5 text-sm">
+                        <p className="font-medium text-slate-700 dark:text-slate-200">4. Meeting</p>
+                        {meetingAtSummary && <div className="text-slate-600 dark:text-slate-300">Waktu: {meetingAtSummary.replace('T', ' ').slice(0, 16)}</div>}
+                        {meetingLocationSummary && <div className="text-slate-600 dark:text-slate-300">Lokasi: {meetingLocationSummary}</div>}
+                        {meetingModeSummary && (
+                          <div className="text-slate-600 dark:text-slate-300">
+                            Mode: {meetingModeSummary === 'online' ? 'Online' : meetingModeSummary === 'offline' ? 'Offline' : meetingModeSummary}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {stepIndex > 4 && finalDealSummary !== '' && (
+                      <div className="rounded-md border border-slate-200 bg-white/90 dark:border-slate-600 dark:bg-slate-950/50 p-3 space-y-1.5 text-sm">
+                        <p className="font-medium text-slate-700 dark:text-slate-200">5. Negotiation</p>
+                        <div className="text-slate-600 dark:text-slate-300">
+                          Harga final deal: {Number(finalDealSummary).toLocaleString('id-ID')}
+                        </div>
+                      </div>
+                    )}
+                    {stepIndex > 5 && (
+                      <div className="rounded-md border border-slate-200 bg-white/90 dark:border-slate-600 dark:bg-slate-950/50 p-3 space-y-1.5 text-sm">
+                        <p className="font-medium text-slate-700 dark:text-slate-200">6. Closed</p>
+                        <div className="text-slate-600 dark:text-slate-300">Outcome: {pitch?.outcome === 'win' ? 'Win' : pitch?.outcome === 'lost' ? 'Lost' : '—'}</div>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {currentStepKey === 'new_prospect' && (
                   <div className="space-y-3">
                     <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Lead baru. Gunakan tombol Maju untuk masuk ke Sent Compro setelah siap.
+                      Lead baru. Gunakan tombol Next untuk masuk ke Sent Compro setelah siap.
                     </p>
                   </div>
                 )}
 
                 {currentStepKey === 'sent_compro' && (
                   <div className="space-y-3">
-                    <label className="space-y-2 block">
-                      <span className="text-sm font-medium">URL Compro</span>
-                      <Input
-                        type="text"
-                        placeholder="https://..."
-                        value={form.compro_url}
-                        onChange={(e) => setForm((p) => ({ ...p, compro_url: e.target.value }))}
-                        disabled={!can('sales.update') || !!pitch.outcome}
-                      />
-                    </label>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Nilai tersimpan ikut saat Maju ke Proposal Sent (bisa juga Simpan detail).</p>
+                    {comproHref !== '' && (
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium block">URL Compro</span>
+                        <a
+                          href={comproHref.startsWith('http') ? comproHref : `https://${comproHref}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline break-all text-sm"
+                        >
+                          {comproHref}
+                        </a>
+                      </div>
+                    )}
+                    {comproHref !== '' && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Nilai tersimpan ikut saat Next ke Proposal Sent (bisa juga Simpan draft).</p>
+                    )}
                   </div>
                 )}
 
                 {currentStepKey === 'proposal_sent' && (
                   <div className="space-y-3">
-                    <label className="space-y-2 block">
-                      <span className="text-sm font-medium">Link proposal</span>
-                      <Input
-                        type="text"
-                        placeholder="https://..."
-                        value={form.proposal_url}
-                        onChange={(e) => setForm((p) => ({ ...p, proposal_url: e.target.value }))}
-                        disabled={!can('sales.update') || !!pitch.outcome}
-                      />
-                    </label>
-                    <label className="space-y-2 block">
-                      <span className="text-sm font-medium">Link quotation</span>
-                      <Input
-                        type="text"
-                        placeholder="https://..."
-                        value={form.quotation_url}
-                        onChange={(e) => setForm((p) => ({ ...p, quotation_url: e.target.value }))}
-                        disabled={!can('sales.update') || !!pitch.outcome}
-                      />
-                    </label>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">URL Compro dari tahap sebelumnya tampil di atas. Maju memerlukan proposal + quotation terisi (atau sudah tersimpan).</p>
+                    {proposalHref !== '' && (
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium block">Link proposal</span>
+                        <a
+                          href={proposalHref.startsWith('http') ? proposalHref : `https://${proposalHref}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline break-all text-sm"
+                        >
+                          {proposalHref}
+                        </a>
+                      </div>
+                    )}
+                    {quotationHref !== '' && (
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium block">Link quotation</span>
+                        <a
+                          href={quotationHref.startsWith('http') ? quotationHref : `https://${quotationHref}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline break-all text-sm"
+                        >
+                          {quotationHref}
+                        </a>
+                      </div>
+                    )}
+                    {(proposalHref !== '' || quotationHref !== '') && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">URL Compro dari tahap sebelumnya tampil di atas. Next memerlukan proposal + quotation terisi (atau sudah tersimpan).</p>
+                    )}
                   </div>
                 )}
 
                 {currentStepKey === 'meeting' && (
                   <div className="space-y-4">
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Jadwalkan meeting dengan klien. Data di bawah ikut ke tahap berikutnya setelah disimpan atau saat Maju.
-                    </p>
-                    <label className="space-y-2 block">
-                      <span className="text-sm font-medium">Tanggal & jam meeting</span>
-                      <Input
-                        type="datetime-local"
-                        value={form.meeting_at}
-                        onChange={(e) => setForm((p) => ({ ...p, meeting_at: e.target.value }))}
-                        disabled={!can('sales.update') || !!pitch.outcome}
-                      />
-                    </label>
-                    <label className="space-y-2 block">
-                      <span className="text-sm font-medium">Lokasi</span>
-                      <Input
-                        type="text"
-                        placeholder="Alamat / link ruang / nama gedung"
-                        value={form.meeting_location}
-                        onChange={(e) => setForm((p) => ({ ...p, meeting_location: e.target.value }))}
-                        disabled={!can('sales.update') || !!pitch.outcome}
-                      />
-                    </label>
-                    <div className="space-y-2">
-                      <span className="text-sm font-medium">Online atau offline</span>
-                      <Select
-                        value={form.meeting_mode}
-                        onValueChange={(v) => setForm((p) => ({ ...p, meeting_mode: v }))}
-                        disabled={!can('sales.update') || !!pitch.outcome}
-                      >
-                        <SelectTrigger className="w-full max-w-md border-slate-200 dark:border-slate-700">
-                          <SelectValue placeholder="Online atau offline" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={FK_NONE}>Pilih mode</SelectItem>
-                          <SelectItem value="online">Online</SelectItem>
-                          <SelectItem value="offline">Offline</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Gunakan Simpan detail untuk menyimpan tanpa pindah step, atau Maju ke Negosiasi jika sudah lengkap.</p>
+                    {meetingAtSummary && (
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium block">Tanggal & jam meeting</span>
+                        <div className="text-sm text-slate-700 dark:text-slate-300">{formatMeetingDateTime(meetingAtSummary)}</div>
+                      </div>
+                    )}
+                    {meetingLocationSummary && (
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium block">Lokasi</span>
+                        <div className="text-sm text-slate-700 dark:text-slate-300">{meetingLocationSummary}</div>
+                      </div>
+                    )}
+                    {meetingModeSummary && (
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium block">Online atau offline</span>
+                        <div className="text-sm text-slate-700 dark:text-slate-300">
+                          {meetingModeSummary === 'online' ? 'Online' : meetingModeSummary === 'offline' ? 'Offline' : meetingModeSummary}
+                        </div>
+                      </div>
+                    )}
+                    {(meetingAtSummary || meetingLocationSummary || meetingModeSummary) && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Gunakan Simpan draft untuk menyimpan tanpa pindah step, atau Next ke Negosiasi jika sudah lengkap.</p>
+                    )}
                   </div>
                 )}
 
                 {currentStepKey === 'negotiation' && (
-                  <div className="space-y-3">
-                    <p className="text-sm text-slate-600 dark:text-slate-400">Negosiasi kontrak / harga.</p>
+                  <div className="space-y-4">
+                    {pitch?.estimated_value != null && Number(pitch.estimated_value) > 0 && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Estimasi awal:{' '}
+                        <span className="font-medium text-slate-700 dark:text-slate-300">
+                          {Number(pitch.estimated_value).toLocaleString('id-ID')}
+                        </span>
+                      </p>
+                    )}
+                    {finalDealSummary !== '' && (
+                      <div className="space-y-2 max-w-md">
+                        <span className="text-sm font-medium block">Harga final deal</span>
+                        <div className="text-sm text-slate-700 dark:text-slate-300">
+                          {Number(finalDealSummary).toLocaleString('id-ID')}
+                        </div>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Nilai final tersimpan. Untuk mengubah, gunakan Simpan draft pada card Detail pitch.</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {currentStepKey === 'closed' && !pitch.outcome && (
                   <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Step closed. Tentukan hasil di kartu Win / Lost di bawah.
+                    Step closed. Win: isi harga final di kartu di bawah lalu konfirmasi. Lost: satu klik di kartu di bawah.
                   </p>
                 )}
 
@@ -682,117 +838,248 @@ export default function Sales() {
           </Card>
         )}
 
-        <Card>
+        {(isNewPitch || (!isNewPitch && pitch)) && (
+          <Card>
           <CardHeader>
             <CardTitle>{isNewPitch ? 'Data awal lead' : 'Detail pitch'}</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={isNewPitch ? createPitch : (e) => { e.preventDefault(); saveDetails(); }}>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-2 md:col-span-2">
-                  <span className="text-sm font-medium">Nama Project</span>
-                  <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} required />
-                </label>
-              </div>
-              <div className="space-y-2">
-                <span className="text-sm font-medium">Perusahaan</span>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Pilih dari master List Company (menu Bisnis).</p>
-                <Select value={form.company_id} onValueChange={(v) => setForm((p) => ({ ...p, company_id: v }))}>
-                  <SelectTrigger className="w-full border-slate-200 dark:border-slate-700">
-                    <SelectValue placeholder="Pilih perusahaan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={FK_NONE}>Tidak dipilih</SelectItem>
-                    {formOptions.companies.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
+              {currentStepKey === 'new_prospect' && (
+              <fieldset className="space-y-4 rounded-md border border-slate-200 p-4 dark:border-slate-700" disabled={isStepGroupDisabled('new_prospect')}>
+                <legend className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">1. New Prospect</legend>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-sm font-medium">Nama Project</span>
+                    <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} required />
+                  </label>
+                </div>
                 <div className="space-y-2">
-                  <span className="text-sm font-medium">Kategori company</span>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Master Category Company.</p>
-                  <Select value={form.project_category_id} onValueChange={(v) => setForm((p) => ({ ...p, project_category_id: v }))}>
+                  <span className="text-sm font-medium">Perusahaan</span>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Pilih dari master List Company (menu Bisnis).</p>
+                  <Select value={form.company_id} onValueChange={(v) => setForm((p) => ({ ...p, company_id: v }))}>
                     <SelectTrigger className="w-full border-slate-200 dark:border-slate-700">
-                      <SelectValue placeholder="Pilih kategori" />
+                      <SelectValue placeholder="Pilih perusahaan" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={FK_NONE}>Tidak dipilih</SelectItem>
-                      {formOptions.company_categories.map((c) => (
+                      {formOptions.companies.map((c) => (
                         <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium">Kategori company</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Master Category Company.</p>
+                    <Select value={form.project_category_id} onValueChange={(v) => setForm((p) => ({ ...p, project_category_id: v }))}>
+                      <SelectTrigger className="w-full border-slate-200 dark:border-slate-700">
+                        <SelectValue placeholder="Pilih kategori" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={FK_NONE}>Tidak dipilih</SelectItem>
+                        {formOptions.company_categories.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium">Kategori project</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Master Category Project (Sales).</p>
+                    <Select value={form.sales_category_project_id} onValueChange={(v) => setForm((p) => ({ ...p, sales_category_project_id: v }))}>
+                      <SelectTrigger className="w-full border-slate-200 dark:border-slate-700">
+                        <SelectValue placeholder="Pilih kategori project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={FK_NONE}>Tidak dipilih</SelectItem>
+                        {formOptions.category_projects.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium">Estimasi nilai (opsional)</span>
+                    <Input type="number" min="0" value={form.estimated_value} onChange={(e) => setForm((p) => ({ ...p, estimated_value: e.target.value }))} />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium">Email</span>
+                    <Input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
+                  </label>
+                </div>
+                <label className="space-y-2 block">
+                  <span className="text-sm font-medium">Telepon</span>
+                  <Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+                </label>
+                <label className="space-y-2 block">
+                  <span className="text-sm font-medium">Mulai lead</span>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Tanggal saja; default hari ini.</p>
+                  <Input type="date" value={form.lead_started_at} onChange={(e) => setForm((p) => ({ ...p, lead_started_at: e.target.value }))} />
+                </label>
+                <label className="space-y-2 block">
+                  <span className="text-sm font-medium">Catatan</span>
+                  <Textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} rows={4} />
+                </label>
+              </fieldset>
+              )}
+
+              {currentStepKey === 'sent_compro' && (
+              <fieldset className="space-y-3 rounded-md border border-slate-200 p-4 dark:border-slate-700" disabled={isStepGroupDisabled('sent_compro')}>
+                <legend className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">2. Sent Compro</legend>
+                <label className="space-y-2 block">
+                  <span className="text-sm font-medium">URL Compro</span>
+                  <Input type="text" placeholder="https://..." value={form.compro_url} onChange={(e) => setForm((p) => ({ ...p, compro_url: e.target.value }))} />
+                </label>
+              </fieldset>
+              )}
+
+              {currentStepKey === 'proposal_sent' && (
+              <fieldset className="space-y-3 rounded-md border border-slate-200 p-4 dark:border-slate-700" disabled={isStepGroupDisabled('proposal_sent')}>
+                <legend className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">3. Proposal Sent</legend>
+                <label className="space-y-2 block">
+                  <span className="text-sm font-medium">Link proposal</span>
+                  <Input type="text" placeholder="https://..." value={form.proposal_url} onChange={(e) => setForm((p) => ({ ...p, proposal_url: e.target.value }))} />
+                </label>
+                <label className="space-y-2 block">
+                  <span className="text-sm font-medium">Link quotation</span>
+                  <Input type="text" placeholder="https://..." value={form.quotation_url} onChange={(e) => setForm((p) => ({ ...p, quotation_url: e.target.value }))} />
+                </label>
+              </fieldset>
+              )}
+
+              {currentStepKey === 'meeting' && (
+              <fieldset className="space-y-3 rounded-md border border-slate-200 p-4 dark:border-slate-700" disabled={isStepGroupDisabled('meeting')}>
+                <legend className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">4. Meeting</legend>
+                <label className="space-y-2 block">
+                  <span className="text-sm font-medium">Tanggal & jam meeting</span>
+                  <Input type="datetime-local" value={form.meeting_at} onChange={(e) => setForm((p) => ({ ...p, meeting_at: e.target.value }))} />
+                </label>
+                <label className="space-y-2 block">
+                  <span className="text-sm font-medium">Lokasi</span>
+                  <Input type="text" placeholder="Alamat / link ruang / nama gedung" value={form.meeting_location} onChange={(e) => setForm((p) => ({ ...p, meeting_location: e.target.value }))} />
+                </label>
                 <div className="space-y-2">
-                  <span className="text-sm font-medium">Kategori project</span>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Master Category Project (Sales).</p>
-                  <Select value={form.sales_category_project_id} onValueChange={(v) => setForm((p) => ({ ...p, sales_category_project_id: v }))}>
+                  <span className="text-sm font-medium">Online atau offline</span>
+                  <Select value={form.meeting_mode} onValueChange={(v) => setForm((p) => ({ ...p, meeting_mode: v }))}>
                     <SelectTrigger className="w-full border-slate-200 dark:border-slate-700">
-                      <SelectValue placeholder="Pilih kategori project" />
+                      <SelectValue placeholder="Online atau offline" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={FK_NONE}>Tidak dipilih</SelectItem>
-                      {formOptions.category_projects.map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                      ))}
+                      <SelectItem value={FK_NONE}>Pilih mode</SelectItem>
+                      <SelectItem value="online">Online</SelectItem>
+                      <SelectItem value="offline">Offline</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-2">
-                  <span className="text-sm font-medium">Estimasi nilai (opsional)</span>
-                  <Input type="number" min="0" value={form.estimated_value} onChange={(e) => setForm((p) => ({ ...p, estimated_value: e.target.value }))} />
+              </fieldset>
+              )}
+
+              {(currentStepKey === 'negotiation' || currentStepKey === 'closed') && (
+              <fieldset className="space-y-3 rounded-md border border-slate-200 p-4 dark:border-slate-700" disabled={isStepGroupDisabled('negotiation')}>
+                <legend className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">5. Negotiation</legend>
+                <label className="space-y-2 block">
+                  <span className="text-sm font-medium">Harga final deal</span>
+                  <Input type="number" min="0" step="0.01" placeholder="0" value={form.final_deal_value} onChange={(e) => setForm((p) => ({ ...p, final_deal_value: e.target.value }))} />
                 </label>
-                <label className="space-y-2">
-                  <span className="text-sm font-medium">Email</span>
-                  <Input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
-                </label>
-              </div>
-              <label className="space-y-2 block">
-                <span className="text-sm font-medium">Telepon</span>
-                <Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
-              </label>
-              <label className="space-y-2 block">
-                <span className="text-sm font-medium">Mulai lead</span>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Tanggal saja; default hari ini.</p>
-                <Input type="date" value={form.lead_started_at} onChange={(e) => setForm((p) => ({ ...p, lead_started_at: e.target.value }))} />
-              </label>
-              <label className="space-y-2 block">
-                <span className="text-sm font-medium">Catatan</span>
-                <Textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} rows={4} />
-              </label>
+              </fieldset>
+              )}
               <div className="flex gap-2">
                 {isNewPitch ? (
                   <Button type="submit" disabled={saving || !can('sales.create')}>
                     {saving ? 'Menyimpan...' : 'Buat pitch'}
                   </Button>
                 ) : (
-                  <Button type="submit" disabled={saving || !can('sales.update') || !!pitch?.outcome}>
-                    {saving ? 'Menyimpan...' : 'Simpan detail'}
-                  </Button>
+                  <>
+                    <Button type="submit" disabled={saving || !can('sales.update') || !!pitch?.outcome}>
+                      {saving ? 'Menyimpan...' : 'Simpan draft'}
+                    </Button>
+                    {(currentStepKey === 'sent_compro' || currentStepKey === 'proposal_sent' || currentStepKey === 'meeting' || currentStepKey === 'negotiation' || currentStepKey === 'closed') && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={saving || !can('sales.update') || !!pitch?.outcome}
+                        onClick={deleteDraftForCurrentStep}
+                      >
+                        Delete draft
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             </form>
           </CardContent>
-        </Card>
+          </Card>
+        )}
+
+        {!isNewPitch && pitch && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={stepIndex <= 0 || !can('sales.update') || !!pitch.outcome || saving}
+              onClick={stepMundur}
+            >
+              <ChevronLeft className="size-4 mr-1" />
+              Prev
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={stepIndex < 0 || stepIndex >= STEPS.length - 1 || !can('sales.update') || !!pitch.outcome || saving}
+              onClick={stepMaju}
+            >
+              Next
+              <ChevronRight className="size-4 ml-1" />
+            </Button>
+          </div>
+        )}
 
         {!isNewPitch && pitch && currentStepKey === 'closed' && !pitch.outcome && (
           <Card className="border-primary/30">
             <CardHeader>
               <CardTitle>Closed — pilih hasil</CardTitle>
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-normal mt-1">
+                Win: isi harga final deal lalu konfirmasi. Lost: langsung pindah ke tab Project Lost.
+              </p>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-3">
-              <Button type="button" className="bg-emerald-600 hover:bg-emerald-700" disabled={saving || !can('sales.update')} onClick={() => finalizeOutcome('win')}>
-                <Check className="size-4 mr-2" />
-                Win
-              </Button>
-              <Button type="button" variant="destructive" disabled={saving || !can('sales.update')} onClick={() => finalizeOutcome('lost')}>
-                <X className="size-4 mr-2" />
-                Lost
-              </Button>
+            <CardContent className="space-y-6">
+              <div className="space-y-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 p-4">
+                <span className="text-sm font-medium text-slate-900 dark:text-white">Win</span>
+                <label className="space-y-2 block max-w-md">
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Harga final deal (wajib)</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0"
+                    value={form.final_deal_value}
+                    onChange={(e) => setForm((p) => ({ ...p, final_deal_value: e.target.value }))}
+                    disabled={saving || !can('sales.update')}
+                  />
+                  <span className="text-xs text-slate-500">Angka ≥ 0 (mis. IDR). Disimpan bersama status Win.</span>
+                </label>
+                <Button
+                  type="button"
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  disabled={saving || !can('sales.update')}
+                  onClick={() => finalizeOutcome('win')}
+                >
+                  <Check className="size-4 mr-2" />
+                  Win & ke tab Project Win
+                </Button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 dark:border-slate-700 pt-4">
+                <span className="text-sm font-medium text-slate-900 dark:text-white">Lost</span>
+                <Button type="button" variant="destructive" disabled={saving || !can('sales.update')} onClick={() => finalizeOutcome('lost')}>
+                  <X className="size-4 mr-2" />
+                  Lost & ke tab Project Lost
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}

@@ -10,15 +10,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle2, Pencil, Plus } from 'lucide-react';
 import { MENU_NEW_PROJECT } from '../constants/menuLabels';
 
-const TAB_KEYS = ['Business', 'Tech', 'Operation'];
+const TAB_KEYS = ['Business', 'Operation'];
 const TAB_TO_PATH = {
   Business: 'business',
-  Tech: 'tech',
   Operation: 'operation',
 };
 const PATH_TO_TAB = {
   business: 'Business',
-  tech: 'Tech',
   operation: 'Operation',
 };
 
@@ -31,6 +29,7 @@ export default function Presales() {
   const [projectCategories, setProjectCategories] = useState([]);
   const [projectRoles, setProjectRoles] = useState([]);
   const [users, setUsers] = useState([]);
+  const [winPitches, setWinPitches] = useState([]);
 
   const [selectedId, setSelectedId] = useState(null);
   const [isNewOpen, setIsNewOpen] = useState(false);
@@ -43,6 +42,7 @@ export default function Presales() {
   });
 
   const [newForm, setNewForm] = useState({
+    sales_pitch_id: '',
     company_id: '',
     project_name: '',
     project_category_id: '',
@@ -59,7 +59,6 @@ export default function Presales() {
     role_ids: [],
     role_mh: {},
   });
-  const [developmentMh, setDevelopmentMh] = useState({});
   const [operationAssignments, setOperationAssignments] = useState({});
   const [editForm, setEditForm] = useState({
     id: null,
@@ -74,17 +73,19 @@ export default function Presales() {
     () => presales.filter((item) => !item.converted_project_id),
     [presales]
   );
+  const usedWinPitchIds = useMemo(
+    () => new Set((presales || []).map((item) => item.sales_pitch_id).filter((id) => id != null)),
+    [presales]
+  );
   const selected = useMemo(
     () => visiblePresales.find((item) => item.id?.toString() === selectedId?.toString()) || null,
     [visiblePresales, selectedId]
   );
 
-  const canOpenTech = !!selected?.business_acknowledged_at;
-  const canOpenOperation = !!selected?.development_acknowledged_at;
+  const canOpenOperation = !!selected?.business_acknowledged_at;
   const isProceeded = !!selected?.converted_project_id;
   const canProceed =
     !!selected?.business_acknowledged_at &&
-    !!selected?.development_acknowledged_at &&
     !!selected?.operation_acknowledged_at &&
     !isProceeded;
   const activeTab = PATH_TO_TAB[(view || '').toLowerCase()] || 'Business';
@@ -99,12 +100,13 @@ export default function Presales() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [presaleRes, companyRes, categoryRes, roleRes, userRes] = await Promise.all([
+      const [presaleRes, companyRes, categoryRes, roleRes, userRes, winPitchRes] = await Promise.all([
         fetchAPI('/presales'),
         fetchAPI('/companies'),
         fetchAPI('/project-categories'),
         fetchAPI('/project-roles'),
         fetchAPI('/users'),
+        fetchAPI('/sales-pitches?tab=win'),
       ]);
 
       const items = presaleRes.data || [];
@@ -114,6 +116,7 @@ export default function Presales() {
       setProjectCategories(categoryRes.data || []);
       setProjectRoles(roleRes.data || []);
       setUsers(userRes.data || []);
+      setWinPitches(winPitchRes.data || []);
       if (!selectedId && activeItems.length) setSelectedId(activeItems[0].id);
     } catch (error) {
       showFeedback('Gagal Memuat Data', 'Gagal memuat data opportunity: ' + error.message);
@@ -152,12 +155,6 @@ export default function Presales() {
       role_mh: roleMh,
     });
 
-    const devMap = {};
-    roleReq.forEach((r) => {
-      devMap[r.project_role_id] = r.development_mh ?? '';
-    });
-    setDevelopmentMh(devMap);
-
     const opMap = {};
     (selected.operation_assignments || []).forEach((a) => {
       if (!opMap[a.project_role_id]) opMap[a.project_role_id] = [];
@@ -184,6 +181,33 @@ export default function Presales() {
       return next;
     });
   };
+  const lockManualFields = !newForm.sales_pitch_id;
+
+  const applyPitchToNewForm = (pitchIdRaw) => {
+    const pitchId = String(pitchIdRaw || '');
+    if (!pitchId) {
+      setNewForm((prev) => ({ ...prev, sales_pitch_id: '' }));
+      return;
+    }
+    const picked = winPitches.find((p) => String(p.id) === pitchId);
+    if (!picked) return;
+    if (usedWinPitchIds.has(picked.id)) {
+      showFeedback('Sudah dipakai', 'Project Win ini sudah pernah dipilih untuk New Project lain.');
+      return;
+    }
+    setNewForm((prev) => ({
+      ...prev,
+      sales_pitch_id: pitchId,
+      company_id: picked.company_id != null ? String(picked.company_id) : prev.company_id,
+      project_name: picked.title || picked.prospect_name || prev.project_name,
+      project_category_id: picked.project_category_id != null ? String(picked.project_category_id) : prev.project_category_id,
+      estimated_budget:
+        picked.final_deal_value != null
+          ? String(picked.final_deal_value)
+          : (picked.estimated_value != null ? String(picked.estimated_value) : prev.estimated_budget),
+      project_description: picked.notes || prev.project_description,
+    }));
+  };
 
   const createOpportunity = async (e) => {
     e.preventDefault();
@@ -192,6 +216,7 @@ export default function Presales() {
       const res = await fetchAPI('/presales', {
         method: 'POST',
         body: JSON.stringify({
+          sales_pitch_id: newForm.sales_pitch_id ? parseInt(newForm.sales_pitch_id) : null,
           company_id: parseInt(newForm.company_id),
           project_name: newForm.project_name,
           project_category_id: parseInt(newForm.project_category_id),
@@ -201,6 +226,7 @@ export default function Presales() {
       });
       setIsNewOpen(false);
       setNewForm({
+        sales_pitch_id: '',
         company_id: '',
         project_name: '',
         project_category_id: '',
@@ -281,30 +307,6 @@ export default function Presales() {
     }
   };
 
-  const saveDevelopment = async () => {
-    if (!selected) return;
-    try {
-      await submitDevelopmentData();
-      await loadAll();
-      showFeedback('Berhasil', 'Data Tech tersimpan.');
-    } catch (error) {
-      showFeedback('Gagal Simpan Tech', error.message);
-    }
-  };
-
-  const acknowledgeDevelopment = async () => {
-    if (!selected) return;
-    try {
-      // Keep UX simple: acknowledge always persists current Development form first.
-      await submitDevelopmentData();
-      await fetchAPI(`/presales/${selected.id}/development/acknowledge`, { method: 'POST' });
-      await loadAll();
-      showFeedback('Berhasil', 'Development acknowledged.');
-    } catch (error) {
-      showFeedback('Gagal Acknowledge Development', error.message);
-    }
-  };
-
   const saveOperation = async () => {
     if (!selected) return;
     try {
@@ -343,9 +345,28 @@ export default function Presales() {
     updateBusinessForm((prev) => {
       const exists = prev.role_ids.includes(roleId);
       const role_ids = exists ? prev.role_ids.filter((id) => id !== roleId) : [...prev.role_ids, roleId];
-      return { ...prev, role_ids };
+      const role_mh = { ...(prev.role_mh || {}) };
+      if (exists) {
+        delete role_mh[roleId];
+      } else if (role_mh[roleId] == null) {
+        role_mh[roleId] = '';
+      }
+      return { ...prev, role_ids, role_mh };
     });
   };
+
+  useEffect(() => {
+    if (businessForm.methodology !== 'Agile Scrum') return;
+    const total = businessForm.role_ids.reduce((sum, roleId) => {
+      const raw = businessForm.role_mh?.[roleId];
+      const num = raw === '' || raw == null ? 0 : Number(raw);
+      return sum + (Number.isFinite(num) ? num : 0);
+    }, 0);
+    const nextTotal = total === 0 ? '' : String(total);
+    if (String(businessForm.total_manhours ?? '') !== nextTotal) {
+      setBusinessForm((prev) => ({ ...prev, total_manhours: nextTotal }));
+    }
+  }, [businessForm.methodology, businessForm.role_ids, businessForm.role_mh, businessForm.total_manhours]);
 
   const submitBusinessData = async () => {
     if (!selected) return;
@@ -360,16 +381,6 @@ export default function Presales() {
           businessForm.methodology === 'Agile Scrum' ? Number(businessForm.total_manhours || 0) : null,
         project_role_ids: businessForm.role_ids,
         business_role_mh: businessForm.role_mh,
-      }),
-    });
-  };
-
-  const submitDevelopmentData = async () => {
-    if (!selected) return;
-    await fetchAPI(`/presales/${selected.id}/development`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        development_role_mh: developmentMh,
       }),
     });
   };
@@ -404,7 +415,7 @@ export default function Presales() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{MENU_NEW_PROJECT}</h1>
           <p className="text-slate-500 mt-1">
-            Untuk opportunity dengan goals dan scope yang sudah pasti — alur Business, Tech, dan Operation sampai Proceed ke List Project dan Board.
+            Untuk opportunity dengan goals dan scope yang sudah pasti — alur Business dan Operation sampai Proceed ke List Project dan Board.
           </p>
         </div>
         <Button onClick={() => setIsNewOpen(true)}>
@@ -462,11 +473,6 @@ export default function Presales() {
                         Business Ack
                       </Badge>
                     )}
-                    {item.development_acknowledged_at && (
-                      <Badge className="bg-purple-600 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
-                        Tech Ack
-                      </Badge>
-                    )}
                     {item.operation_acknowledged_at && (
                       <Badge className="bg-green-600 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
                         Operation Ack
@@ -511,7 +517,7 @@ export default function Presales() {
                 </div>
                 <div className="flex gap-2 mt-4">
                   {TAB_KEYS.map((tab) => {
-                    const disabled = (tab === 'Tech' && !canOpenTech) || (tab === 'Operation' && !canOpenOperation);
+                    const disabled = tab === 'Operation' && !canOpenOperation;
                     return (
                       <Button
                         key={tab}
@@ -587,8 +593,8 @@ export default function Presales() {
                           type="number"
                           min="0"
                           value={businessForm.total_manhours}
-                          disabled={isProceeded}
-                          onChange={(e) => updateBusinessForm((prev) => ({ ...prev, total_manhours: e.target.value }))}
+                          disabled
+                          readOnly
                         />
                       </label>
                     )}
@@ -609,78 +615,39 @@ export default function Presales() {
                         ))}
                       </div>
                     </div>
+                    {businessForm.methodology === 'Agile Scrum' && businessForm.role_ids.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">MH Business per Role</p>
+                        <div className="space-y-2">
+                          {businessForm.role_ids.map((roleId) => {
+                            const role = projectRoles.find((r) => r.id === roleId);
+                            return (
+                              <div key={roleId} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                                <div className="w-40 shrink-0 text-sm">{role?.name || `Role ${roleId}`}</div>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.25"
+                                  value={businessForm.role_mh?.[roleId] ?? ''}
+                                  disabled={isProceeded}
+                                  onChange={(e) =>
+                                    updateBusinessForm((prev) => ({
+                                      ...prev,
+                                      role_mh: { ...(prev.role_mh || {}), [roleId]: e.target.value },
+                                    }))
+                                  }
+                                  placeholder="Isi MH role"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
 
                     <div className="flex gap-2">
                       <Button onClick={acknowledgeBusiness} disabled={isProceeded}>
-                        Acknowledge
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === 'Tech' && (
-                  <div className="space-y-4">
-                    {businessForm.methodology === 'Agile Scrum' && (
-                      <div className="text-sm text-slate-600 space-y-1">
-                        <p>
-                          Total MH dari Business: <b>{selected.total_manhours || 0}</b>
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          MH Tech dicek terhadap <b>MH Business per role</b> (tersimpan saat Save Business). Angka Total di atas
-                          dipakai sebagai batas per role jika breakdown per role tidak diisi.
-                        </p>
-                      </div>
-                    )}
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Role dari Business</p>
-                      {businessForm.role_ids.length === 0 ? (
-                        <p className="text-slate-500 text-sm">Belum ada role dipilih di Business.</p>
-                      ) : (
-                        businessForm.role_ids.map((roleId) => {
-                          const role = projectRoles.find((r) => r.id === roleId);
-                          const reqRow = (selected.role_requirements || []).find(
-                            (r) => Number(r.project_role_id) === Number(roleId)
-                          );
-                          const bizCap =
-                            reqRow != null && reqRow.business_mh != null && reqRow.business_mh !== ''
-                              ? Number(reqRow.business_mh)
-                              : null;
-                          return (
-                            <div key={roleId} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                              <div className="w-40 shrink-0">
-                                <span className="text-sm block">{role?.name || `Role ${roleId}`}</span>
-                                {businessForm.methodology === 'Agile Scrum' && (
-                                  <span className="text-[10px] text-slate-500">
-                                    Batas Business:{' '}
-                                    {bizCap != null && !Number.isNaN(bizCap) ? `${bizCap} MH` : '—'}
-                                  </span>
-                                )}
-                              </div>
-                              {businessForm.methodology === 'Agile Scrum' ? (
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  value={developmentMh[roleId] ?? ''}
-                                  disabled={isProceeded}
-                                  onChange={(e) => setDevelopmentMh((prev) => ({ ...prev, [roleId]: e.target.value }))}
-                                  placeholder="MH Development"
-                                />
-                              ) : (
-                                <span className="text-sm text-slate-500">Waterfall - tanpa input MH</span>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                    {businessForm.methodology === 'Agile Scrum' && (
-                      <p className="text-xs text-slate-500">
-                        Tombol Acknowledge akan menyimpan MH Tech terlebih dahulu, lalu mengunci tab ini.
-                      </p>
-                    )}
-                    <div className="flex gap-2">
-                      <Button onClick={acknowledgeDevelopment} disabled={isProceeded}>
                         Acknowledge
                       </Button>
                     </div>
@@ -733,14 +700,33 @@ export default function Presales() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{MENU_NEW_PROJECT}</DialogTitle>
-            <DialogDescription>Buat project baru dengan goals yang jelas sebelum masuk ke operasional (List Project dan Board).</DialogDescription>
           </DialogHeader>
           <form onSubmit={createOpportunity} className="space-y-4">
+            <label className="space-y-2 block">
+              <span className="text-sm font-medium">Sumber Project Win</span>
+              <select
+                className="w-full border rounded-md p-2"
+                value={newForm.sales_pitch_id}
+                onChange={(e) => applyPitchToNewForm(e.target.value)}
+              >
+                <option value="">Pilih dari Sales - Project Win</option>
+                {winPitches.map((pitch) => {
+                  const used = usedWinPitchIds.has(pitch.id);
+                  return (
+                    <option key={pitch.id} value={pitch.id} disabled={used}>
+                      {`${pitch.title || pitch.prospect_name || `Pitch #${pitch.id}`} - ${pitch.company_name || '-'}${used ? ' (sudah dipakai)' : ''}`}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+
             <label className="space-y-2 block">
               <span className="text-sm font-medium">Nama Company</span>
               <select
                 className="w-full border rounded-md p-2"
                 value={newForm.company_id}
+                disabled={lockManualFields}
                 onChange={(e) => setNewForm((prev) => ({ ...prev, company_id: e.target.value }))}
                 required
               >
@@ -757,6 +743,7 @@ export default function Presales() {
               <span className="text-sm font-medium">Project Name</span>
               <Input
                 value={newForm.project_name}
+                disabled={lockManualFields}
                 onChange={(e) => setNewForm((prev) => ({ ...prev, project_name: e.target.value }))}
                 required
               />
@@ -767,6 +754,7 @@ export default function Presales() {
               <select
                 className="w-full border rounded-md p-2"
                 value={newForm.project_category_id}
+                disabled={lockManualFields}
                 onChange={(e) => setNewForm((prev) => ({ ...prev, project_category_id: e.target.value }))}
                 required
               >
@@ -785,6 +773,7 @@ export default function Presales() {
                 type="number"
                 min="0"
                 value={newForm.estimated_budget}
+                disabled={lockManualFields}
                 onChange={(e) => setNewForm((prev) => ({ ...prev, estimated_budget: e.target.value }))}
                 required
               />
@@ -794,6 +783,7 @@ export default function Presales() {
               <span className="text-sm font-medium">Deskripsi Project</span>
               <Textarea
                 value={newForm.project_description}
+                disabled={lockManualFields}
                 onChange={(e) => setNewForm((prev) => ({ ...prev, project_description: e.target.value }))}
               />
             </label>
@@ -802,7 +792,7 @@ export default function Presales() {
               <Button type="button" variant="outline" onClick={() => setIsNewOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSaving}>
+              <Button type="submit" disabled={isSaving || lockManualFields}>
                 {isSaving ? 'Saving...' : 'Create Opportunity'}
               </Button>
             </DialogFooter>

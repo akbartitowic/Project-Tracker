@@ -68,6 +68,7 @@ class SalesPitchController extends Controller
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:64',
             'estimated_value' => 'nullable|numeric|min:0',
+            'final_deal_value' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
             'compro_url' => 'nullable|string|max:2048',
             'proposal_url' => 'nullable|string|max:2048',
@@ -106,6 +107,7 @@ class SalesPitchController extends Controller
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'] ?? null,
             'estimated_value' => $validated['estimated_value'] ?? null,
+            'final_deal_value' => $validated['final_deal_value'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'meeting_at' => !empty($validated['meeting_at'])
                 ? Carbon::parse($validated['meeting_at'])
@@ -135,6 +137,12 @@ class SalesPitchController extends Controller
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:64',
             'estimated_value' => 'nullable|numeric|min:0',
+            'final_deal_value' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                Rule::requiredIf((string) $request->input('outcome') === SalesPitch::OUTCOME_WIN),
+            ],
             'notes' => 'nullable|string',
             'compro_url' => 'nullable|string|max:2048',
             'proposal_url' => 'nullable|string|max:2048',
@@ -147,7 +155,7 @@ class SalesPitchController extends Controller
             'outcome' => ['nullable', Rule::in([SalesPitch::OUTCOME_WIN, SalesPitch::OUTCOME_LOST])],
         ]);
 
-        foreach (['company_name', 'email', 'phone', 'estimated_value', 'notes', 'compro_url', 'proposal_url', 'quotation_url', 'meeting_location', 'meeting_mode'] as $field) {
+        foreach (['company_name', 'email', 'phone', 'estimated_value', 'final_deal_value', 'notes', 'compro_url', 'proposal_url', 'quotation_url', 'meeting_location', 'meeting_mode'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $pitch->{$field} = $validated[$field];
             }
@@ -157,6 +165,7 @@ class SalesPitchController extends Controller
             $raw = $validated['meeting_at'];
             $pitch->meeting_at = ($raw === null || $raw === '') ? null : Carbon::parse($raw);
         }
+        if (array_key_exists('title', $validated)) {
             $pitch->title = $validated['title'];
         }
         if (array_key_exists('prospect_name', $validated)) {

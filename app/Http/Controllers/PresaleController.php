@@ -8,8 +8,10 @@ use App\Models\PresaleRoleRequirement;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\ProjectRoleQuota;
+use App\Models\SalesPitch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use App\Traits\LogActivity;
 
 class PresaleController extends Controller
@@ -38,6 +40,11 @@ class PresaleController extends Controller
             'estimated_budget' => 'required|numeric|min:0',
             'project_description' => 'nullable|string',
             'status' => 'nullable|string',
+            'sales_pitch_id' => [
+                'nullable',
+                Rule::exists('sales_pitches', 'id')->where(fn ($q) => $q->where('outcome', SalesPitch::OUTCOME_WIN)),
+                Rule::unique('presales', 'sales_pitch_id'),
+            ],
         ]);
 
         if (!isset($validated['status'])) {
@@ -275,8 +282,8 @@ class PresaleController extends Controller
     public function updateOperation(Request $request, string $id)
     {
         $presale = Presale::with('roleRequirements')->findOrFail($id);
-        if (!$presale->development_acknowledged_at) {
-            return response()->json(['message' => 'Tab Operation aktif setelah Development acknowledge.'], 422);
+        if (!$presale->business_acknowledged_at) {
+            return response()->json(['message' => 'Tab Operation aktif setelah Business acknowledge.'], 422);
         }
 
         $validated = $request->validate([
@@ -318,8 +325,8 @@ class PresaleController extends Controller
     public function acknowledgeOperation(Request $request, string $id)
     {
         $presale = Presale::with('roleRequirements', 'operationAssignments')->findOrFail($id);
-        if (!$presale->development_acknowledged_at) {
-            return response()->json(['message' => 'Development harus acknowledge terlebih dahulu.'], 422);
+        if (!$presale->business_acknowledged_at) {
+            return response()->json(['message' => 'Business harus acknowledge terlebih dahulu.'], 422);
         }
 
         $requiredRoleIds = $presale->roleRequirements->pluck('project_role_id')->unique();
@@ -339,8 +346,8 @@ class PresaleController extends Controller
     public function proceedToProject(Request $request, string $id)
     {
         $presale = Presale::with(['roleRequirements', 'operationAssignments'])->findOrFail($id);
-        if (!$presale->business_acknowledged_at || !$presale->development_acknowledged_at || !$presale->operation_acknowledged_at) {
-            return response()->json(['message' => 'Semua tab harus acknowledged sebelum proceed project.'], 422);
+        if (!$presale->business_acknowledged_at || !$presale->operation_acknowledged_at) {
+            return response()->json(['message' => 'Business dan Operation harus acknowledged sebelum proceed project.'], 422);
         }
 
         if ($presale->converted_project_id) {

@@ -29,6 +29,7 @@ class ApiFeatureTest extends TestCase
             '/api/stats',
             '/api/reports/efficiency',
             '/api/reports/revenue-trend',
+            '/api/reports/company-projects',
         ];
 
         foreach ($endpoints as $endpoint) {

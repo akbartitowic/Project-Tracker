@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { isFreelanceUser } from '../utils/permissions';
 import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,53 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DndContext, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+
+const RUSH_HOUR_FACTOR = 1.3;
+
+function ProjectCompanyIcon({ logoUrl, projectName, size = 'lg' }) {
+    const imgClass = size === 'lg' ? 'size-12 rounded-xl' : 'size-8 rounded-lg';
+    const iconWrapClass = size === 'lg' ? 'p-3 rounded-xl' : 'p-2 rounded-lg';
+    const iconClass = size === 'lg' ? 'size-6' : 'size-4';
+
+    if (logoUrl) {
+        return (
+            <img
+                src={logoUrl}
+                alt={projectName ? `${projectName} company logo` : 'Company logo'}
+                className={`${imgClass} object-cover border border-slate-200 dark:border-slate-700 bg-white shrink-0`}
+            />
+        );
+    }
+
+    return (
+        <div className={`${iconWrapClass} bg-primary/10 text-primary shrink-0`}>
+            <Briefcase className={iconClass} />
+        </div>
+    );
+}
+
+/** Stored MH = base input * factor when rush hour; reverse for edit form. */
+function baseInputFromStoredHours(storedHours, rushHour) {
+    const h = Number(storedHours);
+    if (!Number.isFinite(h) || h < 0) return '';
+    if (rushHour && h > 0) {
+        const base = h / RUSH_HOUR_FACTOR;
+        return String(Math.round(base * 1000) / 1000);
+    }
+    return h === 0 ? '0' : String(storedHours);
+}
+
+function effectiveHoursFromBaseInput(baseStr, rushHour) {
+    const b = parseFloat(baseStr);
+    if (!Number.isFinite(b) || b < 0) return 0;
+    return rushHour ? Math.round(b * RUSH_HOUR_FACTOR * 1000) / 1000 : b;
+}
+
+function toDateInputValue(value) {
+    if (!value) return '';
+    const s = String(value);
+    return s.length >= 10 ? s.slice(0, 10) : s;
+}
 
 function DraggableTaskCard({ task, onClick, assigneeName, isFreelance }) {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -43,9 +91,14 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance }) {
                 <div className="flex justify-between items-start mb-2">
                     <span className={`${pClass} text-[10px] px-2 py-0.5 rounded uppercase font-bold tracking-wider`}>{task.priority}</span>
                     {!isFreelance && (
-                        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
-                            <Clock className="size-3.5" />
-                            {task.estimated_hours || 0} hrs
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 flex-wrap justify-end">
+                            {task.rush_hour && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30">
+                                    Rush hour
+                                </span>
+                            )}
+                            <Clock className="size-3.5 shrink-0" />
+                            <span>{task.estimated_hours || 0} hrs</span>
                         </div>
                     )}
                 </div>
@@ -153,7 +206,9 @@ export default function ProjectBoard() {
     const [newTaskRoleFilter, setNewTaskRoleFilter] = useState('All');
     const [newTaskAssignee, setNewTaskAssignee] = useState('Unassigned');
     const [newTaskEstimate, setNewTaskEstimate] = useState('');
+    const [newTaskRushHour, setNewTaskRushHour] = useState(false);
     const [newTaskCategory, setNewTaskCategory] = useState('');
+    const [newTaskDueDate, setNewTaskDueDate] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
@@ -167,7 +222,7 @@ export default function ProjectBoard() {
     const [bulkEditEstimate, setBulkEditEstimate] = useState('');
     const [bulkEditRoleFilter, setBulkEditRoleFilter] = useState('All');
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
-    const isFreelance = ((user?.role?.name || user?.role || '').toString().trim().toLowerCase() === 'freelance');
+    const isFreelance = isFreelanceUser(user);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -267,22 +322,32 @@ export default function ProjectBoard() {
 
     const loadBoard = async (projectId) => {
         try {
-            // Load stats
-            const balanceRes = await fetchAPI(`/projects/${projectId}/balance`);
-            if (balanceRes.data) {
-                const s = balanceRes.data;
-                let perc = 0;
-                if (s.total_manhours) {
-                    perc = Math.round((s.allocated_hours / s.total_manhours) * 100);
-                    if (perc > 100) perc = 100;
+            if (!isFreelance) {
+                const balanceRes = await fetchAPI(`/projects/${projectId}/balance`);
+                if (balanceRes.data) {
+                    const s = balanceRes.data;
+                    let perc = 0;
+                    if (s.total_manhours) {
+                        perc = Math.round((s.allocated_hours / s.total_manhours) * 100);
+                        if (perc > 100) perc = 100;
+                    }
+                    setStats({
+                        total_manhours: s.total_manhours,
+                        allocated_hours: s.total_manhours ? Math.round(s.allocated_hours * 10) / 10 : 0,
+                        actual_hours: s.total_manhours ? Math.round(s.actual_hours * 10) / 10 : 0,
+                        remaining: s.total_manhours ? Math.round(s.remaining * 10) / 10 : 0,
+                        perc
+                    });
                 }
+            } else {
                 setStats({
-                    total_manhours: s.total_manhours,
-                    allocated_hours: s.total_manhours ? Math.round(s.allocated_hours * 10) / 10 : 0,
-                    actual_hours: s.total_manhours ? Math.round(s.actual_hours * 10) / 10 : 0,
-                    remaining: s.total_manhours ? Math.round(s.remaining * 10) / 10 : 0,
-                    perc
+                    total_manhours: null,
+                    allocated_hours: 0,
+                    actual_hours: 0,
+                    remaining: null,
+                    perc: 0,
                 });
+                setRoleQuotas([]);
             }
 
             // Members & tasks require project_board.read only — load before optional /users
@@ -296,9 +361,11 @@ export default function ProjectBoard() {
                 setTasks(tasksRes.data);
             }
 
-            const quotasRes = await fetchAPI(`/projects/${projectId}/quotas`);
-            if (quotasRes.data) {
-                setRoleQuotas(quotasRes.data);
+            if (!isFreelance) {
+                const quotasRes = await fetchAPI(`/projects/${projectId}/quotas`);
+                if (quotasRes.data) {
+                    setRoleQuotas((quotasRes.data || []).filter((q) => q.is_active !== false));
+                }
             }
 
             // Full user directory requires teams_users.read — non-admins may lack this; board must still work
@@ -349,9 +416,11 @@ export default function ProjectBoard() {
             }
 
             setNewTaskAssignee(taskToEdit.assignee_id ? taskToEdit.assignee_id.toString() : 'Unassigned');
-            setNewTaskEstimate(taskToEdit.estimated_hours || '');
+            setNewTaskRushHour(!!taskToEdit.rush_hour);
+            setNewTaskEstimate(baseInputFromStoredHours(taskToEdit.estimated_hours, !!taskToEdit.rush_hour));
             setNewTaskCategory(taskToEdit.category || '');
             setNewTaskRoleFilter(taskToEdit.project_role_id ? taskToEdit.project_role_id.toString() : 'All');
+            setNewTaskDueDate(toDateInputValue(taskToEdit.due_date));
         } else {
             setEditingTaskId(null);
             setNewTaskStatus(status || 'To Do');
@@ -371,20 +440,24 @@ export default function ProjectBoard() {
             
             setNewTaskAssignee('Unassigned');
             setNewTaskEstimate('');
+            setNewTaskRushHour(false);
             setNewTaskCategory('');
+            setNewTaskDueDate('');
         }
         setIsModalOpen(true);
     };
 
-    const categoryOptions = Array.from(
-        new Set(
-            roleQuotas
-                .map((q) => q.role_name)
-                .filter(Boolean)
-        )
+    const visibleRoleQuotas = useMemo(
+        () => roleQuotas.filter((quota) => Number(quota.quota_hours || 0) > 0),
+        [roleQuotas]
     );
 
-    const categoryBasedRoleQuotas = roleQuotas.filter((quota) =>
+    const categoryOptions = useMemo(
+        () => Array.from(new Set(visibleRoleQuotas.map((q) => q.role_name).filter(Boolean))),
+        [visibleRoleQuotas]
+    );
+
+    const categoryBasedRoleQuotas = visibleRoleQuotas.filter((quota) =>
         newTaskCategory ? quota.role_name === newTaskCategory : true
     );
 
@@ -394,18 +467,45 @@ export default function ProjectBoard() {
         return Number.isInteger(num) ? `${num}` : num.toFixed(1);
     };
 
+    const normalizeBoardTaskStatus = (status) => {
+        const value = String(status || '').trim().toLowerCase();
+        if (value === 're-open' || value === 'reopen') return 'Reopen';
+        if (value === 'in progress') return 'In Progress';
+        if (value === 'to do' || value === 'todo') return 'To Do';
+        if (value === 'review') return 'Review';
+        if (value === 'done') return 'Done';
+        return String(status || '').trim() || 'To Do';
+    };
+
     const mappedRoleQuotaHours = roleQuotas.reduce((sum, quota) => sum + (Number(quota.quota_hours) || 0), 0);
     const generalQuotaFromPresales = Math.max(0, (Number(selectedProject?.total_manhours) || 0) - mappedRoleQuotaHours);
     const generalAllocatedHours = tasks
         .filter((task) => !task.project_role_id)
         .reduce((sum, task) => sum + (Number(task.estimated_hours) || 0), 0);
     const generalQuotaRemaining = Math.max(0, generalQuotaFromPresales - generalAllocatedHours);
+    const showGeneralQuotaCard = generalQuotaFromPresales > 0;
+    const hasQuotaSummary = visibleRoleQuotas.length > 0 || showGeneralQuotaCard;
+    const headerTotalManhours = stats.total_manhours ?? selectedProject?.total_manhours;
+    const headerUsedManhours = useMemo(() => {
+        const fromTasks = tasks.reduce((sum, task) => {
+            if (normalizeBoardTaskStatus(task.status) === 'To Do') return sum;
+            return sum + (Number(task.estimated_hours) || 0);
+        }, 0);
+        if (tasks.length > 0) return fromTasks;
+        return Number(stats.allocated_hours) || 0;
+    }, [tasks, stats.allocated_hours]);
+    const headerUsagePercent = useMemo(() => {
+        const total = Number(headerTotalManhours) || 0;
+        if (total <= 0) return 0;
+        return Math.min(100, Math.round((headerUsedManhours / total) * 1000) / 10);
+    }, [headerUsedManhours, headerTotalManhours]);
 
     const handleSubmitTask = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
         try {
             const isWaterfall = selectedProject?.methodology === 'Waterfall';
+            const storedHours = isWaterfall ? null : effectiveHoursFromBaseInput(newTaskEstimate, newTaskRushHour);
             const payload = {
                 title: newTaskTitle,
                 feature_title: newTaskFeatureTitle,
@@ -413,10 +513,12 @@ export default function ProjectBoard() {
                 priority: newTaskPriority,
                 status: newTaskStatus,
                 assignee_id: newTaskAssignee !== 'Unassigned' ? parseInt(newTaskAssignee) : null,
-                estimated_hours: isWaterfall ? null : (newTaskEstimate || 0),
+                estimated_hours: isWaterfall ? null : storedHours,
+                rush_hour: isWaterfall || isFreelance ? false : newTaskRushHour,
                 project_id: selectedProject.id,
                 project_role_id: isWaterfall ? null : (newTaskRoleFilter !== 'All' ? parseInt(newTaskRoleFilter) : null),
-                category: newTaskCategory || null
+                category: newTaskCategory || null,
+                due_date: newTaskDueDate || null,
             };
 
             if (editingTaskId) {
@@ -783,9 +885,7 @@ export default function ProjectBoard() {
                                     )}
                                     <CardContent className="p-6">
                                         <div className="flex justify-between items-start mb-4">
-                                            <div className="p-3 rounded-xl bg-primary/10 text-primary">
-                                                <Briefcase className="size-6" />
-                                            </div>
+                                            <ProjectCompanyIcon logoUrl={project.company_logo_url} projectName={project.name} size="lg" />
                                             <Badge variant="outline" className={
                                                 project.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' :
                                                     project.status === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30' :
@@ -850,9 +950,7 @@ export default function ProjectBoard() {
                                             )}
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                                                        <Briefcase className="size-4" />
-                                                    </div>
+                                                    <ProjectCompanyIcon logoUrl={project.company_logo_url} projectName={project.name} size="sm" />
                                                     <span className="font-bold text-slate-900 dark:text-white">{project.name}</span>
                                                 </div>
                                             </td>
@@ -932,9 +1030,9 @@ export default function ProjectBoard() {
     }
 
     return (
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background-light dark:bg-background-dark transition-colors duration-200 h-full relative">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background-light dark:bg-background-dark transition-colors duration-200 h-full">
             {/* Project Header & Stats */}
-            <div className="flex flex-col gap-6 p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28] shrink-0 transition-colors duration-200">
+            <div className="flex flex-col gap-4 p-5 sm:p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28] shrink-0 transition-colors duration-200">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                         <Button variant="ghost" className="mb-2 -ml-3 text-slate-500" onClick={() => navigate('/board')}>
@@ -952,6 +1050,29 @@ export default function ProjectBoard() {
                             </Badge>
                         </div>
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{selectedProject.methodology} Board</p>
+                        {!isFreelance && headerTotalManhours != null && Number(headerTotalManhours) > 0 && (
+                            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 max-w-2xl">
+                                <p className="text-sm text-slate-600 dark:text-slate-300 flex items-center gap-1.5 shrink-0">
+                                    <Clock className="size-3.5 shrink-0 text-primary" />
+                                    <span>
+                                        <span className="font-semibold text-slate-900 dark:text-white">{formatHours(headerTotalManhours)} hrs</span>
+                                        <span className="text-slate-500 dark:text-slate-400"> total</span>
+                                    </span>
+                                </p>
+                                <div className="flex-1 min-w-[140px] max-w-md">
+                                    <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                        <span>Digunakan {formatHours(headerUsedManhours)} hrs</span>
+                                        <span>{headerUsagePercent}%</span>
+                                    </div>
+                                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                                        <div
+                                            className="h-full rounded-full bg-primary transition-all"
+                                            style={{ width: `${headerUsagePercent}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <div className="flex gap-3">
                         <div className="flex items-center -space-x-2 mr-1">
@@ -1064,60 +1185,67 @@ export default function ProjectBoard() {
                             </Card>
                         ))}
                     </div>
-                ) : !isFreelance && (roleQuotas.length > 0 || generalQuotaFromPresales > 0 || generalAllocatedHours > 0) && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {roleQuotas.map(quota => {
+                ) : !isFreelance && hasQuotaSummary && (
+                    <div className="flex flex-wrap gap-2">
+                        {visibleRoleQuotas.map((quota) => {
                             const alloc = Number(quota.allocated_hours) || 0;
                             const qh = Number(quota.quota_hours) || 0;
                             const realP = qh > 0 ? Math.round((alloc / qh) * 100) : 0;
                             const p = Math.min(100, realP);
                             const isOver = alloc > qh;
                             return (
-                                <Card key={quota.id} className="bg-slate-50 dark:bg-[#1e2532] border-none shadow-none">
-                                    <CardContent className="p-4">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{quota.role_name}</p>
-                                            <span className={`text-xs font-bold ${realP > 80 ? 'text-rose-500' : 'text-primary'}`}>{realP}%</span>
-                                        </div>
-                                        <div className="flex items-center justify-between gap-2">
-                                            <p className="text-lg font-bold text-slate-900 dark:text-white">
-                                                <span>{formatHours(alloc)} <span className="text-[10px] font-normal text-slate-400">/ {formatHours(qh)} hrs</span></span>
-                                            </p>
-                                            {isOver && (
-                                                <div className="px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-[10px] font-bold tracking-tight">
-                                                    Minus {(alloc - qh).toFixed(1)}h
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-2">
-                                            <div className={`h-1.5 rounded-full transition-all ${realP > 90 ? 'bg-rose-500' : realP > 70 ? 'bg-orange-500' : 'bg-primary'}`} style={{ width: `${p}%` }}></div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            )
-                        })}
-                        {(generalQuotaFromPresales > 0 || generalAllocatedHours > 0) && (
-                            <Card key="general-quota" className="bg-slate-50 dark:bg-[#1e2532] border-none shadow-none">
-                                <CardContent className="p-4">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">General Quota</p>
-                                        <span className={`text-xs font-bold ${(generalQuotaFromPresales > 0 && (generalAllocatedHours / generalQuotaFromPresales) * 100 > 80) ? 'text-rose-500' : 'text-primary'}`}>
-                                            {generalQuotaFromPresales > 0 ? `${Math.round((generalAllocatedHours / generalQuotaFromPresales) * 100)}%` : '0%'}
+                                <div
+                                    key={quota.id}
+                                    className="min-w-[148px] flex-1 max-w-[220px] rounded-lg border border-slate-200/80 dark:border-slate-700/80 bg-slate-50/80 dark:bg-[#1e2532]/80 px-3 py-2.5"
+                                >
+                                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate" title={quota.role_name}>
+                                            {quota.role_name}
+                                        </p>
+                                        <span className={`text-[10px] font-bold shrink-0 ${realP > 80 ? 'text-rose-500' : 'text-primary'}`}>
+                                            {realP}%
                                         </span>
                                     </div>
-                                    <div className="flex items-center justify-between gap-2">
-                                        <p className="text-lg font-bold text-slate-900 dark:text-white">
-                                            <span>{formatHours(generalAllocatedHours)} <span className="text-[10px] font-normal text-slate-400">/ {formatHours(generalQuotaFromPresales)} hrs</span></span>
+                                    <div className="flex items-baseline justify-between gap-2">
+                                        <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                            {formatHours(alloc)}
+                                            <span className="text-[10px] font-normal text-slate-400"> / {formatHours(qh)}h</span>
                                         </p>
+                                        {isOver ? (
+                                            <span className="text-[9px] font-bold text-rose-500 shrink-0">+{(alloc - qh).toFixed(1)}h</span>
+                                        ) : null}
                                     </div>
-                                    <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-2">
+                                    <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                                         <div
-                                            className={`h-1.5 rounded-full transition-all ${generalQuotaFromPresales > 0 && (generalAllocatedHours / generalQuotaFromPresales) * 100 > 90 ? 'bg-rose-500' : generalQuotaFromPresales > 0 && (generalAllocatedHours / generalQuotaFromPresales) * 100 > 70 ? 'bg-orange-500' : 'bg-primary'}`}
-                                            style={{ width: `${generalQuotaFromPresales > 0 ? Math.min(100, (generalAllocatedHours / generalQuotaFromPresales) * 100) : 0}%` }}
-                                        ></div>
+                                            className={`h-full rounded-full transition-all ${realP > 90 ? 'bg-rose-500' : realP > 70 ? 'bg-orange-500' : 'bg-primary'}`}
+                                            style={{ width: `${p}%` }}
+                                        />
                                     </div>
-                                </CardContent>
-                            </Card>
+                                </div>
+                            );
+                        })}
+                        {showGeneralQuotaCard && (
+                            <div
+                                key="general-quota"
+                                className="min-w-[148px] flex-1 max-w-[220px] rounded-lg border border-slate-200/80 dark:border-slate-700/80 bg-slate-50/80 dark:bg-[#1e2532]/80 px-3 py-2.5"
+                            >
+                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">General</p>
+                                    <span className={`text-[10px] font-bold shrink-0 ${(generalAllocatedHours / generalQuotaFromPresales) * 100 > 80 ? 'text-rose-500' : 'text-primary'}`}>
+                                        {Math.round((generalAllocatedHours / generalQuotaFromPresales) * 100)}%
+                                    </span>
+                                </div>
+                                <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                    {formatHours(generalAllocatedHours)}
+                                    <span className="text-[10px] font-normal text-slate-400"> / {formatHours(generalQuotaFromPresales)}h</span>
+                                </p>
+                                <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                                    <div
+                                        className={`h-full rounded-full transition-all ${(generalAllocatedHours / generalQuotaFromPresales) * 100 > 90 ? 'bg-rose-500' : (generalAllocatedHours / generalQuotaFromPresales) * 100 > 70 ? 'bg-orange-500' : 'bg-primary'}`}
+                                        style={{ width: `${Math.min(100, (generalAllocatedHours / generalQuotaFromPresales) * 100)}%` }}
+                                    />
+                                </div>
+                            </div>
                         )}
                     </div>
                 )}
@@ -1125,7 +1253,7 @@ export default function ProjectBoard() {
 
             {/* Board / List View */}
             {viewMode === 'kanban' ? (
-                <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 absolute inset-x-0 bottom-0 top-[300px]">
+                <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-6">
                     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
                         <div className="flex h-full gap-6 min-w-max pb-6">
                             {COLUMNS.map(col => (
@@ -1152,7 +1280,7 @@ export default function ProjectBoard() {
                     </DndContext>
                 </div>
             ) : (
-                <div className="flex-1 overflow-auto p-6 absolute inset-x-0 bottom-0 top-[300px]">
+                <div className="flex-1 min-h-0 overflow-auto p-6">
                     <div className="bg-white dark:bg-[#151b28] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
                         <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
@@ -1163,7 +1291,7 @@ export default function ProjectBoard() {
                                     <th className="px-6 py-4 font-medium">Priority</th>
                                     <th className="px-6 py-4 font-medium">Assignee</th>
                                     <th className="px-6 py-4 font-medium text-center">Category</th>
-                                    <th className="px-6 py-4 font-medium text-center">Role Quota</th>
+                                    {!isFreelance && <th className="px-6 py-4 font-medium text-center">Role Quota</th>}
                                     {!isFreelance && <th className="px-6 py-4 font-medium text-right">Est. Hours</th>}
                                 </tr>
                             </thead>
@@ -1223,18 +1351,25 @@ export default function ProjectBoard() {
                                                 </span>
                                             ) : '-'}
                                         </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                                                {task.project_role_id 
-                                                    ? (roleQuotas.find(q => q.project_role_id === task.project_role_id)?.role_name || `Role ${task.project_role_id}`) 
-                                                    : 'General'}
-                                            </span>
-                                        </td>
+                                        {!isFreelance && (
+                                            <td className="px-6 py-4 text-center">
+                                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                                    {task.project_role_id
+                                                        ? (roleQuotas.find(q => q.project_role_id === task.project_role_id)?.role_name || `Role ${task.project_role_id}`)
+                                                        : 'General'}
+                                                </span>
+                                            </td>
+                                        )}
                                         {!isFreelance && (
                                             <td className="px-6 py-4 text-right text-slate-500 dark:text-slate-400">
-                                                <div className="flex items-center justify-end gap-1.5 font-medium text-sm">
-                                                    <Clock className="size-3.5" />
-                                                    {task.estimated_hours || 0} hrs
+                                                <div className="flex items-center justify-end gap-1.5 font-medium text-sm flex-wrap">
+                                                    {task.rush_hour && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30">
+                                                            Rush hour
+                                                        </span>
+                                                    )}
+                                                    <Clock className="size-3.5 shrink-0" />
+                                                    <span>{task.estimated_hours || 0} hrs</span>
                                                 </div>
                                             </td>
                                         )}
@@ -1242,7 +1377,7 @@ export default function ProjectBoard() {
                                 ))}
                                 {tasks.length === 0 && (
                                     <tr>
-                                        <td colSpan={isTaskBulkEditMode && !isFreelance ? "8" : (isFreelance ? "6" : "7")} className="px-6 py-8 text-center text-slate-500">No tasks found. Create one first!</td>
+                                        <td colSpan={isTaskBulkEditMode && !isFreelance ? "8" : (isFreelance ? "5" : "7")} className="px-6 py-8 text-center text-slate-500">No tasks found. Create one first!</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -1253,128 +1388,185 @@ export default function ProjectBoard() {
 
             {/* Modal */}
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="sm:max-w-[560px]">
+                <DialogContent className="sm:max-w-[600px]">
                     <DialogHeader>
                         <DialogTitle>{editingTaskId ? 'Edit Task' : 'Add New Task'}</DialogTitle>
                     </DialogHeader>
-                    <form className="flex flex-col gap-4 py-4 max-h-[70vh] overflow-y-auto px-1" onSubmit={handleSubmitTask}>
-                        <div className="flex flex-col gap-2">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Feature Title <span className="text-rose-500">*</span></label>
-                            <Input type="text" value={newTaskFeatureTitle} onChange={e => setNewTaskFeatureTitle(e.target.value)} placeholder="E.g., Authentication" required />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Description / Sub-task <span className="text-slate-400 font-normal">(Optional)</span></label>
-                            <Textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} placeholder="Enter detailed description..." className="min-h-[80px]" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Task Title <span className="text-rose-500">*</span></label>
-                            <Input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} required placeholder="E.g., Design Homepage" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</label>
-                            <Select value={newTaskCategory} onValueChange={(val) => {
-                                setNewTaskCategory(val);
-                                const matchedQuota = roleQuotas.find((q) => q.role_name === val);
-                                if (matchedQuota) {
-                                    setNewTaskRoleFilter(matchedQuota.project_role_id.toString());
-                                }
-                            }}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select category" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {categoryOptions.map((categoryName) => (
-                                        <SelectItem key={categoryName} value={categoryName}>{categoryName}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Priority</label>
-                                <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select priority" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Low">Low</SelectItem>
-                                        <SelectItem value="Medium">Medium</SelectItem>
-                                        <SelectItem value="High">High</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                    <form className="flex flex-col gap-5 py-2 max-h-[75vh] overflow-y-auto px-1" onSubmit={handleSubmitTask}>
+                        <section className="space-y-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Task Details</p>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Feature Title <span className="text-rose-500">*</span></label>
+                                <Input type="text" value={newTaskFeatureTitle} onChange={e => setNewTaskFeatureTitle(e.target.value)} placeholder="E.g., Authentication" required />
                             </div>
-                            <div className="flex flex-col gap-2">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Status</label>
-                                <Select value={newTaskStatus} onValueChange={setNewTaskStatus}>
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="To Do">To Do</SelectItem>
-                                        <SelectItem value="In Progress">In Progress</SelectItem>
-                                        <SelectItem value="Review">Review</SelectItem>
-                                        <SelectItem value="Re-open">Re-open</SelectItem>
-                                        <SelectItem value="Done">Done</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Task Title <span className="text-rose-500">*</span></label>
+                                <Input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} required placeholder="E.g., Design Homepage" />
                             </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {selectedProject?.methodology !== 'Waterfall' && !isFreelance && (
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Project Role Quota</label>
-                                    <Select value={newTaskRoleFilter} onValueChange={(val) => {
-                                        setNewTaskRoleFilter(val);
-                                        setNewTaskAssignee('Unassigned');
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    Description / Sub-task <span className="text-slate-400 font-normal">(Optional)</span>
+                                </label>
+                                <Textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} placeholder="Enter detailed description..." className="min-h-[72px] resize-y" />
+                            </div>
+                            {categoryOptions.length > 0 && (
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</label>
+                                    <Select value={newTaskCategory} onValueChange={(val) => {
+                                        setNewTaskCategory(val);
+                                        const matchedQuota = roleQuotas.find((q) => q.role_name === val);
+                                        if (matchedQuota) {
+                                            setNewTaskRoleFilter(matchedQuota.project_role_id.toString());
+                                        }
                                     }}>
-                                        <SelectTrigger className="w-full min-w-0">
-                                            <SelectValue
-                                                placeholder={newTaskCategory ? "Select Role..." : "Select category first"}
-                                                className="truncate"
-                                            />
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select category" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {selectedProject?.total_manhours > 0 && (
-                                                <SelectItem value="All">
-                                                    {`General Quota (Rem: ${formatHours(generalQuotaRemaining)}h)`}
-                                                </SelectItem>
-                                            )}
-                                            {categoryBasedRoleQuotas
-                                                .filter(q => q.quota_hours > 0)
-                                                .map(q => (
-                                                    <SelectItem key={q.project_role_id} value={q.project_role_id.toString()}>
-                                                        {q.role_name} (Rem: {q.quota_hours - (q.allocated_hours || 0)}h)
-                                                    </SelectItem>
-                                                ))
-                                            }
+                                            {categoryOptions.map((categoryName) => (
+                                                <SelectItem key={categoryName} value={categoryName}>{categoryName}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
                             )}
-                            <div className="flex flex-col gap-2">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Assignee</label>
-                                <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
-                                    <SelectTrigger className="w-full min-w-0">
-                                        <SelectValue placeholder="Unassigned" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Unassigned">Unassigned</SelectItem>
-                                        {assigneeSelectOptions.map((opt) => (
-                                            <SelectItem key={opt.id} value={opt.id.toString()}>
-                                                {opt.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            {selectedProject?.methodology !== 'Waterfall' && !isFreelance && (
-                                <div className="flex flex-col gap-2 col-span-2">
-                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estimated Manhours</label>
-                                    <Input type="number" value={newTaskEstimate} onChange={e => setNewTaskEstimate(e.target.value)} min="0" step="0.5" placeholder="0" />
+                        </section>
+
+                        <section className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status & Schedule</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Priority</label>
+                                    <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Priority" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Low">Low</SelectItem>
+                                            <SelectItem value="Medium">Medium</SelectItem>
+                                            <SelectItem value="High">High</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                            )}
-                        </div>
-                        <DialogFooter className="mt-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Status</label>
+                                    <Select value={newTaskStatus} onValueChange={setNewTaskStatus}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="To Do">To Do</SelectItem>
+                                            <SelectItem value="In Progress">In Progress</SelectItem>
+                                            <SelectItem value="Review">Review</SelectItem>
+                                            <SelectItem value="Re-open">Re-open</SelectItem>
+                                            <SelectItem value="Done">Done</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                        Due Date <span className="text-slate-400 font-normal">(Optional)</span>
+                                    </label>
+                                    <Input
+                                        type="date"
+                                        value={newTaskDueDate}
+                                        onChange={(e) => setNewTaskDueDate(e.target.value)}
+                                        className="w-full"
+                                    />
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Assignment</p>
+                            <div className={`grid grid-cols-1 gap-3 ${selectedProject?.methodology !== 'Waterfall' && !isFreelance ? 'sm:grid-cols-2' : ''}`}>
+                                {selectedProject?.methodology !== 'Waterfall' && !isFreelance && (
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Project Role Quota</label>
+                                        <Select value={newTaskRoleFilter} onValueChange={(val) => {
+                                            setNewTaskRoleFilter(val);
+                                            setNewTaskAssignee('Unassigned');
+                                        }}>
+                                            <SelectTrigger className="w-full min-w-0">
+                                                <SelectValue
+                                                    placeholder={newTaskCategory ? 'Select role...' : 'Select category first'}
+                                                    className="truncate"
+                                                />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {selectedProject?.total_manhours > 0 && (
+                                                    <SelectItem value="All">
+                                                        {`General Quota (Rem: ${formatHours(generalQuotaRemaining)}h)`}
+                                                    </SelectItem>
+                                                )}
+                                                {categoryBasedRoleQuotas
+                                                    .filter(q => q.quota_hours > 0)
+                                                    .map(q => (
+                                                        <SelectItem key={q.project_role_id} value={q.project_role_id.toString()}>
+                                                            {q.role_name} (Rem: {q.quota_hours - (q.allocated_hours || 0)}h)
+                                                        </SelectItem>
+                                                    ))
+                                                }
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Assignee</label>
+                                    <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
+                                        <SelectTrigger className="w-full min-w-0">
+                                            <SelectValue placeholder="Unassigned" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Unassigned">Unassigned</SelectItem>
+                                            {assigneeSelectOptions.map((opt) => (
+                                                <SelectItem key={opt.id} value={opt.id.toString()}>
+                                                    {opt.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </section>
+
+                        {selectedProject?.methodology !== 'Waterfall' && !isFreelance && (
+                            <section className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Manhour Estimate</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 sm:items-end">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estimated Manhours</label>
+                                        <Input
+                                            type="number"
+                                            value={newTaskEstimate}
+                                            onChange={e => setNewTaskEstimate(e.target.value)}
+                                            min="0"
+                                            step="0.5"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-3 py-2.5 sm:mb-0.5 sm:min-w-[200px]">
+                                        <Checkbox
+                                            id="task-rush-hour"
+                                            checked={newTaskRushHour}
+                                            onCheckedChange={(c) => setNewTaskRushHour(c === true)}
+                                        />
+                                        <div className="flex flex-col gap-0.5 min-w-0">
+                                            <label htmlFor="task-rush-hour" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                                                Rush hour
+                                            </label>
+                                            {newTaskRushHour && (
+                                                <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+                                                    Quota uses input × 1.3
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
+                        <DialogFooter className="mt-1 pt-4 border-t border-slate-200 dark:border-slate-800">
                             <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
                             <Button type="submit" disabled={isSubmitting}>
                                 {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
@@ -1538,7 +1730,10 @@ export default function ProjectBoard() {
                     <DialogHeader>
                         <DialogTitle>Import Tasks</DialogTitle>
                         <DialogDescription>
-                            Upload a CSV file to import tasks to this project board.
+                            Upload a CSV file to import tasks. Columns: Title, Feature Title, Description, Status, Priority,
+                            Assignee Email, Estimated Hours (base input), Project Role Quota (role name on this project, or General),
+                            Category (optional; used if quota column empty), Due Date (YYYY-MM-DD), Rush Hour (Yes/No).
+                            Rush hour multiplies estimated hours by 1.3 before saving.
                         </DialogDescription>
                     </DialogHeader>
                     

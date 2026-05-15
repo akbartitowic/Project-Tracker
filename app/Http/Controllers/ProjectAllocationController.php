@@ -6,11 +6,57 @@ use App\Models\ProjectAllocation;
 use App\Models\Project;
 use App\Models\Manhour;
 use App\Models\ProjectRoleQuota;
+use App\Models\Task;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProjectAllocationController extends Controller
 {
+    private const CHANGE_REQUEST_CATEGORY = 'Change Request';
+
+    private function isChangeRequestRow($row): bool
+    {
+        if (!empty($row->is_change_request)) {
+            return true;
+        }
+
+        return !empty($row->is_topup)
+            && str_starts_with((string) ($row->description ?? ''), '[CHANGE REQUEST]');
+    }
+
+    private function resolveChangeRequestCategoryId(): int
+    {
+        $existing = DB::table('finance_categories')
+            ->where('name', self::CHANGE_REQUEST_CATEGORY)
+            ->value('id');
+
+        if ($existing) {
+            return (int) $existing;
+        }
+
+        return (int) DB::table('finance_categories')->insertGetId([
+            'name' => self::CHANGE_REQUEST_CATEGORY,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function mapChangeRequestRow($row): array
+    {
+        $description = (string) ($row->description ?? '');
+        $legacyNotes = str_starts_with($description, '[CHANGE REQUEST] ')
+            ? substr($description, strlen('[CHANGE REQUEST] '))
+            : $description;
+
+        return [
+            'id' => $row->id,
+            'cr_date' => $row->cr_date,
+            'cr_feature' => $row->cr_feature ?: $legacyNotes ?: '-',
+            'amount' => (float) ($row->amount ?? 0),
+            'created_at' => $row->created_at,
+        ];
+    }
+
     public function index(Request $request)
     {
         $query = DB::table('project_allocations as pa')
@@ -119,6 +165,47 @@ class ProjectAllocationController extends Controller
         }
     }
 
+    public function changeRequest(Request $request, $id)
+    {
+        $project = Project::find($id);
+        if (!$project) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+        if (!str_contains(strtolower((string) ($project->methodology ?? '')), 'waterfall')) {
+            return response()->json(['error' => 'Change Request hanya tersedia untuk project Waterfall.'], 422);
+        }
+
+        $validated = $request->validate([
+            'cr_date' => 'required|date',
+            'cr_feature' => 'required|string|max:255',
+            'additional_quotation' => 'required|numeric|min:0',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $project->quotation_value += $validated['additional_quotation'];
+            $project->save();
+
+            ProjectAllocation::create([
+                'project_id' => $id,
+                'category_id' => $this->resolveChangeRequestCategoryId(),
+                'amount' => $validated['additional_quotation'],
+                'description' => '[CHANGE REQUEST] ' . $validated['cr_feature'],
+                'is_topup' => true,
+                'is_change_request' => true,
+                'topup_hours' => null,
+                'cr_date' => $validated['cr_date'],
+                'cr_feature' => $validated['cr_feature'],
+            ]);
+
+            DB::commit();
+            return response()->json(['message' => 'Change request recorded']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     public function financeSummary($id)
     {
         $project = Project::find($id);
@@ -140,6 +227,15 @@ class ProjectAllocationController extends Controller
         $topupHoursTotal = $allocations->where('is_topup', true)->sum(function ($row) {
             return (float)($row->topup_hours ?? 0);
         });
+        $changeRequestAllocations = $allocations->filter(fn ($row) => $this->isChangeRequestRow($row));
+        $changeRequestCount = $changeRequestAllocations->count();
+        $changeRequestTotalValue = $changeRequestAllocations->sum(function ($row) {
+            return (float) ($row->amount ?? 0);
+        });
+        $changeRequests = $changeRequestAllocations
+            ->sortByDesc(fn ($row) => $row->cr_date ?? $row->created_at)
+            ->map(fn ($row) => $this->mapChangeRequestRow($row))
+            ->values();
         $quotationValue = $project->quotation_value ?? 0;
 
         $allocatedHours = DB::table('tasks')->where('project_id', $id)->sum('estimated_hours');
@@ -149,6 +245,7 @@ class ProjectAllocationController extends Controller
         return response()->json([
             'data' => [
                 'project_name' => $project->name,
+                'methodology' => $project->methodology,
                 'quotation_value' => $quotationValue,
                 'total_allocated' => $totalAllocated,
                 'planned_allocated' => $plannedAllocated,
@@ -159,8 +256,170 @@ class ProjectAllocationController extends Controller
                 'remaining_hours' => $totalManhours - $allocatedHours,
                 'topup_hours_total' => $topupHoursTotal,
                 'has_topup_manhours' => $topupHoursTotal > 0,
+                'change_request_count' => $changeRequestCount,
+                'change_request_total_value' => $changeRequestTotalValue,
+                'change_requests' => $changeRequests,
                 'allocations' => $allocations
             ]
         ]);
+    }
+
+    public function transferQuota(Request $request, $id)
+    {
+        $project = Project::find($id);
+        if (!$project) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+        if (str_contains(strtolower((string) ($project->methodology ?? '')), 'waterfall')) {
+            return response()->json(['error' => 'Switch MH tidak tersedia untuk project Waterfall.'], 422);
+        }
+
+        $validated = $request->validate([
+            'hours' => 'required|numeric|min:0.01',
+            'from_type' => 'required|in:general,role',
+            'from_project_role_id' => 'nullable|integer|exists:project_roles,id|required_if:from_type,role',
+            'to_type' => 'required|in:general,role',
+            'to_project_role_id' => 'nullable|integer|exists:project_roles,id|required_if:to_type,role',
+        ]);
+
+        $hours = round((float) $validated['hours'], 2);
+        $fromType = $validated['from_type'];
+        $toType = $validated['to_type'];
+        $fromRoleId = $validated['from_project_role_id'] ?? null;
+        $toRoleId = $validated['to_project_role_id'] ?? null;
+
+        if ($fromType === $toType && (int) ($fromRoleId ?? 0) === (int) ($toRoleId ?? 0)) {
+            return response()->json(['error' => 'Sumber dan tujuan tidak boleh sama.'], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $available = $this->availableTransferHours($project, $fromType, $fromRoleId);
+            if ($hours > $available + 0.0001) {
+                DB::rollBack();
+                return response()->json([
+                    'error' => 'Jam yang dipindahkan melebihi sisa quota yang tersedia (' . round($available, 2) . ' jam).',
+                ], 422);
+            }
+
+            if ($fromType === 'role') {
+                $fromQuota = ProjectRoleQuota::where('project_id', $id)
+                    ->where('project_role_id', $fromRoleId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$fromQuota || !$fromQuota->is_active) {
+                    DB::rollBack();
+                    return response()->json(['error' => 'Quota kategori sumber tidak ditemukan atau tidak aktif.'], 422);
+                }
+
+                $fromQuota->quota_hours = max(0, round((float) $fromQuota->quota_hours - $hours, 2));
+                $fromQuota->save();
+            }
+
+            if ($toType === 'role') {
+                $toQuota = ProjectRoleQuota::firstOrNew([
+                    'project_id' => $id,
+                    'project_role_id' => $toRoleId,
+                ]);
+                $toQuota->quota_hours = round((float) ($toQuota->quota_hours ?? 0) + $hours, 2);
+                $toQuota->is_active = true;
+                $toQuota->save();
+            }
+
+            DB::commit();
+
+            return response()->json(['message' => 'Quota MH berhasil dipindahkan.']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function deactivateRoleQuota($id, $quotaId)
+    {
+        $project = Project::find($id);
+        if (!$project) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+        if (str_contains(strtolower((string) ($project->methodology ?? '')), 'waterfall')) {
+            return response()->json(['error' => 'Nonaktifkan kategori tidak tersedia untuk project Waterfall.'], 422);
+        }
+
+        $quota = ProjectRoleQuota::where('project_id', $id)->where('id', $quotaId)->first();
+        if (!$quota) {
+            return response()->json(['error' => 'Quota kategori tidak ditemukan.'], 404);
+        }
+        if (!$quota->is_active) {
+            return response()->json(['error' => 'Kategori sudah nonaktif.'], 422);
+        }
+
+        if ((float) $quota->quota_hours > 0.0001) {
+            return response()->json(['error' => 'Kategori hanya bisa dinonaktifkan jika quota MH bernilai 0.'], 422);
+        }
+
+        $taskCount = Task::where('project_id', $id)
+            ->where('project_role_id', $quota->project_role_id)
+            ->count();
+
+        if ($taskCount > 0) {
+            return response()->json([
+                'error' => 'Kategori tidak bisa dinonaktifkan karena masih ada task yang menggunakan kategori ini.',
+            ], 422);
+        }
+
+        $quota->is_active = false;
+        $quota->save();
+
+        return response()->json(['message' => 'Kategori berhasil dinonaktifkan.']);
+    }
+
+    private function availableTransferHours(Project $project, string $fromType, ?int $fromRoleId): float
+    {
+        if ($fromType === 'general') {
+            $meta = $this->buildQuotaMeta((int) $project->id, $project);
+
+            return max(0, (float) ($meta['general_quota']['remaining_hours'] ?? 0));
+        }
+
+        $quota = ProjectRoleQuota::where('project_id', $project->id)
+            ->where('project_role_id', $fromRoleId)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$quota) {
+            return 0;
+        }
+
+        $allocated = (float) DB::table('tasks')
+            ->where('project_id', $project->id)
+            ->where('project_role_id', $fromRoleId)
+            ->sum('estimated_hours');
+
+        return max(0, (float) $quota->quota_hours - $allocated);
+    }
+
+    private function buildQuotaMeta(int $projectId, Project $project): array
+    {
+        $quotas = DB::table('project_role_quotas as pq')
+            ->where('pq.project_id', $projectId)
+            ->where('pq.is_active', true)
+            ->get();
+
+        $roleQuotaSum = (float) $quotas->sum('quota_hours');
+        $totalManhours = (float) ($project->total_manhours ?? 0);
+        $generalCurrent = max(0, $totalManhours - $roleQuotaSum);
+        $generalAllocated = (float) DB::table('tasks')
+            ->where('project_id', $projectId)
+            ->whereNull('project_role_id')
+            ->sum('estimated_hours');
+
+        return [
+            'general_quota' => [
+                'current_quota_hours' => $generalCurrent,
+                'allocated_hours' => $generalAllocated,
+                'remaining_hours' => $generalCurrent - $generalAllocated,
+            ],
+        ];
     }
 }

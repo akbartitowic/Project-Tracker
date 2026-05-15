@@ -22,20 +22,19 @@ class ProjectCategoryController extends Controller
         return response()->json(['id' => $category->id]);
     }
 
-    public function update(Request $request, string $id)
+    public function update(Request $request, ProjectCategory $project_category)
     {
-        $category = ProjectCategory::findOrFail($id);
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:project_categories,name,' . $category->id,
+            'name' => 'required|string|max:255|unique:project_categories,name,' . $project_category->id,
         ]);
 
-        $changes = $category->update($validated) ? 1 : 0;
+        $changes = $project_category->update($validated) ? 1 : 0;
         return response()->json(['changes' => $changes]);
     }
 
-    public function destroy(string $id)
+    public function destroy(ProjectCategory $project_category)
     {
-        $deleted = ProjectCategory::destroy($id);
-        return response()->json(['deleted' => $deleted]);
+        $deleted = $project_category->delete();
+        return response()->json(['deleted' => $deleted ? 1 : 0]);
     }
 }

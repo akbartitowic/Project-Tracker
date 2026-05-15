@@ -135,6 +135,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/project-allocations/{id}/realization', [ProjectAllocationController::class, 'realize'])->middleware('permission:finance_monitoring.update');
     Route::delete('/project-allocations/{id}', [ProjectAllocationController::class, 'destroy'])->middleware('permission:finance_monitoring.delete');
     Route::post('/projects/{id}/top-up', [ProjectAllocationController::class, 'topUp'])->middleware('permission:finance_monitoring.create');
+    Route::post('/projects/{id}/change-request', [ProjectAllocationController::class, 'changeRequest'])->middleware('permission:finance_monitoring.create');
+    Route::post('/projects/{id}/quota-transfer', [ProjectAllocationController::class, 'transferQuota'])->middleware('permission:finance_monitoring.update');
+    Route::post('/projects/{id}/role-quotas/{quotaId}/deactivate', [ProjectAllocationController::class, 'deactivateRoleQuota'])->middleware('permission:finance_monitoring.update');
 
     // 8. Analytics
     Route::get('/stats', [StatController::class, 'stats'])->middleware('permission:reports.read');
@@ -142,6 +145,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/stats/recent', [StatController::class, 'recentLogs'])->middleware('permission:dashboard.read');
     Route::get('/reports/efficiency', [StatController::class, 'efficiency'])->middleware('permission:reports.read');
     Route::get('/reports/revenue-trend', [StatController::class, 'revenueTrend'])->middleware('permission:reports.read');
+    Route::get('/reports/company-projects', [StatController::class, 'companyProjects'])->middleware('permission:reports.read');
     Route::get('/reports/projects', [ReportController::class, 'getProjects'])->middleware('permission:generate_report.read');
     Route::post('/reports/generate', [ReportController::class, 'generate'])->middleware('permission:generate_report.create');
     Route::post('/reports/send-email', [ReportController::class, 'sendEmail'])->middleware('permission:generate_report.create');

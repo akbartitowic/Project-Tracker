@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Role;
-use App\Models\Permission;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -33,22 +33,13 @@ class AuthController extends Controller
 
     private function ensureBoardOnlyPermissions(Role $role): void
     {
-        $permissionSpecs = [
-            ['slug' => 'project_board.read', 'name' => 'Read Project Board', 'module' => 'Project Board'],
-            ['slug' => 'project_board.create', 'name' => 'Create Project Board', 'module' => 'Project Board'],
-            ['slug' => 'project_board.update', 'name' => 'Update Project Board', 'module' => 'Project Board'],
-        ];
-
-        $permissionIds = [];
-        foreach ($permissionSpecs as $spec) {
-            $permission = Permission::firstOrCreate(
-                ['slug' => $spec['slug']],
-                ['name' => $spec['name'], 'module' => $spec['module']]
-            );
-            $permissionIds[] = $permission->id;
+        PermissionCatalog::sync();
+        $permissionIds = PermissionCatalog::permissionIdsForSlugs(
+            PermissionCatalog::boardMemberPermissionSlugs()
+        );
+        if ($permissionIds !== []) {
+            $role->permissions()->sync($permissionIds);
         }
-
-        $role->permissions()->sync($permissionIds);
     }
 
     public function signup(Request $request)

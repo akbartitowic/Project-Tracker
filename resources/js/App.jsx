@@ -84,7 +84,7 @@ function App() {
 
           <Route path="reports" element={<Reports />} />
           <Route path="generate-report" element={<GenerateReport />} />
-          <Route path="finance-monitoring" element={<FinanceMonitoring />} />
+          <Route path="finance-monitoring/:projectId?" element={<FinanceMonitoring />} />
           <Route path="finance-categories" element={<FinanceCategories />} />
           <Route path="finance-report" element={<FinanceReport />} />
           <Route path="finance-realization-report" element={<RealizationReport />} />

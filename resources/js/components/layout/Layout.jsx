@@ -27,6 +27,8 @@ export default function Layout() {
         if (pathname === '/sales-category-projects') return 'Bisnis - Category Project';
         if (pathname.startsWith('/presales')) return MENU_NEW_PROJECT;
         if (pathname === '/finance-realization-report') return 'Finance - Realization Report';
+        if (pathname === '/finance-monitoring') return 'Finance - Monitoring';
+        if (pathname.startsWith('/finance-monitoring/')) return 'Finance - Project Monitoring';
         return 'Overview';
     };
 

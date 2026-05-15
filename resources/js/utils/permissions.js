@@ -38,6 +38,10 @@ export function hasPermission(user, slug) {
     return slugs.has(slug);
 }
 
+export function isFreelanceUser(user) {
+    return String(user?.role?.name || user?.role || '').trim().toLowerCase() === 'freelance';
+}
+
 export function isAdminUser(user) {
     const roleName = String(user?.role?.name || user?.role_name || user?.role || '').toLowerCase();
     if (roleName === 'admin') return true;

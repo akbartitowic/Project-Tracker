@@ -1,17 +1,163 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
-import { Wallet, Plus, Trash2, PieChart, Info, ArrowUpRight, Banknote, ListFilter, Search, Clock } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+    Wallet,
+    Briefcase,
+    Plus,
+    Trash2,
+    PieChart,
+    Info,
+    ArrowUpRight,
+    Banknote,
+    Search,
+    Clock,
+    FileEdit,
+    ArrowLeft,
+    Loader2,
+    ArrowRightLeft,
+    Ban,
+} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+function SectionTable({ children, className = '' }) {
+    return (
+        <div className={`overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 ${className}`}>
+            <table className="w-full text-sm text-left">{children}</table>
+        </div>
+    );
+}
+
+const formatCurrency = (val) =>
+    new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0,
+    }).format(Number(val) || 0);
+
+const formatHours = (val) => {
+    const num = Number(val || 0);
+    return Number.isInteger(num) ? `${num}` : num.toFixed(1);
+};
+
+function ProjectCompanyIcon({ logoUrl, projectName, size = 'sm' }) {
+    const imgClass = size === 'lg' ? 'size-12 rounded-xl' : 'size-9 rounded-lg';
+    const iconWrapClass = size === 'lg' ? 'p-3 rounded-xl' : 'size-9 rounded-lg flex items-center justify-center';
+    const iconClass = size === 'lg' ? 'size-6' : 'size-4';
+
+    if (logoUrl) {
+        return (
+            <img
+                src={logoUrl}
+                alt={projectName ? `${projectName} company logo` : 'Company logo'}
+                className={`${imgClass} object-cover border border-slate-200 dark:border-slate-700 bg-white shrink-0`}
+            />
+        );
+    }
+
+    return (
+        <div className={`${iconWrapClass} bg-primary/10 text-primary shrink-0`}>
+            <Briefcase className={iconClass} />
+        </div>
+    );
+}
+
+const projectStatusBadgeClass = {
+    Planning: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+    'In Progress': 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/30',
+    Done: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30',
+};
+
+function FinanceProjectTable({ projects, onSelectProject }) {
+    if (projects.length === 0) {
+        return null;
+    }
+
+    return (
+        <SectionTable className="border-0 rounded-none">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                    <th className="px-4 py-3 font-medium">Project</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Methodology</th>
+                    <th className="px-4 py-3 font-medium text-right">Quotation value</th>
+                    <th className="px-4 py-3 font-medium text-right w-28">Action</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {projects.map((proj) => (
+                    <tr
+                        key={proj.id}
+                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 cursor-pointer transition-colors"
+                        onClick={() => onSelectProject(proj.id)}
+                    >
+                        <td className="px-4 py-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <ProjectCompanyIcon
+                                    logoUrl={proj.company_logo_url}
+                                    projectName={proj.name}
+                                />
+                                <span className="font-semibold text-slate-900 dark:text-white truncate">
+                                    {proj.name}
+                                </span>
+                            </div>
+                        </td>
+                        <td className="px-4 py-3">
+                            <Badge
+                                variant="outline"
+                                className={`font-normal ${projectStatusBadgeClass[proj.status] || projectStatusBadgeClass.Planning}`}
+                            >
+                                {proj.status || 'Planning'}
+                            </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                            {proj.methodology ? (
+                                <Badge variant="outline" className="font-normal">
+                                    {proj.methodology}
+                                </Badge>
+                            ) : (
+                                <span className="text-slate-400">—</span>
+                            )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white whitespace-nowrap">
+                            {formatCurrency(proj.quotation_value || 0)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 text-primary"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectProject(proj.id);
+                                }}
+                            >
+                                Open
+                                <ArrowUpRight className="size-3.5" />
+                            </Button>
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </SectionTable>
+    );
+}
 
 export default function FinanceMonitoring() {
+    const { projectId: projectIdParam } = useParams();
+    const navigate = useNavigate();
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [projectRolesList, setProjectRolesList] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [detailLoading, setDetailLoading] = useState(false);
     const [selectedProject, setSelectedProject] = useState(null);
     const [summary, setSummary] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -24,16 +170,25 @@ export default function FinanceMonitoring() {
         description: ''
     });
 
-    // Top Up States
+    // Top Up / Change Request States
     const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+    const [isChangeRequestOpen, setIsChangeRequestOpen] = useState(false);
     const [topUpData, setTopUpData] = useState({
         additional_quotation: '',
         additional_hours: '',
         description: '',
         category_id: ''
     });
+    const defaultChangeRequestForm = () => ({
+        cr_date: new Date().toISOString().slice(0, 10),
+        cr_feature: '',
+        additional_quotation: '',
+    });
+    const [changeRequestData, setChangeRequestData] = useState(defaultChangeRequestForm);
 
-    // Quota Details States
+    // Quota / CR Details States
+    const [isCrDetailsOpen, setIsCrDetailsOpen] = useState(false);
+    const [changeRequestList, setChangeRequestList] = useState([]);
     const [isQuotaDetailsOpen, setIsQuotaDetailsOpen] = useState(false);
     const [quotaBreakdown, setQuotaBreakdown] = useState([]);
     const [quotaMeta, setQuotaMeta] = useState(null);
@@ -42,12 +197,23 @@ export default function FinanceMonitoring() {
     const [selectedAllocationForRealization, setSelectedAllocationForRealization] = useState(null);
     const [realizationAmountInput, setRealizationAmountInput] = useState('');
     const [isSavingRealization, setIsSavingRealization] = useState(false);
+    const [isSwitchMhOpen, setIsSwitchMhOpen] = useState(false);
+    const [switchMhData, setSwitchMhData] = useState({
+        from_key: 'general',
+        to_key: '',
+        hours: '',
+    });
+    const [isSwitchingMh, setIsSwitchingMh] = useState(false);
+    const [deactivatingQuotaId, setDeactivatingQuotaId] = useState(null);
 
     const selectedProjectData = useMemo(
         () => projects.find((project) => project.id === selectedProject) || null,
         [projects, selectedProject]
     );
-    const isWaterfallProject = selectedProjectData?.methodology === 'Waterfall';
+    const isWaterfallProject = useMemo(() => {
+        const methodology = (selectedProjectData?.methodology ?? summary?.methodology ?? '').toLowerCase();
+        return methodology.includes('waterfall');
+    }, [selectedProjectData, summary]);
 
     const loadInitialData = async () => {
         try {
@@ -66,23 +232,53 @@ export default function FinanceMonitoring() {
         }
     };
 
-    const loadProjectFinance = async (projectId) => {
+    const loadProjectFinance = useCallback(async (projectId) => {
+        const id = Number(projectId);
+        if (!id) return;
+
+        setDetailLoading(true);
         try {
-            const res = await fetchAPI(`/projects/${projectId}/finance-summary`);
+            const res = await fetchAPI(`/projects/${id}/finance-summary`);
             setSummary(res.data);
-            setSelectedProject(projectId);
-            
-            const qRes = await fetchAPI(`/projects/${projectId}/quotas`);
+            setSelectedProject(id);
+
+            const qRes = await fetchAPI(`/projects/${id}/quotas`);
             setQuotaBreakdown(qRes.data || []);
             setQuotaMeta(qRes.meta || null);
         } catch (error) {
             alert('Failed to load project finance details');
+        } finally {
+            setDetailLoading(false);
         }
+    }, []);
+
+    const selectProject = (projectId) => {
+        navigate(`/finance-monitoring/${projectId}`);
     };
 
     useEffect(() => {
         loadInitialData();
     }, []);
+
+    useEffect(() => {
+        if (!projectIdParam) {
+            setSelectedProject(null);
+            setSummary(null);
+            setQuotaBreakdown([]);
+            setQuotaMeta(null);
+            return;
+        }
+
+        if (projects.length === 0) return;
+
+        const project = projects.find((p) => p.id.toString() === projectIdParam.toString());
+        if (!project) {
+            navigate('/finance-monitoring', { replace: true });
+            return;
+        }
+
+        loadProjectFinance(project.id);
+    }, [projectIdParam, projects, navigate, loadProjectFinance]);
 
     const handleAddAllocation = async (e) => {
         e.preventDefault();
@@ -146,12 +342,35 @@ export default function FinanceMonitoring() {
         }
     };
 
+    const handleChangeRequest = async (e) => {
+        e.preventDefault();
+        if (!selectedProject || !changeRequestData.cr_feature || !changeRequestData.cr_date) return;
+
+        try {
+            await fetchAPI(`/projects/${selectedProject}/change-request`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    cr_date: changeRequestData.cr_date,
+                    cr_feature: changeRequestData.cr_feature,
+                    additional_quotation: parseFloat(changeRequestData.additional_quotation || 0),
+                })
+            });
+            setIsChangeRequestOpen(false);
+            setChangeRequestData(defaultChangeRequestForm());
+            loadProjectFinance(selectedProject);
+            loadInitialData();
+        } catch (error) {
+            alert('Change request failed: ' + error.message);
+        }
+    };
+
+    const openCrBreakdown = () => {
+        setChangeRequestList(summary?.change_requests || []);
+        setIsCrDetailsOpen(true);
+    };
+
     const handleTopUp = async (e) => {
         e.preventDefault();
-        if (isWaterfallProject) {
-            alert('Top up quota tidak tersedia untuk project Waterfall.');
-            return;
-        }
         if (!selectedProject || !topUpData.category_id || !topUpData.project_role_id) return;
 
         try {
@@ -187,17 +406,15 @@ export default function FinanceMonitoring() {
         }
     };
 
-    const formatCurrency = (val) => {
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0
-        }).format(val);
-    };
-
-    const formatHours = (val) => {
-        const num = Number(val || 0);
-        return Number.isInteger(num) ? `${num}` : num.toFixed(1);
+    const refreshQuotas = async () => {
+        if (!selectedProject) return;
+        try {
+            const res = await fetchAPI(`/projects/${selectedProject}/quotas`);
+            setQuotaBreakdown(res.data || []);
+            setQuotaMeta(res.meta || null);
+        } catch (error) {
+            console.error('Failed to refresh quotas:', error);
+        }
     };
 
     const generalQuota = quotaMeta?.general_quota || {
@@ -208,10 +425,169 @@ export default function FinanceMonitoring() {
         actual_hours: 0,
         remaining_hours: 0,
     };
+
+    const parseSwitchKey = (key) => {
+        if (!key || key === 'general') {
+            return { type: 'general', project_role_id: null };
+        }
+        const roleId = Number(String(key).replace('role:', ''));
+        return { type: 'role', project_role_id: Number.isFinite(roleId) ? roleId : null };
+    };
+
+    const getTransferRemaining = (key) => {
+        if (!key || key === 'general') {
+            return Math.max(0, Number(generalQuota.remaining_hours || 0));
+        }
+        const roleId = Number(String(key).replace('role:', ''));
+        const row = quotaBreakdown.find((q) => q.project_role_id === roleId && q.is_active !== false);
+        if (!row) return 0;
+        return Math.max(0, Number(row.quota_hours || 0) - Number(row.allocated_hours || 0));
+    };
+
+    const switchSourceOptions = useMemo(() => {
+        const options = [];
+        const generalRemaining = Math.max(0, Number(generalQuota.remaining_hours || 0));
+        if (generalRemaining > 0) {
+            options.push({
+                key: 'general',
+                label: `General (${formatHours(generalRemaining)}h tersedia)`,
+            });
+        }
+        quotaBreakdown
+            .filter((q) => q.is_active !== false)
+            .forEach((q) => {
+                const remaining = Math.max(0, Number(q.quota_hours || 0) - Number(q.allocated_hours || 0));
+                if (remaining > 0) {
+                    options.push({
+                        key: `role:${q.project_role_id}`,
+                        label: `${q.role_name} (${formatHours(remaining)}h tersedia)`,
+                    });
+                }
+            });
+        return options;
+    }, [quotaBreakdown, generalQuota.remaining_hours]);
+
+    const switchTargetOptions = useMemo(() => {
+        const fromKey = switchMhData.from_key;
+        const options = [];
+        if (fromKey !== 'general') {
+            options.push({ key: 'general', label: 'General' });
+        }
+        const roleIds = new Set(projectRolesList.map((r) => r.id));
+        quotaBreakdown.forEach((q) => roleIds.add(q.project_role_id));
+        roleIds.forEach((roleId) => {
+            const key = `role:${roleId}`;
+            if (key === fromKey) return;
+            const role = projectRolesList.find((r) => r.id === roleId);
+            const quotaRow = quotaBreakdown.find((q) => q.project_role_id === roleId);
+            const name = role?.name || quotaRow?.role_name || `Role ${roleId}`;
+            const inactive = quotaRow && quotaRow.is_active === false;
+            const label = inactive ? `${name} (nonaktif — akan diaktifkan)` : name;
+            options.push({ key, label });
+        });
+        return options;
+    }, [switchMhData.from_key, projectRolesList, quotaBreakdown]);
+
+    const openSwitchMh = () => {
+        const defaultFrom = switchSourceOptions[0]?.key || 'general';
+        const defaultTo = switchTargetOptions.find((o) => o.key !== defaultFrom)?.key || '';
+        setSwitchMhData({ from_key: defaultFrom, to_key: defaultTo, hours: '' });
+        setIsSwitchMhOpen(true);
+    };
+
+    const handleSwitchMh = async (e) => {
+        e.preventDefault();
+        if (!selectedProject || !switchMhData.from_key || !switchMhData.to_key) return;
+
+        const hours = parseFloat(switchMhData.hours);
+        if (!Number.isFinite(hours) || hours <= 0) {
+            alert('Masukkan jumlah jam yang valid.');
+            return;
+        }
+
+        const maxHours = getTransferRemaining(switchMhData.from_key);
+        if (hours > maxHours + 0.0001) {
+            alert(`Maksimal ${formatHours(maxHours)} jam dapat dipindahkan dari sumber ini.`);
+            return;
+        }
+
+        const from = parseSwitchKey(switchMhData.from_key);
+        const to = parseSwitchKey(switchMhData.to_key);
+
+        setIsSwitchingMh(true);
+        try {
+            await fetchAPI(`/projects/${selectedProject}/quota-transfer`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    hours,
+                    from_type: from.type,
+                    from_project_role_id: from.project_role_id,
+                    to_type: to.type,
+                    to_project_role_id: to.project_role_id,
+                }),
+            });
+            setIsSwitchMhOpen(false);
+            setSwitchMhData({ from_key: 'general', to_key: '', hours: '' });
+            await loadProjectFinance(selectedProject);
+            if (isQuotaDetailsOpen) {
+                await refreshQuotas();
+            }
+        } catch (error) {
+            alert(error.message || 'Gagal memindahkan quota MH.');
+        } finally {
+            setIsSwitchingMh(false);
+        }
+    };
+
+    const handleDeactivateQuota = async (quotaRow) => {
+        if (!selectedProject || !quotaRow?.id) return;
+        if (!window.confirm(`Nonaktifkan kategori "${quotaRow.role_name}"? Kategori tidak akan muncul di Project Board.`)) {
+            return;
+        }
+
+        setDeactivatingQuotaId(quotaRow.id);
+        try {
+            await fetchAPI(`/projects/${selectedProject}/role-quotas/${quotaRow.id}/deactivate`, {
+                method: 'POST',
+            });
+            await loadProjectFinance(selectedProject);
+            if (isQuotaDetailsOpen) {
+                await refreshQuotas();
+            }
+        } catch (error) {
+            alert(error.message || 'Gagal menonaktifkan kategori.');
+        } finally {
+            setDeactivatingQuotaId(null);
+        }
+    };
+
+    const formatCrDate = (crDate, createdAt) => {
+        const raw = crDate || createdAt;
+        if (!raw) return '-';
+        const date = new Date(raw);
+        if (Number.isNaN(date.getTime())) return '-';
+        return new Intl.DateTimeFormat('id-ID', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        }).format(date);
+    };
+
     const hasGeneralTopUp = Number(generalQuota.topup_quota_hours || 0) > 0;
 
-    const filteredProjects = projects.filter(p =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredProjects = useMemo(
+        () => projects.filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase())),
+        [projects, searchTerm]
+    );
+
+    const activeProjects = useMemo(
+        () => filteredProjects.filter((p) => p.status !== 'Done'),
+        [filteredProjects]
+    );
+
+    const completedProjects = useMemo(
+        () => filteredProjects.filter((p) => p.status === 'Done'),
+        [filteredProjects]
     );
 
     const allocationPercentage = summary ? (summary.total_allocated / (summary.quotation_value || 1)) * 100 : 0;
@@ -220,136 +596,230 @@ export default function FinanceMonitoring() {
     const incomeAllocations = allocations.filter((alloc) => alloc.is_topup);
     const activeAllocations = allocationTab === 'income' ? incomeAllocations : expenseAllocations;
     const activeAllocationTotal = activeAllocations.reduce((sum, alloc) => sum + Number(alloc.amount || 0), 0);
+    const incomeActionLabel = isWaterfallProject ? 'Change Request' : 'Top Up Quota';
+
+    const formatIncomeBadge = (alloc) => {
+        if (alloc.is_change_request || alloc.description?.startsWith('[CHANGE REQUEST]') || (isWaterfallProject && alloc.is_topup)) {
+            return 'Change Request';
+        }
+        return `Top Up MH${alloc.topup_hours ? ` +${formatHours(alloc.topup_hours)}h` : ''}`;
+    };
+
+    const isDetailView = Boolean(projectIdParam);
+    const marginPercent = summary && summary.quotation_value > 0
+        ? (summary.remaining_margin / summary.quotation_value) * 100
+        : 0;
 
     return (
-        <div className="mx-auto max-w-[1400px] p-4 pb-16 sm:p-6 sm:pb-20 lg:p-8">
-            <div className="flex flex-col gap-2 mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Finance Monitoring</h1>
-                <p className="text-slate-500 dark:text-text-secondary">Track project quotation values against cost allocations and margins.</p>
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                {/* Project List Sidebar */}
-                <div className="xl:col-span-4 flex flex-col gap-4">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-3 size-4 text-slate-400" />
-                        <Input
-                            placeholder="Search projects..."
-                            className="pl-10"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <Card className="flex-1 min-h-[500px]">
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-sm font-bold text-slate-500 flex items-center gap-2">
-                                <ListFilter className="size-4" /> ACTIVE PROJECTS
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <div className="flex flex-col">
-                                {loading ? (
-                                    <div className="p-8 text-center text-slate-500">Loading projects...</div>
-                                ) : filteredProjects.length === 0 ? (
-                                    <div className="p-8 text-center text-slate-500">No projects found.</div>
-                                ) : (
-                                    filteredProjects.map(proj => (
-                                        <button
-                                            key={proj.id}
-                                            onClick={() => loadProjectFinance(proj.id)}
-                                            className={`flex flex-col gap-1 p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 transition-colors ${selectedProject === proj.id ? 'bg-primary/5 border-l-4 border-l-primary' : ''}`}
-                                        >
-                                            <span className="font-bold text-slate-900 dark:text-white">{proj.name}</span>
-                                            <div className="flex items-center justify-between text-xs">
-                                                <span className="text-slate-500">Quotation Value:</span>
-                                                <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(proj.quotation_value || 0)}</span>
-                                            </div>
-                                        </button>
-                                    ))
-                                )}
+        <div className="flex-1 flex flex-col overflow-y-auto w-full">
+            <div className="mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8 space-y-6 pb-16">
+                {!isDetailView ? (
+                    <div className="space-y-6">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                            <div>
+                                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                                    Finance Monitoring
+                                </h1>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xl">
+                                    Track quotation, cost allocations, margin, and manhour quota per project.
+                                </p>
                             </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                            <div className="relative w-full sm:w-72 shrink-0">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                                <Input
+                                    placeholder="Search projects..."
+                                    className="pl-10"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                        </div>
 
-                {/* Detail View */}
-                <div className="xl:col-span-8 flex flex-col gap-6">
-                    {!summary ? (
+                        {loading ? (
+                            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                                <CardContent className="flex items-center justify-center py-16 text-slate-500 gap-2 text-sm">
+                                    <Loader2 className="size-5 animate-spin" />
+                                    Loading projects…
+                                </CardContent>
+                            </Card>
+                        ) : filteredProjects.length === 0 ? (
+                            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                                <CardContent className="py-16 text-center text-slate-500 text-sm">
+                                    {searchTerm ? 'No projects match your search.' : 'No projects available.'}
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <>
+                                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                                    <CardHeader className="pb-3">
+                                        <CardTitle className="text-base font-semibold">Active projects</CardTitle>
+                                        <CardDescription>
+                                            Planning or in progress · {activeProjects.length} project(s)
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        {activeProjects.length === 0 ? (
+                                            <div className="py-10 text-center text-slate-500 text-sm border-t border-slate-100 dark:border-slate-800">
+                                                {searchTerm ? 'No active projects match your search.' : 'No active projects.'}
+                                            </div>
+                                        ) : (
+                                            <FinanceProjectTable projects={activeProjects} onSelectProject={selectProject} />
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                                    <CardHeader className="pb-3">
+                                        <CardTitle className="text-base font-semibold">Completed projects</CardTitle>
+                                        <CardDescription>
+                                            All tasks done · {completedProjects.length} project(s)
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        {completedProjects.length === 0 ? (
+                                            <div className="py-10 text-center text-slate-500 text-sm border-t border-slate-100 dark:border-slate-800">
+                                                {searchTerm ? 'No completed projects match your search.' : 'No completed projects.'}
+                                            </div>
+                                        ) : (
+                                            <FinanceProjectTable projects={completedProjects} onSelectProject={selectProject} />
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                                    Showing {filteredProjects.length} of {projects.length} project(s)
+                                    {searchTerm ? ` matching "${searchTerm}"` : ''}
+                                </p>
+                            </>
+                        )}
+                    </div>
+                ) : (
+                <div className="flex flex-col gap-6">
+                    {detailLoading ? (
+                        <div className="flex items-center justify-center py-24 text-slate-500 gap-2">
+                            <Loader2 className="size-5 animate-spin" /> Loading finance data…
+                        </div>
+                    ) : !summary ? (
                         <Card className="flex flex-col items-center justify-center p-20 text-center border-dashed border-2">
                             <Wallet className="size-16 text-slate-200 mb-4" />
-                            <CardTitle className="text-slate-400">Select a project to see financial details</CardTitle>
+                            <CardTitle className="text-slate-400">Project data unavailable</CardTitle>
                         </Card>
                     ) : (
                         <>
-                            {/* Summary Cards */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <Card className="bg-primary/5 border-primary/20">
-                                    <CardHeader className="pb-2">
-                                        <CardDescription className="text-xs font-bold text-primary uppercase">Quotation Value</CardDescription>
-                                        <CardTitle className="text-2xl">{formatCurrency(summary.quotation_value)}</CardTitle>
-                                    </CardHeader>
-                                </Card>
-                                <Card className="bg-amber-50 dark:bg-amber-500/5 border-amber-200 dark:border-amber-500/20">
-                                    <CardHeader className="pb-2">
-                                        <CardDescription className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase">Total Allocated</CardDescription>
-                                        <CardTitle className="text-2xl text-amber-700 dark:text-amber-300">{formatCurrency(summary.total_allocated)}</CardTitle>
-                                    </CardHeader>
-                                </Card>
-                                <Card className="bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20">
-                                    <CardHeader className="pb-2">
-                                        <CardDescription className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase">Remaining Margin</CardDescription>
-                                        <CardTitle className="text-2xl text-emerald-700 dark:text-emerald-300">{formatCurrency(summary.remaining_margin)}</CardTitle>
-                                    </CardHeader>
-                                </Card>
-                            </div>
+                            {isDetailView && (
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between -mt-2">
+                                    <div className="flex items-start gap-3 min-w-0">
+                                        <Button variant="outline" size="icon" className="shrink-0" onClick={() => navigate('/finance-monitoring')} title="Back">
+                                            <ArrowLeft className="size-4" />
+                                        </Button>
+                                        <div className="min-w-0">
+                                            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white truncate">
+                                                {selectedProjectData?.name || summary.project_name}
+                                            </h1>
+                                            <p className="text-sm text-slate-500 mt-0.5">Finance monitoring & allocation</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {summary.methodology && <Badge variant="secondary">{summary.methodology}</Badge>}
+                                        {!isWaterfallProject ? (
+                                            <>
+                                                <Button variant="outline" size="sm" onClick={openSwitchMh} className="gap-1.5" disabled={switchSourceOptions.length === 0}>
+                                                    <ArrowRightLeft className="size-4" /> Switch MH
+                                                </Button>
+                                                <Button variant="outline" size="sm" onClick={loadQuotaBreakdown} className="gap-1.5"><Clock className="size-4" /> MH Quota</Button>
+                                            </>
+                                        ) : (
+                                            <Button variant="outline" size="sm" onClick={openCrBreakdown} className="gap-1.5"><FileEdit className="size-4" /> CR List</Button>
+                                        )}
+                                        <Button size="sm" className="gap-1.5" onClick={() => (isWaterfallProject ? setIsChangeRequestOpen(true) : setIsTopUpOpen(true))}>
+                                            <Plus className="size-4" /> {incomeActionLabel}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
-                                <Card className="bg-blue-50 dark:bg-blue-500/5 border-blue-200 dark:border-blue-500/20 cursor-pointer hover:border-blue-400 transition-all"
-                                     onClick={loadQuotaBreakdown}>
-                                    <CardHeader className="pb-3">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <CardDescription className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Manhour Quota Status</CardDescription>
-                                                <CardTitle className="text-xl mt-1">
-                                                    {summary.allocated_hours}/{summary.total_manhours} <span className="text-sm font-normal text-slate-500 uppercase ml-1">Hours</span>
-                                                </CardTitle>
-                                                {summary.has_topup_manhours ? (
-                                                    <div className="mt-2 inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5">
-                                                        <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                                                            Top Up MH +{formatHours(summary.topup_hours_total)}h
-                                                        </span>
+                            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-base font-semibold">Financial summary</CardTitle>
+                                    <CardDescription>Quotation vs realized allocation for this project</CardDescription>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <SectionTable>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            <tr>
+                                                <td className="px-4 py-3 font-medium text-slate-600 w-[40%]">Quotation value</td>
+                                                <td className="px-4 py-3 font-semibold">{formatCurrency(summary.quotation_value)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td className="px-4 py-3 font-medium text-slate-600">Total allocated (realized)</td>
+                                                <td className="px-4 py-3 font-semibold text-amber-700 dark:text-amber-300">{formatCurrency(summary.total_allocated)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td className="px-4 py-3 font-medium text-slate-600">Planned allocation</td>
+                                                <td className="px-4 py-3">{formatCurrency(summary.planned_allocated ?? 0)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td className="px-4 py-3 font-medium text-slate-600">Remaining margin</td>
+                                                <td className={`px-4 py-3 font-semibold ${summary.remaining_margin >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600'}`}>
+                                                    {formatCurrency(summary.remaining_margin)} ({marginPercent.toFixed(1)}%)
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </SectionTable>
+                                </CardContent>
+                            </Card>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {isWaterfallProject ? (
+                                    <Card
+                                        className="bg-violet-50 dark:bg-violet-500/5 border-violet-200 dark:border-violet-500/20 cursor-pointer hover:border-violet-400 transition-all"
+                                        onClick={openCrBreakdown}
+                                    >
+                                        <CardHeader className="pb-3">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <CardDescription className="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase">Change Request Status</CardDescription>
+                                                    <CardTitle className="text-xl mt-1">
+                                                        {summary.change_request_count ?? 0}{' '}
+                                                        <span className="text-sm font-normal text-slate-500 uppercase ml-1">CR</span>
+                                                    </CardTitle>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase">Total Nilai</div>
+                                                    <div className="text-lg font-bold text-violet-700 dark:text-violet-300">
+                                                        {formatCurrency(summary.change_request_total_value ?? 0)}
                                                     </div>
-                                                ) : null}
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Remaining</div>
-                                                <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                                                    {summary.remaining_hours} <span className="text-xs font-normal opacity-70">Hrs</span>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <Progress value={(summary.allocated_hours / (summary.total_manhours || 1)) * 100} className="h-1.5 mt-3" />
-                                    </CardHeader>
-                                </Card>
-                                {isWaterfallProject ? (
-                                    <Card className="flex items-center justify-center p-6 border-dashed border-2 bg-slate-50/60 dark:bg-slate-900/30">
-                                        <div className="text-left">
-                                            <h3 className="font-bold text-slate-900 dark:text-white">Top Up Quota</h3>
-                                            <p className="text-xs text-slate-500">Tidak tersedia untuk project Waterfall.</p>
-                                        </div>
+                                        </CardHeader>
                                     </Card>
                                 ) : (
-                                    <Card className="flex items-center justify-center p-6 border-dashed border-2 hover:bg-slate-50 dark:hover:bg-slate-900/50 cursor-pointer transition-colors group"
-                                         onClick={() => setIsTopUpOpen(true)}>
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                                                <Plus className="size-6" />
+                                    <Card className="bg-blue-50 dark:bg-blue-500/5 border-blue-200 dark:border-blue-500/20 cursor-pointer hover:border-blue-400 transition-all"
+                                         onClick={loadQuotaBreakdown}>
+                                        <CardHeader className="pb-3">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <CardDescription className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Manhour Quota Status</CardDescription>
+                                                    <CardTitle className="text-xl mt-1">
+                                                        {summary.allocated_hours}/{summary.total_manhours} <span className="text-sm font-normal text-slate-500 uppercase ml-1">Hours</span>
+                                                    </CardTitle>
+                                                    {summary.has_topup_manhours ? (
+                                                        <div className="mt-2 inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5">
+                                                            <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                                                                Top Up MH +{formatHours(summary.topup_hours_total)}h
+                                                            </span>
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Remaining</div>
+                                                    <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
+                                                        {summary.remaining_hours} <span className="text-xs font-normal opacity-70">Hrs</span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="text-left">
-                                                <h3 className="font-bold text-slate-900 dark:text-white">Top Up Quota</h3>
-                                                <p className="text-xs text-slate-500">Increase budget and manhour limits.</p>
-                                            </div>
-                                        </div>
+                                            <Progress value={(summary.allocated_hours / (summary.total_manhours || 1)) * 100} className="h-1.5 mt-3" />
+                                        </CardHeader>
                                     </Card>
                                 )}
                             </div>
@@ -364,14 +834,14 @@ export default function FinanceMonitoring() {
                                             <Info className="size-3" />
                                             {allocationTab === 'expense'
                                                 ? `${allocationPercentage.toFixed(1)}% of quotation used`
-                                                : `Top Up total: ${formatCurrency(activeAllocationTotal)}`}
+                                                : `${incomeActionLabel} total: ${formatCurrency(activeAllocationTotal)}`}
                                         </div>
                                     </div>
                                     {allocationTab === 'expense' ? (
                                         <Progress value={allocationPercentage} className="h-2 mt-2" />
                                     ) : (
                                         <div className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                                            Pemasukan berasal dari transaksi Top Up Quota.
+                                            Pemasukan berasal dari transaksi {incomeActionLabel}.
                                         </div>
                                     )}
                                     <div className="mt-4 inline-flex rounded-lg border border-slate-200 dark:border-slate-800 p-1 bg-slate-50 dark:bg-slate-900/40">
@@ -417,7 +887,7 @@ export default function FinanceMonitoring() {
                                                     <tr>
                                                         <td colSpan="4" className="py-8 text-center text-slate-400 italic">
                                                             {allocationTab === 'income'
-                                                                ? 'Belum ada pemasukan (Top Up) untuk project ini.'
+                                                                ? `Belum ada pemasukan (${incomeActionLabel}) untuk project ini.`
                                                                 : 'Belum ada pengeluaran. Tambahkan alokasi di bawah.'}
                                                         </td>
                                                     </tr>
@@ -429,7 +899,7 @@ export default function FinanceMonitoring() {
                                                                     {alloc.category_name}
                                                                     {alloc.is_topup ? (
                                                                         <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-bold uppercase tracking-tight">
-                                                                            {`Top Up MH${alloc.topup_hours ? ` +${formatHours(alloc.topup_hours)}h` : ''}`}
+                                                                            {formatIncomeBadge(alloc)}
                                                                         </span>
                                                                     ) : null}
                                                                 </span>
@@ -520,7 +990,7 @@ export default function FinanceMonitoring() {
                                         </form>
                                     ) : (
                                         <div className="mt-6 p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-900/10 text-xs text-emerald-700 dark:text-emerald-300">
-                                            Pemasukan dicatat dari transaksi <strong>Top Up Quota</strong>. Gunakan card Top Up di atas untuk menambah pemasukan.
+                                            Pemasukan dicatat dari transaksi <strong>{incomeActionLabel}</strong>. Gunakan card {incomeActionLabel} di atas untuk menambah pemasukan.
                                         </div>
                                     )}
                                 </CardContent>
@@ -533,6 +1003,8 @@ export default function FinanceMonitoring() {
                         </>
                     )}
                 </div>
+                )}
+
             </div>
 
             {/* Top Up Modal */}
@@ -620,6 +1092,111 @@ export default function FinanceMonitoring() {
                 </div>
             )}
 
+            {/* Change Request Modal (Waterfall) */}
+            {isChangeRequestOpen && isWaterfallProject && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
+                        <CardHeader className="pb-4 border-b">
+                            <CardTitle className="flex items-center gap-2">
+                                <Plus className="size-5 text-violet-600" /> Change Request
+                            </CardTitle>
+                            <CardDescription>Tambah nilai quotation akibat perubahan scope pada project Waterfall.</CardDescription>
+                        </CardHeader>
+                        <form onSubmit={handleChangeRequest}>
+                            <CardContent className="space-y-4 pt-6">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tanggal CR</label>
+                                    <Input
+                                        type="date"
+                                        value={changeRequestData.cr_date}
+                                        onChange={(e) => setChangeRequestData({ ...changeRequestData, cr_date: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Fitur yang CR</label>
+                                    <Input
+                                        placeholder="Nama fitur / scope yang berubah..."
+                                        value={changeRequestData.cr_feature}
+                                        onChange={(e) => setChangeRequestData({ ...changeRequestData, cr_feature: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Nilai (Rp)</label>
+                                    <Input
+                                        type="number"
+                                        placeholder="Ex: 5000000"
+                                        value={changeRequestData.additional_quotation}
+                                        onChange={(e) => setChangeRequestData({ ...changeRequestData, additional_quotation: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                            </CardContent>
+                            <div className="p-6 pt-2 flex items-center justify-end gap-3 border-t">
+                                <Button type="button" variant="ghost" onClick={() => setIsChangeRequestOpen(false)}>Cancel</Button>
+                                <Button type="submit" className="bg-violet-600 hover:bg-violet-700">Submit Change Request</Button>
+                            </div>
+                        </form>
+                    </Card>
+                </div>
+            )}
+
+            {/* Change Request Breakdown Modal (Waterfall) */}
+            {isCrDetailsOpen && isWaterfallProject && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200">
+                        <CardHeader className="pb-4 border-b">
+                            <CardTitle className="flex items-center gap-2">
+                                <FileEdit className="size-5 text-violet-600" /> Change Request Breakdown
+                            </CardTitle>
+                            <CardDescription>
+                                Daftar change request untuk {summary?.project_name}. Total {summary?.change_request_count ?? 0} CR · {formatCurrency(summary?.change_request_total_value ?? 0)}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500">
+                                            <th className="text-left font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Tanggal CR</th>
+                                            <th className="text-left font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Fitur yang CR</th>
+                                            <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Total Nilai</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                                        {changeRequestList.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="3" className="py-8 text-center text-slate-400 italic">
+                                                    Belum ada change request untuk project ini.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            changeRequestList.map((cr) => (
+                                                <tr key={cr.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                                                    <td className="py-4 px-2 font-medium text-slate-900 dark:text-white whitespace-nowrap">
+                                                        {formatCrDate(cr.cr_date, cr.created_at)}
+                                                    </td>
+                                                    <td className="py-4 px-2 text-slate-700 dark:text-slate-300">
+                                                        {cr.cr_feature || '-'}
+                                                    </td>
+                                                    <td className="py-4 px-2 text-right font-bold text-violet-700 dark:text-violet-300 whitespace-nowrap">
+                                                        {formatCurrency(cr.amount ?? 0)}
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                        <div className="p-6 pt-2 flex items-center justify-end border-t mt-4">
+                            <Button variant="outline" onClick={() => setIsCrDetailsOpen(false)}>Close</Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
+
             {/* Quota Details Modal */}
             {isQuotaDetailsOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -683,23 +1260,33 @@ export default function FinanceMonitoring() {
                                                 <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Allocated</th>
                                                 <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Actual Used</th>
                                                 <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px]">Remaining</th>
+                                                <th className="text-right font-bold pb-3 px-2 uppercase tracking-tight text-[10px] w-32">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                                             {quotaBreakdown.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan="8" className="py-8 text-center text-slate-400 italic">No role quotas defined for this project.</td>
+                                                    <td colSpan="9" className="py-8 text-center text-slate-400 italic">No role quotas defined for this project.</td>
                                                 </tr>
                                             ) : (
                                                 quotaBreakdown.map(item => {
                                                     const remaining = item.quota_hours - item.allocated_hours;
                                                     const percentUsed = (item.allocated_hours / (item.quota_hours || 1)) * 100;
-                                                    
+                                                    const isInactive = item.is_active === false;
+                                                    const canDeactivate = !isInactive
+                                                        && Number(item.quota_hours || 0) <= 0
+                                                        && Number(item.task_count || 0) === 0;
+
                                                     return (
-                                                        <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                                                        <tr key={item.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors ${isInactive ? 'opacity-60' : ''}`}>
                                                             <td className="py-4 px-2">
                                                                 <div className="flex flex-col gap-1">
-                                                                    <span className="font-bold text-slate-900 dark:text-white">{item.role_name}</span>
+                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                        <span className="font-bold text-slate-900 dark:text-white">{item.role_name}</span>
+                                                                        {isInactive ? (
+                                                                            <Badge variant="outline" className="text-[10px] font-bold uppercase">Nonaktif</Badge>
+                                                                        ) : null}
+                                                                    </div>
                                                                     <div className="w-32">
                                                                         <Progress value={percentUsed} className="h-1" color={percentUsed > 90 ? 'bg-red-500' : 'bg-primary'} />
                                                                     </div>
@@ -720,6 +1307,27 @@ export default function FinanceMonitoring() {
                                                             <td className={`py-4 px-2 text-right font-bold ${remaining < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
                                                                 {formatHours(remaining)} <span className="text-[10px]">HRS</span>
                                                             </td>
+                                                            <td className="py-4 px-2 text-right">
+                                                                {canDeactivate ? (
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="gap-1 text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/40"
+                                                                        disabled={deactivatingQuotaId === item.id}
+                                                                        onClick={() => handleDeactivateQuota(item)}
+                                                                    >
+                                                                        {deactivatingQuotaId === item.id ? (
+                                                                            <Loader2 className="size-3.5 animate-spin" />
+                                                                        ) : (
+                                                                            <Ban className="size-3.5" />
+                                                                        )}
+                                                                        Nonaktifkan
+                                                                    </Button>
+                                                                ) : (
+                                                                    <span className="text-[10px] text-slate-400">—</span>
+                                                                )}
+                                                            </td>
                                                         </tr>
                                                     );
                                                 })
@@ -736,6 +1344,85 @@ export default function FinanceMonitoring() {
                     </Card>
                 </div>
             )}
+
+            <Dialog open={isSwitchMhOpen} onOpenChange={setIsSwitchMhOpen}>
+                <DialogContent className="sm:max-w-[520px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <ArrowRightLeft className="size-5 text-primary" />
+                            Switch MH antar kategori
+                        </DialogTitle>
+                        <DialogDescription>
+                            Pindahkan sisa quota MH yang belum dialokasikan ke task. Total manhour project tidak berubah.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleSwitchMh} className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Dari kategori</label>
+                            <select
+                                value={switchMhData.from_key}
+                                onChange={(e) => {
+                                    const fromKey = e.target.value;
+                                    const nextTo = switchTargetOptions.find((o) => o.key !== fromKey)?.key || '';
+                                    setSwitchMhData((prev) => ({ ...prev, from_key: fromKey, to_key: nextTo }));
+                                }}
+                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3 text-sm"
+                                required
+                            >
+                                {switchSourceOptions.length === 0 ? (
+                                    <option value="">Tidak ada sumber quota tersedia</option>
+                                ) : (
+                                    switchSourceOptions.map((opt) => (
+                                        <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                    ))
+                                )}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ke kategori</label>
+                            <select
+                                value={switchMhData.to_key}
+                                onChange={(e) => setSwitchMhData((prev) => ({ ...prev, to_key: e.target.value }))}
+                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3 text-sm"
+                                required
+                            >
+                                <option value="">Pilih tujuan</option>
+                                {switchTargetOptions.map((opt) => (
+                                    <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Jumlah jam (MH)</label>
+                            <Input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                placeholder="Contoh: 8"
+                                value={switchMhData.hours}
+                                onChange={(e) => setSwitchMhData((prev) => ({ ...prev, hours: e.target.value }))}
+                                required
+                            />
+                            {switchMhData.from_key ? (
+                                <p className="text-xs text-slate-500">
+                                    Maksimal {formatHours(getTransferRemaining(switchMhData.from_key))} jam dari sumber ini.
+                                </p>
+                            ) : null}
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsSwitchMhOpen(false)}>
+                                Batal
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={isSwitchingMh || switchSourceOptions.length === 0 || !switchMhData.to_key}
+                            >
+                                {isSwitchingMh ? 'Memindahkan…' : 'Pindahkan MH'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={isRealizationModalOpen} onOpenChange={setIsRealizationModalOpen}>
                 <DialogContent className="sm:max-w-[460px]">

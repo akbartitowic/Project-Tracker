@@ -18,6 +18,8 @@ class RoleSeeder extends Seeder
             ['name' => 'Developer', 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'Designer', 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'QA', 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Freelance', 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Board Member', 'created_at' => now(), 'updated_at' => now()],
         ];
 
         foreach ($roles as $role) {

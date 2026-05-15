@@ -10,4 +10,9 @@ class Task extends Model
     use HasFactory;
 
     protected $guarded = [];
+
+    protected $casts = [
+        'rush_hour' => 'boolean',
+        'due_date' => 'date',
+    ];
 }

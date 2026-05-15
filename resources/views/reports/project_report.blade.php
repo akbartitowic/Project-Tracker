@@ -15,10 +15,19 @@
         th { background-color: #f8fafc; color: #64748b; font-weight: bold; text-align: left; padding: 10px; border: 1px solid #e2e8f0; text-transform: uppercase; }
         td { padding: 10px; border: 1px solid #e2e8f0; vertical-align: top; }
         
-        .stats-grid { display: block; width: 100%; margin-bottom: 30px; }
-        .stat-box { display: inline-block; width: 30%; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; background-color: #fff; margin-right: 2%; }
-        .stat-label { font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: bold; margin-bottom: 5px; }
-        .stat-value { font-size: 20px; font-weight: bold; color: #135cec; }
+        .stats-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 12px; table-layout: fixed; }
+        .stats-table td { width: 20%; vertical-align: top; padding: 0 5px 10px 5px; }
+        .stats-table td:first-child { padding-left: 0; }
+        .stats-table td:last-child { padding-right: 0; }
+        .stat-box { border: 1px solid #e2e8f0; padding: 14px 10px; border-radius: 8px; background-color: #f8fafc; min-height: 78px; box-sizing: border-box; }
+        .stat-label { font-size: 8px; color: #64748b; text-transform: uppercase; font-weight: bold; margin-bottom: 6px; line-height: 1.25; letter-spacing: 0.02em; }
+        .stat-value { font-size: 17px; font-weight: bold; color: #135cec; line-height: 1.2; }
+        .stat-value-sm { font-size: 14px; line-height: 1.3; }
+        .stat-value-done { color: #15803d; }
+        .stat-value-progress { color: #1d4ed8; }
+        .stat-value-muted { color: #475569; }
+        .stat-hint { font-size: 8px; color: #94a3b8; margin-top: 5px; line-height: 1.25; }
+        .stats-footnote { font-size: 9px; color: #64748b; margin-top: 2px; padding: 8px 10px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
         
         .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
         .badge-todo { background-color: #f1f5f9; color: #475569; }
@@ -49,28 +58,61 @@
     </div>
 
     @if($project->methodology === 'Agile Scrum')
+    @php
+        $totalQuota = (float) ($stats['total_quota'] ?? 0);
+        $totalUsed = (float) ($stats['total_used'] ?? 0);
+        $usagePercent = $totalQuota > 0 ? round(($totalUsed / $totalQuota) * 100, 1) : 0;
+    @endphp
     <div class="section">
         <div class="section-title">Man-hour Statistics</div>
-        <div class="stats-grid">
-            <div class="stat-box">
-                <div class="stat-label">Used In Range</div>
-                <div class="stat-value">{{ number_format($stats['used_in_range'], 1) }}h</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">Total Used</div>
-                <div class="stat-value">{{ number_format($stats['total_used'], 1) }}h</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">Remaining / Quota</div>
-                <div class="stat-value">{{ number_format($stats['remaining'], 1) }}h / {{ number_format($stats['total_quota'] ?? 0, 1) }}h</div>
-            </div>
-        </div>
-        <div style="font-size: 10px; color: #64748b; margin-top: -14px;">
-            Logged Actual: {{ number_format($stats['actual_logged_in_range'] ?? 0, 1) }}h (range), {{ number_format($stats['actual_logged_total'] ?? 0, 1) }}h (total)
+        <table class="stats-table" cellpadding="0" cellspacing="0">
+            <tr>
+                <td>
+                    <div class="stat-box">
+                        <div class="stat-label">Used In Range</div>
+                        <div class="stat-value">{{ number_format($stats['used_in_range'], 1) }}h</div>
+                        <div class="stat-hint">Estimasi task diperbarui dalam periode</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="stat-box">
+                        <div class="stat-label">Total Used</div>
+                        <div class="stat-value">{{ number_format($stats['total_used'], 1) }}h</div>
+                        <div class="stat-hint">{{ $usagePercent }}% dari quota · tanpa To Do</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="stat-box">
+                        <div class="stat-label">MH Done</div>
+                        <div class="stat-value stat-value-done">{{ number_format($stats['done_hours'] ?? 0, 1) }}h</div>
+                        <div class="stat-hint">Status Done</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="stat-box">
+                        <div class="stat-label">MH In Progress</div>
+                        <div class="stat-value stat-value-progress">{{ number_format($stats['in_progress_hours'] ?? 0, 1) }}h</div>
+                        <div class="stat-hint">In Progress, Review, Reopen</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="stat-box">
+                        <div class="stat-label">Remaining / Quota</div>
+                        <div class="stat-value stat-value-sm stat-value-muted">
+                            {{ number_format($stats['remaining'], 1) }}h
+                            <span style="color:#94a3b8;font-weight:normal;"> / </span>
+                            {{ number_format($totalQuota, 1) }}h
+                        </div>
+                        <div class="stat-hint">Sisa quota project</div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+        <div class="stats-footnote">
+            Logged actual: {{ number_format($stats['actual_logged_in_range'] ?? 0, 1) }}h (range) · {{ number_format($stats['actual_logged_total'] ?? 0, 1) }}h (total)
         </div>
     </div>
     @endif
-
     <div class="section">
         <div class="section-title">Category Progress Breakdown</div>
         <div style="margin-bottom: 15px; font-size: 9px; color: #64748b; background: #f8fafc; padding: 10px; border-radius: 6px;">
