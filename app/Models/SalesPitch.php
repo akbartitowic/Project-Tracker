@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SalesPitch extends Model
 {
@@ -13,7 +15,10 @@ class SalesPitch extends Model
 
     public const STEP_PROPOSAL_SENT = 'proposal_sent';
 
-    public const STEP_MEETING = 'meeting';
+    public const STEP_PRESENTATION = 'presentation';
+
+    /** @deprecated Use STEP_PRESENTATION */
+    public const STEP_MEETING = 'presentation';
 
     public const STEP_NEGOTIATION = 'negotiation';
 
@@ -28,7 +33,7 @@ class SalesPitch extends Model
         self::STEP_NEW_PROSPECT,
         self::STEP_SENT_COMPRO,
         self::STEP_PROPOSAL_SENT,
-        self::STEP_MEETING,
+        self::STEP_PRESENTATION,
         self::STEP_NEGOTIATION,
         self::STEP_CLOSED,
     ];
@@ -37,7 +42,6 @@ class SalesPitch extends Model
         'user_id',
         'company_id',
         'project_category_id',
-        'sales_category_project_id',
         'title',
         'prospect_name',
         'company_name',
@@ -49,6 +53,8 @@ class SalesPitch extends Model
         'compro_url',
         'proposal_url',
         'quotation_url',
+        'quotation_data',
+        'quotation_logo_path',
         'meeting_at',
         'meeting_location',
         'meeting_mode',
@@ -68,6 +74,7 @@ class SalesPitch extends Model
             'meeting_at' => 'datetime',
             'closed_at' => 'datetime',
             'step_reached_at' => 'array',
+            'quotation_data' => 'array',
         ];
     }
 
@@ -86,8 +93,18 @@ class SalesPitch extends Model
         return $this->belongsTo(ProjectCategory::class, 'project_category_id');
     }
 
-    public function salesCategoryProject(): BelongsTo
+    public function salesCategoryProjects(): BelongsToMany
     {
-        return $this->belongsTo(SalesCategoryProject::class, 'sales_category_project_id');
+        return $this->belongsToMany(
+            SalesCategoryProject::class,
+            'sales_pitch_sales_category_project',
+            'sales_pitch_id',
+            'sales_category_project_id'
+        );
+    }
+
+    public function presale(): HasOne
+    {
+        return $this->hasOne(Presale::class, 'sales_pitch_id');
     }
 }

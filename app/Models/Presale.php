@@ -60,6 +60,11 @@ class Presale extends Model
         return $this->belongsTo(ProjectCategory::class);
     }
 
+    public function salesPitch()
+    {
+        return $this->belongsTo(SalesPitch::class, 'sales_pitch_id');
+    }
+
     public function roleRequirements()
     {
         return $this->hasMany(PresaleRoleRequirement::class);

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ProjectAllocation;
 use App\Models\Project;
+use App\Support\ManhourBucketCalculator;
 use App\Models\Manhour;
 use App\Models\ProjectRoleQuota;
 use App\Models\Task;
@@ -42,6 +43,28 @@ class ProjectAllocationController extends Controller
         ]);
     }
 
+    private function allocationUserOptions(int $projectId): array
+    {
+        $fromMembers = DB::table('project_members as pm')
+            ->join('users as u', 'pm.user_id', '=', 'u.id')
+            ->where('pm.project_id', $projectId)
+            ->select('u.id as user_id', 'u.name as user_name')
+            ->distinct()
+            ->orderBy('u.name')
+            ->get();
+
+        if ($fromMembers->isNotEmpty()) {
+            return $fromMembers->values()->all();
+        }
+
+        return DB::table('users')
+            ->select('id as user_id', 'name as user_name')
+            ->orderBy('name')
+            ->get()
+            ->values()
+            ->all();
+    }
+
     private function mapChangeRequestRow($row): array
     {
         $description = (string) ($row->description ?? '');
@@ -65,7 +88,8 @@ class ProjectAllocationController extends Controller
         $query = DB::table('project_allocations as pa')
             ->join('finance_categories as fc', 'pa.category_id', '=', 'fc.id')
             ->join('projects as p', 'pa.project_id', '=', 'p.id')
-            ->select('pa.*', 'fc.name as category_name', 'p.name as project_name', 'p.quotation_value');
+            ->leftJoin('users as u', 'u.id', '=', 'pa.user_id')
+            ->select('pa.*', 'fc.name as category_name', 'p.name as project_name', 'p.quotation_value', 'u.name as user_name');
 
         ProjectAccess::applyProjectScope($query, 'pa.project_id', $user);
 
@@ -83,14 +107,49 @@ class ProjectAllocationController extends Controller
         $validated = $request->validate([
             'project_id' => 'required|exists:projects,id',
             'category_id' => 'required|exists:finance_categories,id',
+            'user_id' => 'nullable|exists:users,id',
             'amount' => 'required|numeric',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
         ]);
 
         ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $validated['project_id']);
 
+        if (empty($validated['user_id'])) {
+            $validated['user_id'] = null;
+        }
+
         $allocation = ProjectAllocation::create($validated);
         return response()->json(['id' => $allocation->id]);
+    }
+
+    public function update(Request $request, string $id)
+    {
+        $allocation = ProjectAllocation::find($id);
+        if (!$allocation) {
+            return response()->json(['error' => 'Allocation not found'], 404);
+        }
+
+        ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $allocation->project_id);
+
+        if ($allocation->is_topup) {
+            return response()->json(['error' => 'Hanya pengeluaran biasa yang dapat diedit.'], 422);
+        }
+
+        $validated = $request->validate([
+            'category_id' => 'required|exists:finance_categories,id',
+            'user_id' => 'nullable|exists:users,id',
+            'amount' => 'required|numeric',
+            'description' => 'nullable|string',
+        ]);
+
+        $validated['user_id'] = !empty($validated['user_id']) ? (int) $validated['user_id'] : null;
+
+        $allocation->update($validated);
+
+        return response()->json([
+            'message' => 'Allocation updated',
+            'data' => $allocation->fresh(),
+        ]);
     }
 
     public function destroy(Request $request, string $id)
@@ -131,6 +190,61 @@ class ProjectAllocationController extends Controller
         return response()->json([
             'message' => 'Realization saved',
             'data' => $allocation,
+        ]);
+    }
+
+    public function markPaid(Request $request, string $id)
+    {
+        $allocation = ProjectAllocation::find($id);
+        if (!$allocation) {
+            return response()->json(['error' => 'Allocation not found'], 404);
+        }
+
+        ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $allocation->project_id);
+
+        if ($allocation->is_topup) {
+            return response()->json(['error' => 'Paid hanya berlaku untuk data pengeluaran.'], 422);
+        }
+
+        $validated = $request->validate([
+            'payment_amount' => 'nullable|numeric|min:0.01',
+            'reset' => 'sometimes|boolean',
+        ]);
+
+        $targetAmount = (float) ($allocation->realized_amount ?? $allocation->amount ?? 0);
+        $legacyPaid = $allocation->paid_at ? $targetAmount : 0.0;
+        $currentPaid = (float) ($allocation->paid_amount ?? 0);
+        $currentPaid = max($currentPaid, $legacyPaid);
+
+        if (!empty($validated['reset'])) {
+            $newPaid = 0.0;
+        } else {
+            $paymentAmount = (float) ($validated['payment_amount'] ?? 0);
+            if ($paymentAmount <= 0) {
+                return response()->json(['error' => 'payment_amount wajib diisi jika bukan reset.'], 422);
+            }
+            $newPaid = $currentPaid + $paymentAmount;
+        }
+
+        if ($targetAmount > 0) {
+            $newPaid = min($newPaid, $targetAmount);
+        } else {
+            $newPaid = 0.0;
+        }
+
+        $allocation->paid_amount = $newPaid;
+        $allocation->paid_at = ($targetAmount > 0 && $newPaid >= $targetAmount) ? now() : null;
+        $allocation->save();
+
+        return response()->json([
+            'message' => !empty($validated['reset']) ? 'Paid amount reset' : 'Payment recorded',
+            'data' => $allocation->fresh(),
+            'payment' => [
+                'target_amount' => $targetAmount,
+                'paid_amount' => (float) $allocation->paid_amount,
+                'remaining_amount' => max(0, $targetAmount - (float) $allocation->paid_amount),
+                'is_fully_paid' => $allocation->paid_at !== null,
+            ],
         ]);
     }
 
@@ -238,8 +352,10 @@ class ProjectAllocationController extends Controller
 
         $allocations = DB::table('project_allocations as pa')
             ->join('finance_categories as fc', 'pa.category_id', '=', 'fc.id')
-            ->select('pa.*', 'fc.name as category_name')
+            ->leftJoin('users as u', 'u.id', '=', 'pa.user_id')
+            ->select('pa.*', 'fc.name as category_name', 'u.name as user_name')
             ->where('pa.project_id', $id)
+            ->orderByDesc('pa.created_at')
             ->get();
 
         $expenseAllocations = $allocations->where('is_topup', false);
@@ -261,11 +377,43 @@ class ProjectAllocationController extends Controller
             ->sortByDesc(fn ($row) => $row->cr_date ?? $row->created_at)
             ->map(fn ($row) => $this->mapChangeRequestRow($row))
             ->values();
+
+        $expenseByUser = $expenseAllocations
+            ->groupBy(fn ($row) => $row->user_id ? (string) $row->user_id : '__none__')
+            ->map(function ($rows, $userKey) {
+                $first = $rows->first();
+                $planned = $rows->sum(fn ($row) => (float) ($row->amount ?? 0));
+                $realized = $rows->sum(fn ($row) => (float) ($row->realized_amount ?? $row->amount ?? 0));
+
+                return [
+                    'user_id' => $userKey === '__none__' ? null : (int) $userKey,
+                    'user_name' => $first->user_name ?? 'Tanpa user',
+                    'line_count' => $rows->count(),
+                    'planned_total' => $planned,
+                    'realized_total' => $realized,
+                ];
+            })
+            ->sortByDesc('realized_total')
+            ->values();
+
         $quotationValue = $project->quotation_value ?? 0;
 
-        $allocatedHours = DB::table('tasks')->where('project_id', $id)->sum('estimated_hours');
+        $allocatedHours = (float) DB::table('tasks')->where('project_id', $id)->sum('estimated_hours');
         $actualHours = Manhour::where('project_id', $id)->sum('hours');
-        $totalManhours = $project->total_manhours ?? 0;
+        $totalManhours = (float) ($project->total_manhours ?? 0);
+
+        $topupRows = DB::table('project_allocations')
+            ->select('id', 'project_id', 'topup_hours', 'description', 'created_at')
+            ->where('project_id', $id)
+            ->where('is_topup', true)
+            ->whereNotNull('topup_hours')
+            ->where('topup_hours', '>', 0)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        $fifo = ManhourBucketCalculator::build($totalManhours, $topupRows, $allocatedHours);
+        $fifoRemaining = ManhourBucketCalculator::sumRemainingHours($fifo['buckets']);
 
         return response()->json([
             'data' => [
@@ -278,14 +426,19 @@ class ProjectAllocationController extends Controller
                 'total_manhours' => $totalManhours,
                 'allocated_hours' => $allocatedHours,
                 'actual_hours' => $actualHours,
-                'remaining_hours' => $totalManhours - $allocatedHours,
+                'remaining_hours' => $fifoRemaining,
+                'fifo_remaining_hours' => $fifoRemaining,
+                'manhour_buckets' => $fifo['buckets'],
+                'mh_overflow_hours' => $fifo['overflow_hours'],
                 'topup_hours_total' => $topupHoursTotal,
                 'has_topup_manhours' => $topupHoursTotal > 0,
                 'change_request_count' => $changeRequestCount,
                 'change_request_total_value' => $changeRequestTotalValue,
                 'change_requests' => $changeRequests,
-                'allocations' => $allocations
-            ]
+                'expense_by_user' => $expenseByUser,
+                'allocation_user_options' => $this->allocationUserOptions((int) $id),
+                'allocations' => $allocations,
+            ],
         ]);
     }
 

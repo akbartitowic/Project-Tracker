@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
-import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus } from 'lucide-react';
+import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity } from 'lucide-react';
+import { hasPermission } from '../utils/permissions';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,6 +195,7 @@ export default function ProjectBoard() {
     const [tasks, setTasks] = useState([]);
     const [viewMode, setViewMode] = useState('kanban');
     const [listViewMode, setListViewMode] = useState('grid');
+    const [projectListTab, setProjectListTab] = useState('active');
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -222,7 +224,9 @@ export default function ProjectBoard() {
     const [bulkEditEstimate, setBulkEditEstimate] = useState('');
     const [bulkEditRoleFilter, setBulkEditRoleFilter] = useState('All');
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
+    const [isUpdatingProjectStatus, setIsUpdatingProjectStatus] = useState(false);
     const isFreelance = isFreelanceUser(user);
+    const canUpdateBoard = hasPermission(user, 'project_board.update');
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -234,9 +238,55 @@ export default function ProjectBoard() {
         try {
             const res = await fetchAPI('/projects');
             if (res.data) setProjects(res.data);
+            return res.data || [];
         } catch (error) {
             console.error("Failed to load projects", error);
+            return [];
         }
+    };
+
+    const applyProjectStatusUpdate = async (project, { status, reopen = false }) => {
+        if (!project?.id) return;
+        setIsUpdatingProjectStatus(true);
+        try {
+            const body = reopen ? { reopen: true } : { status };
+            await fetchAPI(`/projects/${project.id}/status`, {
+                method: 'PATCH',
+                body: JSON.stringify(body),
+            });
+            const refreshed = await loadProjects();
+            const updated = refreshed.find((p) => p.id.toString() === project.id.toString());
+            if (updated && selectedProject?.id?.toString() === project.id.toString()) {
+                setSelectedProject(updated);
+            }
+        } catch (error) {
+            alert('Failed to update project status: ' + error.message);
+        } finally {
+            setIsUpdatingProjectStatus(false);
+        }
+    };
+
+    const handleCloseProject = async (project) => {
+        if (!project) return;
+        let hint = '';
+        if (selectedProject?.id?.toString() === project.id.toString() && tasks.length > 0) {
+            const openTasks = tasks.filter((t) => t.status !== 'Done').length;
+            if (openTasks > 0) {
+                hint = `\n\nPerhatian: masih ada ${openTasks} task yang belum Done.`;
+            }
+        }
+        if (!window.confirm(`Tandai project "${project.name}" sebagai Done/Closed? Status ini hanya diubah manual.${hint}`)) {
+            return;
+        }
+        await applyProjectStatusUpdate(project, { status: 'Done' });
+    };
+
+    const handleReopenProject = async (project) => {
+        if (!project) return;
+        if (!window.confirm(`Buka kembali project "${project.name}"? Status Done akan dihapus.`)) {
+            return;
+        }
+        await applyProjectStatusUpdate(project, { reopen: true });
     };
 
     useEffect(() => {
@@ -477,6 +527,20 @@ export default function ProjectBoard() {
         return String(status || '').trim() || 'To Do';
     };
 
+    const deriveProjectStatusFromTasks = (taskList) => {
+        const hasOutsideTodo = taskList.some((t) => normalizeBoardTaskStatus(t.status) !== 'To Do');
+        return hasOutsideTodo ? 'In Progress' : 'Planning';
+    };
+
+    const syncSelectedProjectFromList = async (projectId) => {
+        const refreshed = await loadProjects();
+        const updated = refreshed.find((p) => p.id.toString() === projectId.toString());
+        if (updated) {
+            setSelectedProject(updated);
+        }
+        return updated;
+    };
+
     const mappedRoleQuotaHours = roleQuotas.reduce((sum, quota) => sum + (Number(quota.quota_hours) || 0), 0);
     const generalQuotaFromPresales = Math.max(0, (Number(selectedProject?.total_manhours) || 0) - mappedRoleQuotaHours);
     const generalAllocatedHours = tasks
@@ -527,7 +591,8 @@ export default function ProjectBoard() {
                 await fetchAPI('/tasks', { method: 'POST', body: JSON.stringify(payload) });
             }
             setIsModalOpen(false);
-            loadBoard(selectedProject.id);
+            await loadBoard(selectedProject.id);
+            await syncSelectedProjectFromList(selectedProject.id);
         } catch (error) {
             alert(error.message || 'Failed to save task.');
         } finally {
@@ -624,7 +689,8 @@ export default function ProjectBoard() {
                     method: 'PUT',
                     body: JSON.stringify({ status: newStatus })
                 });
-                loadBoard(selectedProject.id);
+                await loadBoard(selectedProject.id);
+                await syncSelectedProjectFromList(selectedProject.id);
             } catch (error) {
                 // Revert on failure
                 setTasks(oldTasks);
@@ -712,11 +778,11 @@ export default function ProjectBoard() {
         }
     };
 
-    const toggleAllProjects = () => {
-        if (selectedProjectIds.length === projects.length) {
+    const toggleAllProjects = (visibleProjects) => {
+        if (selectedProjectIds.length === visibleProjects.length) {
             setSelectedProjectIds([]);
         } else {
-            setSelectedProjectIds(projects.map(p => p.id));
+            setSelectedProjectIds(visibleProjects.map(p => p.id));
         }
     };
 
@@ -804,6 +870,23 @@ export default function ProjectBoard() {
         return opts;
     }, [users, projectMembers]);
 
+    const activeProjects = useMemo(
+        () => projects.filter((p) => p.status !== 'Done'),
+        [projects]
+    );
+    const doneProjects = useMemo(
+        () => projects.filter((p) => p.status === 'Done'),
+        [projects]
+    );
+    const displayedProjects = projectListTab === 'done' ? doneProjects : activeProjects;
+
+    const displayProjectStatus = useMemo(() => {
+        if (!selectedProject) return 'Planning';
+        if (selectedProject.status === 'Done') return 'Done';
+        if (tasks.length > 0) return deriveProjectStatusFromTasks(tasks);
+        return selectedProject.status || 'Planning';
+    }, [selectedProject, tasks]);
+
     if (!selectedProject) {
         return (
             <div className="flex-1 w-full overflow-y-auto bg-slate-50/50 p-4 sm:p-6 lg:p-8 dark:bg-background-dark">
@@ -813,7 +896,7 @@ export default function ProjectBoard() {
                             <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Select Project Board</h1>
                             <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Choose a project to view its kanban board and manage tasks.</p>
                         </div>
-                        <div className="flex gap-3 items-center">
+                        <div className="flex flex-wrap gap-3 items-center">
                             <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg mr-2">
                                 <Button
                                     variant={listViewMode === 'grid' ? 'secondary' : 'ghost'}
@@ -832,13 +915,13 @@ export default function ProjectBoard() {
                                     <List className="size-4" />
                                 </Button>
                             </div>
-                            {isEditMode && projects.length > 0 && (
+                            {isEditMode && displayedProjects.length > 0 && (
                                 <Button
                                     variant="secondary"
                                     className="border border-slate-200 dark:border-slate-800"
-                                    onClick={toggleAllProjects}
+                                    onClick={() => toggleAllProjects(displayedProjects)}
                                 >
-                                    {selectedProjectIds.length === projects.length ? "Deselect All" : "Select All"}
+                                    {selectedProjectIds.length === displayedProjects.length ? "Deselect All" : "Select All"}
                                 </Button>
                             )}
                             {isEditMode && selectedProjectIds.length > 0 && (
@@ -862,9 +945,42 @@ export default function ProjectBoard() {
                         </div>
                     </div>
 
+                    <div className="mb-6 flex flex-wrap items-center gap-2">
+                        <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/50 p-1">
+                            <Button
+                                type="button"
+                                variant={projectListTab === 'active' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                className={`gap-2 ${projectListTab === 'active' ? 'bg-white shadow-sm dark:bg-slate-700' : ''}`}
+                                onClick={() => {
+                                    setProjectListTab('active');
+                                    setSelectedProjectIds([]);
+                                }}
+                            >
+                                <Activity className="size-4" />
+                                Aktif
+                                <span className="text-xs text-slate-500">({activeProjects.length})</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                variant={projectListTab === 'done' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                className={`gap-2 ${projectListTab === 'done' ? 'bg-white shadow-sm dark:bg-slate-700' : ''}`}
+                                onClick={() => {
+                                    setProjectListTab('done');
+                                    setSelectedProjectIds([]);
+                                }}
+                            >
+                                <CheckCircle2 className="size-4" />
+                                Done
+                                <span className="text-xs text-slate-500">({doneProjects.length})</span>
+                            </Button>
+                        </div>
+                    </div>
+
                     {listViewMode === 'grid' ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {projects.map(project => (
+                            {displayedProjects.map(project => (
                                 <Card
                                     key={project.id}
                                     className={`group cursor-pointer transition-all hover:-translate-y-1 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md relative
@@ -887,6 +1003,36 @@ export default function ProjectBoard() {
                                         </div>
                                     ) : (
                                         <div className="absolute top-2 right-2 z-20 flex items-center gap-1">
+                                            {canUpdateBoard && project.status !== 'Done' && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-slate-500 hover:text-emerald-600"
+                                                    disabled={isUpdatingProjectStatus}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCloseProject(project);
+                                                    }}
+                                                    title="Mark project as Done"
+                                                >
+                                                    <CheckCircle2 className="size-4" />
+                                                </Button>
+                                            )}
+                                            {canUpdateBoard && project.status === 'Done' && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-slate-500 hover:text-blue-600"
+                                                    disabled={isUpdatingProjectStatus}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleReopenProject(project);
+                                                    }}
+                                                    title="Reopen project"
+                                                >
+                                                    <RotateCcw className="size-4" />
+                                                </Button>
+                                            )}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -961,7 +1107,7 @@ export default function ProjectBoard() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                                    {projects.map(project => (
+                                    {displayedProjects.map(project => (
                                         <tr
                                             key={project.id}
                                             className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedProjectIds.includes(project.id) ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
@@ -1016,6 +1162,36 @@ export default function ProjectBoard() {
                                             {!isEditMode && (
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="inline-flex items-center gap-1">
+                                                        {canUpdateBoard && project.status !== 'Done' && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="text-slate-400 hover:text-emerald-600"
+                                                                disabled={isUpdatingProjectStatus}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleCloseProject(project);
+                                                                }}
+                                                                title="Mark project as Done"
+                                                            >
+                                                                <CheckCircle2 className="size-4" />
+                                                            </Button>
+                                                        )}
+                                                        {canUpdateBoard && project.status === 'Done' && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="text-slate-400 hover:text-blue-600"
+                                                                disabled={isUpdatingProjectStatus}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleReopenProject(project);
+                                                                }}
+                                                                title="Reopen project"
+                                                            >
+                                                                <RotateCcw className="size-4" />
+                                                            </Button>
+                                                        )}
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
@@ -1049,9 +1225,11 @@ export default function ProjectBoard() {
                             </table>
                         </div>
                     )}
-                    {projects.length === 0 && (
+                    {displayedProjects.length === 0 && (
                         <div className="col-span-full py-12 text-center text-slate-500">
-                            No projects found. Create one first!
+                            {projectListTab === 'done'
+                                ? 'Belum ada project yang ditandai Done.'
+                                : 'Tidak ada project aktif. Buat project baru atau cek tab Done.'}
                         </div>
                     )}
                 </div>
@@ -1072,11 +1250,11 @@ export default function ProjectBoard() {
                         <div className="flex items-center gap-3">
                             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{selectedProject.name}</h1>
                             <Badge variant="outline" className={
-                                selectedProject.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' :
-                                    selectedProject.status === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30' :
+                                displayProjectStatus === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' :
+                                    displayProjectStatus === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30' :
                                         'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-900/30'
                             }>
-                                {selectedProject.status}
+                                {displayProjectStatus}
                             </Badge>
                         </div>
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{selectedProject.methodology} Board</p>
@@ -1138,6 +1316,36 @@ export default function ProjectBoard() {
                                 <UserPlus className="size-4" />
                                 <span>Assign Members</span>
                             </Button>
+                            {canUpdateBoard && selectedProject?.status !== 'Done' && (
+                                <Button
+                                    variant="outline"
+                                    className="flex items-center gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                                    disabled={isUpdatingProjectStatus}
+                                    onClick={() => handleCloseProject(selectedProject)}
+                                >
+                                    {isUpdatingProjectStatus ? (
+                                        <Loader2 className="size-4 animate-spin" />
+                                    ) : (
+                                        <CheckCircle2 className="size-4" />
+                                    )}
+                                    <span>Mark Done</span>
+                                </Button>
+                            )}
+                            {canUpdateBoard && selectedProject?.status === 'Done' && (
+                                <Button
+                                    variant="outline"
+                                    className="flex items-center gap-2"
+                                    disabled={isUpdatingProjectStatus}
+                                    onClick={() => handleReopenProject(selectedProject)}
+                                >
+                                    {isUpdatingProjectStatus ? (
+                                        <Loader2 className="size-4 animate-spin" />
+                                    ) : (
+                                        <RotateCcw className="size-4" />
+                                    )}
+                                    <span>Reopen Project</span>
+                                </Button>
+                            )}
                             {!isFreelance && isTaskBulkEditMode && selectedTaskIds.length > 0 && (
                                 <Button
                                     variant="default"

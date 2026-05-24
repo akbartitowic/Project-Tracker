@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FinancialRecord;
+use App\Support\CompanyFinancialRules;
 use App\Support\ProjectAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,8 @@ class FinancialReportController extends Controller
                     'planning_income' => 0,
                     'planning_expense' => 0,
                     'final_expense' => 0,
+                    'paid_expense' => 0,
+                    'unpaid_expense' => 0,
                     'remaining_margin' => 0,
                     'margin_percentage' => 0,
                 ],
@@ -44,8 +47,20 @@ class FinancialReportController extends Controller
                 'p.quotation_value'
             )
             ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 1 THEN pa.amount ELSE 0 END), 0) as topup_income")
-            ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 0 THEN pa.amount ELSE 0 END), 0) as planning_expense")
-            ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 0 THEN COALESCE(pa.realized_amount, pa.amount) ELSE 0 END), 0) as final_expense")
+            ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 0 OR pa.is_topup IS NULL THEN pa.amount ELSE 0 END), 0) as planning_expense")
+            ->selectRaw("COALESCE(SUM(CASE WHEN pa.is_topup = 0 OR pa.is_topup IS NULL THEN COALESCE(pa.realized_amount, pa.amount) ELSE 0 END), 0) as final_expense")
+            ->selectRaw("COALESCE(SUM(CASE
+                WHEN (pa.is_topup = 0 OR pa.is_topup IS NULL) AND COALESCE(pa.realized_amount, pa.amount) <= 0 THEN 0
+                WHEN (pa.is_topup = 0 OR pa.is_topup IS NULL) AND COALESCE(pa.paid_amount, 0) >= COALESCE(pa.realized_amount, pa.amount) THEN COALESCE(pa.realized_amount, pa.amount)
+                WHEN pa.is_topup = 0 OR pa.is_topup IS NULL THEN COALESCE(pa.paid_amount, 0)
+                ELSE 0
+            END), 0) as paid_expense")
+            ->selectRaw("COALESCE(SUM(CASE
+                WHEN (pa.is_topup = 0 OR pa.is_topup IS NULL) AND COALESCE(pa.realized_amount, pa.amount) <= 0 THEN 0
+                WHEN (pa.is_topup = 0 OR pa.is_topup IS NULL) AND COALESCE(pa.paid_amount, 0) >= COALESCE(pa.realized_amount, pa.amount) THEN 0
+                WHEN pa.is_topup = 0 OR pa.is_topup IS NULL THEN COALESCE(pa.realized_amount, pa.amount) - COALESCE(pa.paid_amount, 0)
+                ELSE 0
+            END), 0) as unpaid_expense")
         ->groupBy('p.id', 'p.name', 'p.methodology', 'p.quotation_value')
             ->orderBy('p.name')
             ->get()
@@ -61,6 +76,8 @@ class FinancialReportController extends Controller
                 // planning_expense = SUM(allocation.amount); final_expense = SUM(COALESCE(realized_amount, amount))
                 $planningExpense = (float) ($project->planning_expense ?? 0);
                 $finalExpense = (float) ($project->final_expense ?? 0);
+                $paidExpense = (float) ($project->paid_expense ?? 0);
+                $unpaidExpense = (float) ($project->unpaid_expense ?? 0);
 
                 $remainingMargin = $planningIncome - $finalExpense;
                 $marginPercentage = $planningIncome > 0
@@ -76,6 +93,8 @@ class FinancialReportController extends Controller
                     'planning_income' => $planningIncome,
                     'planning_expense' => $planningExpense,
                     'final_expense' => $finalExpense,
+                    'paid_expense' => $paidExpense,
+                    'unpaid_expense' => $unpaidExpense,
                     'remaining_margin' => $remainingMargin,
                     'margin_percentage' => $marginPercentage,
                 ];
@@ -88,6 +107,8 @@ class FinancialReportController extends Controller
             'planning_income' => $projects->sum('planning_income'),
             'planning_expense' => $projects->sum('planning_expense'),
             'final_expense' => $projects->sum('final_expense'),
+            'paid_expense' => $projects->sum('paid_expense'),
+            'unpaid_expense' => $projects->sum('unpaid_expense'),
             'remaining_margin' => $projects->sum('remaining_margin'),
         ];
         $totals['margin_percentage'] = $totals['planning_income'] > 0
@@ -134,18 +155,9 @@ class FinancialReportController extends Controller
         $incomeAfterProjectPlanning = $grossIncome - $projectExpensesPlanning;
         $incomeAfterProjectRealized = $grossIncome - $projectExpensesRealized;
 
-        // OPEX and CAPEX: tahun kalender dari tanggal mulai filter (perilaku lama tetap dipakai).
-        $yearStart = Carbon::parse($startDate)->startOfYear()->toDateString();
-        $yearEnd = Carbon::parse($startDate)->endOfYear()->toDateString();
-
-        $opexTotal = (float) FinancialRecord::where('type', 'OPEX')
-            ->whereBetween('date', [$yearStart, $yearEnd])
-            ->sum('amount');
-
-        $capexTotal = (float) FinancialRecord::where('type', 'CAPEX')
-            ->whereBetween('date', [$yearStart, $yearEnd])
-            ->sum('amount');
-
+        $companyTotals = CompanyFinancialRules::sumByType($startDate, $endDate);
+        $opexTotal = $companyTotals['opex_total'];
+        $capexTotal = $companyTotals['capex_total'];
         $opexCapex = $opexTotal + $capexTotal;
         $netRevenue = $incomeAfterProjectPlanning - $opexCapex;
         $netRevenueRealized = $incomeAfterProjectRealized - $opexCapex;
@@ -161,7 +173,7 @@ class FinancialReportController extends Controller
                 'capex_total' => $capexTotal,
                 'net_revenue' => $netRevenue,
                 'net_revenue_realized' => $netRevenueRealized,
-                'records' => FinancialRecord::whereBetween('date', [$startDate, $endDate])->orderBy('date', 'desc')->get(),
+                'records' => CompanyFinancialRules::recordsInRange($startDate, $endDate)->get(),
             ],
         ]);
     }
@@ -170,13 +182,15 @@ class FinancialReportController extends Controller
     {
         $validated = $request->validate([
             'type' => 'required|in:OPEX,CAPEX',
-            'amount' => 'required|numeric',
+            'amount' => 'required|numeric|min:0.01',
             'date' => 'required|date',
             'description' => 'required|string',
-            'recurring_months' => 'nullable|integer|min:1|max:24'
+            'recurring_months' => 'nullable|integer|min:1|max:24',
         ]);
 
-        $recurringMonths = $validated['recurring_months'] ?? 1;
+        $recurringMonths = $validated['type'] === CompanyFinancialRules::TYPE_CAPEX
+            ? 1
+            : ($validated['recurring_months'] ?? 1);
         $startDate = Carbon::parse($validated['date']);
 
         $records = [];

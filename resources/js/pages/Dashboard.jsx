@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchAPI } from '../services/api';
-import { Rocket, Timer, Wallet, Users, AlertCircle, Clock } from 'lucide-react';
+import { Rocket, Wallet, Users, AlertCircle, Clock } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -88,45 +88,50 @@ export default function Dashboard() {
             },
         };
 
-    const summarySection = (
-        <>
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <Card className="bg-gradient-to-br from-primary/5 to-transparent border-primary/10">
-                    <CardContent className="p-6">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Total Project yang Di-handle</p>
-                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{commonSummary.totalProjectsHandled}</h3>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-6">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Total Task yang Masih Aktif</p>
-                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{commonSummary.activeTasks}</h3>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-6">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Total Task Selesai</p>
-                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{commonSummary.taskStatusCounts?.Done || 0}</h3>
-                    </CardContent>
-                </Card>
-            </section>
+    const taskStatusSection = (
+        <section>
+            <h4 className="font-bold text-lg text-slate-900 dark:text-white mb-4">Total Task per Status</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                {['To Do', 'In Progress', 'Review', 'Reopen', 'Done'].map((status) => (
+                    <Card key={status} className="border-slate-200 dark:border-slate-800 shadow-sm">
+                        <CardContent className="p-5">
+                            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{status}</p>
+                            <p className="text-2xl mt-2 font-bold tabular-nums text-slate-900 dark:text-white">
+                                {commonSummary.taskStatusCounts?.[status] || 0}
+                            </p>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        </section>
+    );
 
-            <section>
-                <h4 className="font-bold text-lg text-slate-900 dark:text-white mb-4">Total Task per Status</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    {['To Do', 'In Progress', 'Review', 'Reopen', 'Done'].map((status) => (
-                        <Card key={status}>
-                            <CardContent className="p-5">
-                                <p className="text-xs font-bold uppercase text-slate-500">{status}</p>
-                                <p className="text-2xl mt-2 font-bold text-slate-900 dark:text-white">
-                                    {commonSummary.taskStatusCounts?.[status] || 0}
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
+    const summarySection = shouldShowMemberDashboard ? (
+        <>
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                    <CardContent className="p-6">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total Project yang Di-handle</p>
+                        <h3 className="text-3xl font-bold mt-1 tabular-nums text-slate-900 dark:text-white">{commonSummary.totalProjectsHandled}</h3>
+                    </CardContent>
+                </Card>
+                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                    <CardContent className="p-6">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total Task yang Masih Aktif</p>
+                        <h3 className="text-3xl font-bold mt-1 tabular-nums text-slate-900 dark:text-white">{commonSummary.activeTasks}</h3>
+                    </CardContent>
+                </Card>
+                <Card className="border-slate-200 dark:border-slate-800 shadow-sm sm:col-span-2 lg:col-span-1">
+                    <CardContent className="p-6">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total Task Selesai</p>
+                        <h3 className="text-3xl font-bold mt-1 tabular-nums text-slate-900 dark:text-white">{commonSummary.taskStatusCounts?.Done || 0}</h3>
+                    </CardContent>
+                </Card>
             </section>
+            {taskStatusSection}
         </>
+    ) : (
+        taskStatusSection
     );
 
     if (shouldShowMemberDashboard) {
@@ -135,59 +140,50 @@ export default function Dashboard() {
 
     return (
         <div className="space-y-6 p-4 sm:space-y-8 sm:p-6 lg:p-8">
-            {summarySection}
-            {/* KPI Section */}
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className="bg-gradient-to-br from-primary/5 to-transparent border-primary/10">
+            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                            <Rocket className="text-accent bg-accent/10 p-2 rounded-lg size-10" />
-                            <span className="text-xs font-bold text-accent bg-accent/5 px-2 py-1 rounded">Active</span>
+                        <div className="flex justify-between items-start gap-3 mb-4">
+                            <Rocket className="text-orange-500 bg-orange-500/10 p-2 rounded-lg size-10 shrink-0" />
+                            <span className="text-xs font-bold text-orange-600 bg-orange-50 dark:bg-orange-500/10 px-2 py-1 rounded shrink-0">Active</span>
                         </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Active Projects</p>
-                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{stats.activeProjects}</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Active Projects</p>
+                        <h3 className="text-3xl font-bold mt-1 tabular-nums text-slate-900 dark:text-white">{stats.activeProjects}</h3>
                         <p className="text-[11px] text-slate-400 mt-1">
-                            Done: {stats.doneProjects} | Total: {stats.totalProjects}
+                            Done: {stats.doneProjects} · Total: {stats.totalProjects}
                         </p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-slate-200 dark:border-slate-800 shadow-sm md:col-span-2 xl:col-span-1">
                     <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                            <Wallet className="text-emerald-500 bg-emerald-500/10 p-2 rounded-lg size-10" />
-                            <div className="text-right">
-                                <span className="text-[10px] block font-bold text-slate-400 uppercase">Gross Revenue</span>
-                                <span className="text-sm font-bold text-slate-900 dark:text-white">{formatCurrency(stats.totalRevenue)}</span>
-                            </div>
+                        <div className="flex justify-between items-start gap-3 mb-4">
+                            <Wallet className="text-emerald-500 bg-emerald-500/10 p-2 rounded-lg size-10 shrink-0" />
+                            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded shrink-0">
+                                {Number(stats.marginPercentage || 0).toFixed(2)}%
+                            </span>
                         </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Agency Net Margin</p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <h3 className="text-2xl xl:text-3xl font-bold text-emerald-600 break-words">{formatCurrency(stats.totalMargin)}</h3>
-                            <span className="text-xs font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded shrink-0">{stats.marginPercentage.toFixed(1)}%</span>
-                        </div>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Agency Net Margin</p>
+                        <h3 className="text-xl sm:text-2xl font-bold mt-1 tabular-nums text-emerald-600 dark:text-emerald-400 break-words leading-tight">
+                            {formatCurrency(stats.totalMargin)}
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-2">
+                            Gross revenue {formatCurrency(stats.totalRevenue)}
+                        </p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                            <Timer className="text-amber-500 bg-amber-500/10 p-2 rounded-lg size-10" />
-                            <span className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">Accumulated</span>
+                        <div className="flex justify-between items-start gap-3 mb-4">
+                            <Users className="text-purple-500 bg-purple-500/10 p-2 rounded-lg size-10 shrink-0" />
+                            <span className="text-xs font-medium text-purple-600 bg-purple-50 dark:bg-purple-500/10 px-2 py-1 rounded shrink-0">In Progress</span>
                         </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Recorded Manhours</p>
-                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{stats.totalHours}<span className="text-sm font-normal ml-1">hrs</span></h3>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                            <Users className="text-purple-500 bg-purple-500/10 p-2 rounded-lg size-10" />
-                            <span className="text-xs font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded">In Progress</span>
-                        </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium italic">Active Tasks</p>
-                        <h3 className="text-3xl font-bold mt-1 text-slate-900 dark:text-white">{stats.activeTasks}</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Active Tasks</p>
+                        <h3 className="text-3xl font-bold mt-1 tabular-nums text-slate-900 dark:text-white">{stats.activeTasks}</h3>
                     </CardContent>
                 </Card>
             </section>
+
+            {summarySection}
 
             <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="border-blue-100 dark:border-blue-900/30 bg-blue-50/40 dark:bg-blue-900/10">

@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Support\PublicStorageUrl;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class Company extends Model
 {
@@ -22,7 +22,7 @@ class Company extends Model
                 return null;
             }
 
-            return Storage::disk('public')->url($this->logo_path);
+            return PublicStorageUrl::for($this->logo_path);
         });
     }
 }

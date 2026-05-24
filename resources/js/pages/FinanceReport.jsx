@@ -166,21 +166,21 @@ export default function FinanceReport() {
         },
         {
             label: 'OPEX',
-            hint: 'Full calendar year of the filter start date (not limited to the date range).',
+            hint: 'Operational expenses in the filter period. Each entry is one month at the monthly amount (recurring creates multiple rows).',
             forecast: summary.opex_total,
             realized: null,
             negative: true,
         },
         {
             label: 'CAPEX',
-            hint: 'Full calendar year of the filter start date (not limited to the date range).',
+            hint: 'Capital expenditure in the filter period. Each entry is a one-time amount on its transaction date.',
             forecast: summary.capex_total,
             realized: null,
             negative: true,
         },
         {
             label: 'Net revenue',
-            hint: 'Income after project (forecast/realized) minus OPEX and CAPEX for that year.',
+            hint: 'Income after project (forecast/realized) minus OPEX and CAPEX for the same filter period.',
             forecast: summary.net_revenue,
             realized: netRevenueRealized,
             emphasis: true,
@@ -245,7 +245,13 @@ export default function FinanceReport() {
                         <strong className="font-medium text-slate-800 dark:text-slate-200">Top-up Scrum</strong> is excluded from project expenses here.
                     </li>
                     <li>
-                        <strong className="font-medium text-slate-800 dark:text-slate-200">OPEX / CAPEX</strong> — summed for the full calendar year of the filter start date.
+                        <strong className="font-medium text-slate-800 dark:text-slate-200">OPEX</strong> — monthly operational cost per row; recurring entry spreads the same monthly amount across consecutive months.
+                    </li>
+                    <li>
+                        <strong className="font-medium text-slate-800 dark:text-slate-200">CAPEX</strong> — one-time capital spend (equipment, assets); not annualized.
+                    </li>
+                    <li>
+                        <strong className="font-medium text-slate-800 dark:text-slate-200">OPEX / CAPEX totals</strong> — summed only for dates within the filter range (same period as gross income).
                     </li>
                 </ul>
             </details>
@@ -328,13 +334,14 @@ export default function FinanceReport() {
                         </CardContent>
                     </Card>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                         {[
                             { icon: DollarSign, label: 'Gross', value: formatCurrency(summary.gross_income), color: 'text-blue-600' },
                             { icon: Briefcase, label: 'Project (plan)', value: formatCurrency(summary.project_expenses), color: 'text-amber-600' },
                             { icon: Briefcase, label: 'Project (real)', value: formatCurrency(projectExpensesRealized), color: 'text-orange-600' },
                             { icon: Activity, label: 'Margin (plan)', value: formatCurrency(summary.income_after_project_expenses), color: 'text-slate-700 dark:text-slate-200' },
                             { icon: CreditCard, label: 'OPEX', value: formatCurrency(summary.opex_total), color: 'text-rose-600' },
+                            { icon: CreditCard, label: 'CAPEX', value: formatCurrency(summary.capex_total), color: 'text-indigo-600' },
                             { icon: LayoutDashboard, label: 'Net (real)', value: formatCurrency(netRevenueRealized), color: netRevenueRealized >= 0 ? 'text-emerald-600' : 'text-rose-600' },
                         ].map(({ icon: Icon, label, value, color }) => (
                             <Card key={label} className="border-slate-200 dark:border-slate-800 shadow-sm">
@@ -369,8 +376,8 @@ export default function FinanceReport() {
                                                 <th className="px-4 py-3 text-left font-medium">Date</th>
                                                 <th className="px-4 py-3 text-left font-medium">Type</th>
                                                 <th className="px-4 py-3 text-left font-medium">Description</th>
-                                                <th className="px-4 py-3 text-right font-medium">Monthly</th>
-                                                <th className="px-4 py-3 text-right font-medium">Yearly</th>
+                                                <th className="px-4 py-3 text-right font-medium">Amount</th>
+                                                <th className="px-4 py-3 text-right font-medium hidden sm:table-cell">Note</th>
                                                 <th className="px-4 py-3 text-center font-medium w-16"></th>
                                             </tr>
                                         </thead>
@@ -409,11 +416,11 @@ export default function FinanceReport() {
                                                         <td className="px-4 py-3 text-slate-700 dark:text-slate-300 max-w-[200px] truncate" title={record.description}>
                                                             {record.description}
                                                         </td>
-                                                        <td className="px-4 py-3 text-right tabular-nums font-medium">
-                                                            {record.type === 'OPEX' ? formatCurrency(record.amount) : '—'}
+                                                        <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-900 dark:text-white">
+                                                            {formatCurrency(record.amount)}
                                                         </td>
-                                                        <td className="px-4 py-3 text-right tabular-nums font-medium">
-                                                            {record.type === 'OPEX' ? formatCurrency(record.amount * 12) : '—'}
+                                                        <td className="px-4 py-3 text-right text-xs text-slate-500 hidden sm:table-cell">
+                                                            {record.type === 'OPEX' ? 'per month' : 'one-time'}
                                                         </td>
                                                         <td className="px-4 py-3 text-center">
                                                             <button
@@ -461,7 +468,7 @@ export default function FinanceReport() {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setNewRecord({ ...newRecord, type: 'CAPEX', frequency: 'one-time' })}
+                                                    onClick={() => setNewRecord({ ...newRecord, type: 'CAPEX', duration: 1 })}
                                                     className={`py-2.5 rounded-lg text-sm font-medium transition-colors ${
                                                         newRecord.type === 'CAPEX'
                                                             ? 'bg-primary text-white'
@@ -501,7 +508,9 @@ export default function FinanceReport() {
                                         <div className="space-y-3">
                                             {newRecord.duration == 1 ? (
                                                 <div className="space-y-1.5">
-                                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Amount (IDR)</label>
+                                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                        {newRecord.type === 'CAPEX' ? 'Amount — one-time (IDR)' : 'Monthly amount (IDR)'}
+                                                    </label>
                                                     <Input
                                                         type="number"
                                                         placeholder="0"
@@ -538,7 +547,7 @@ export default function FinanceReport() {
 
                                         <div className="space-y-1.5">
                                             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                                {newRecord.frequency === 'one-time' ? 'Transaction date' : 'Start date'}
+                                                {newRecord.type === 'CAPEX' ? 'Transaction date' : 'Start month'}
                                             </label>
                                             <Input
                                                 type="date"
@@ -546,9 +555,9 @@ export default function FinanceReport() {
                                                 onChange={(e) => setNewRecord({ ...newRecord, date: e.target.value })}
                                                 required
                                             />
-                                            {newRecord.frequency !== 'one-time' && (
+                                            {newRecord.type === 'OPEX' && Number(newRecord.duration) > 1 && (
                                                 <p className="text-[11px] text-slate-500">
-                                                    Generates 12 monthly records from this date.
+                                                    Creates {newRecord.duration} monthly rows from this date (same amount each month).
                                                 </p>
                                             )}
                                         </div>
@@ -564,7 +573,9 @@ export default function FinanceReport() {
                                         </div>
 
                                         <Button type="submit" className="w-full">
-                                            {newRecord.frequency === 'one-time' ? 'Save entry' : 'Save recurring entries'}
+                                            {newRecord.type === 'OPEX' && Number(newRecord.duration) > 1
+                                                ? `Save ${newRecord.duration} monthly entries`
+                                                : 'Save entry'}
                                         </Button>
                                     </form>
                                 </CardContent>

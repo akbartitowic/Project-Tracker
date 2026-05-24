@@ -29,6 +29,7 @@ export default function Layout() {
         if (pathname === '/finance-realization-report') return 'Finance - Realization Report';
         if (pathname === '/finance-monitoring') return 'Finance - Monitoring';
         if (pathname.startsWith('/finance-monitoring/')) return 'Finance - Project Monitoring';
+        if (pathname === '/integrasi/projects') return 'Integrasi - Sales to Project';
         return 'Overview';
     };
 

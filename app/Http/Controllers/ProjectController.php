@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
+use App\Support\ManhourBucketCalculator;
 use App\Models\ProjectMember;
 use App\Models\ProjectRoleQuota;
 use App\Models\ProjectRole;
@@ -13,12 +14,27 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Support\ProjectAccess;
+use App\Support\PublicStorageUrl;
 use App\Support\UserAccess;
 use App\Traits\LogActivity;
 
 class ProjectController extends Controller
 {
     use LogActivity;
+
+    private function deriveProjectStatusFromTasks(int $projectId, ?string $storedStatus): string
+    {
+        if ($storedStatus === 'Done') {
+            return 'Done';
+        }
+
+        $hasTasksOutsideTodo = DB::table('tasks')
+            ->where('project_id', $projectId)
+            ->whereRaw("TRIM(COALESCE(status, 'To Do')) NOT IN ('To Do', 'todo')")
+            ->exists();
+
+        return $hasTasksOutsideTodo ? 'In Progress' : 'Planning';
+    }
 
     public function index()
     {
@@ -27,8 +43,12 @@ class ProjectController extends Controller
         $query = Project::select('projects.*')
             ->selectRaw("
                 CASE
-                    WHEN (SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status IN ('In Progress', 'Review', 'Reopen')) > 0 THEN 'In Progress'
-                    WHEN (SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id) > 0 AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status != 'Done') = 0 THEN 'Done'
+                    WHEN projects.status = 'Done' THEN 'Done'
+                    WHEN (
+                        SELECT COUNT(*) FROM tasks t
+                        WHERE t.project_id = projects.id
+                          AND TRIM(COALESCE(t.status, 'To Do')) NOT IN ('To Do', 'todo')
+                    ) > 0 THEN 'In Progress'
                     ELSE 'Planning'
                 END as status
             ")
@@ -83,9 +103,7 @@ class ProjectController extends Controller
         // Cast jobs back to array (or rely on Model casting)
         $projects->each(function ($p) use ($stripManhours) {
             $p->jobs = is_string($p->jobs) ? json_decode($p->jobs) : $p->jobs;
-            $p->company_logo_url = $p->company_logo_path
-                ? Storage::disk('public')->url($p->company_logo_path)
-                : null;
+            $p->company_logo_url = PublicStorageUrl::for($p->company_logo_path);
             unset($p->company_logo_path);
             if ($stripManhours) {
                 UserAccess::stripProjectManhourFields($p);
@@ -225,27 +243,39 @@ class ProjectController extends Controller
             ->orderBy('pr.name')
             ->get();
 
-        $topupByRole = DB::table('project_allocations')
-            ->select('project_role_id', DB::raw('CAST(COALESCE(SUM(topup_hours), 0) AS FLOAT) as topup_hours'))
+        $topupRowsQuery = DB::table('project_allocations')
+            ->select('id', 'project_id', 'project_role_id', 'topup_hours', 'description', 'created_at')
             ->where('project_id', $id)
             ->where('is_topup', true)
-            ->whereNotNull('project_role_id')
+            ->whereNotNull('topup_hours')
+            ->where('topup_hours', '>', 0)
+            ->orderBy('created_at')
+            ->orderBy('id');
+
+        $allTopupRows = $topupRowsQuery->get();
+        $topupRowsByRole = $allTopupRows->groupBy('project_role_id');
+
+        $topupByRole = $allTopupRows
             ->groupBy('project_role_id')
-            ->pluck('topup_hours', 'project_role_id');
+            ->map(fn ($rows) => (float) $rows->sum('topup_hours'));
 
-        $topupHoursTotal = (float) DB::table('project_allocations')
-            ->where('project_id', $id)
-            ->where('is_topup', true)
-            ->sum('topup_hours');
+        $topupHoursTotal = (float) $allTopupRows->sum('topup_hours');
 
-        $quotasWithSplit = $quotas->map(function ($quota) use ($topupByRole) {
+        $quotasWithSplit = $quotas->map(function ($quota) use ($topupByRole, $topupRowsByRole) {
             $topupHours = (float) ($topupByRole[$quota->project_role_id] ?? 0);
             $currentQuotaHours = (float) ($quota->quota_hours ?? 0);
             $baseQuotaHours = max(0, $currentQuotaHours - $topupHours);
+            $allocatedHours = (float) ($quota->allocated_hours ?? 0);
+            $roleTopups = $topupRowsByRole->get($quota->project_role_id, collect());
+
+            $fifo = ManhourBucketCalculator::build($currentQuotaHours, $roleTopups, $allocatedHours);
 
             return (object) array_merge((array) $quota, [
                 'base_quota_hours' => $baseQuotaHours,
                 'topup_hours' => $topupHours,
+                'manhour_buckets' => $fifo['buckets'],
+                'fifo_remaining_hours' => ManhourBucketCalculator::sumRemainingHours($fifo['buckets']),
+                'fifo_consumed_hours' => ManhourBucketCalculator::sumConsumedHours($fifo['buckets']),
             ]);
         });
 
@@ -270,6 +300,22 @@ class ProjectController extends Controller
             ->whereNull('project_role_id')
             ->sum('hours');
 
+        $generalFifo = ManhourBucketCalculator::build(
+            $generalCurrentQuota,
+            collect(),
+            $generalAllocatedHours,
+        );
+
+        $totalAllocatedHours = (float) DB::table('tasks')
+            ->where('project_id', $id)
+            ->sum('estimated_hours');
+
+        $projectFifo = ManhourBucketCalculator::build(
+            $totalManhours,
+            $allTopupRows,
+            $totalAllocatedHours,
+        );
+
         return response()->json([
             'data' => $quotasWithSplit,
             'meta' => [
@@ -279,13 +325,17 @@ class ProjectController extends Controller
                     'current_quota_hours' => $generalCurrentQuota,
                     'allocated_hours' => $generalAllocatedHours,
                     'actual_hours' => $generalActualHours,
-                    'remaining_hours' => $generalCurrentQuota - $generalAllocatedHours,
+                    'remaining_hours' => ManhourBucketCalculator::sumRemainingHours($generalFifo['buckets']),
+                    'manhour_buckets' => $generalFifo['buckets'],
                 ],
                 'totals' => [
                     'base_total_manhours' => $baseTotalManhours,
                     'topup_total_manhours' => $topupHoursTotal,
                     'current_total_manhours' => $totalManhours,
                 ],
+                'manhour_buckets' => $projectFifo['buckets'],
+                'fifo_remaining_hours' => ManhourBucketCalculator::sumRemainingHours($projectFifo['buckets']),
+                'mh_overflow_hours' => $projectFifo['overflow_hours'],
             ],
         ]);
     }
@@ -304,19 +354,33 @@ class ProjectController extends Controller
         }
         ProjectAccess::assertCanAccessProject($user, (int) $id);
 
-        $allocatedHours = Task::where('project_id', $id)->sum('estimated_hours');
+        $allocatedHours = (float) Task::where('project_id', $id)->sum('estimated_hours');
         $actualHours = Manhour::where('project_id', $id)->sum('hours');
-        
-        $remaining = null;
-        if ($project->total_manhours !== null) {
-            $remaining = $project->total_manhours - $allocatedHours;
-        }
+
+        $topupRows = DB::table('project_allocations')
+            ->select('id', 'project_id', 'topup_hours', 'description', 'created_at')
+            ->where('project_id', $id)
+            ->where('is_topup', true)
+            ->whereNotNull('topup_hours')
+            ->where('topup_hours', '>', 0)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        $totalManhours = (float) ($project->total_manhours ?? 0);
+        $fifo = ManhourBucketCalculator::build($totalManhours, $topupRows, $allocatedHours);
+        $remaining = $totalManhours > 0
+            ? ManhourBucketCalculator::sumRemainingHours($fifo['buckets'])
+            : null;
 
         return response()->json([
             'data' => [
                 'total_manhours' => $project->total_manhours,
                 'methodology' => $project->methodology,
                 'allocated_hours' => $allocatedHours,
+                'manhour_buckets' => $fifo['buckets'],
+                'fifo_remaining_hours' => $remaining,
+                'mh_overflow_hours' => $fifo['overflow_hours'],
                 'actual_hours' => $actualHours,
                 'remaining' => $remaining
             ]
@@ -425,5 +489,68 @@ class ProjectController extends Controller
             DB::rollBack();
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    public function updateStatus(Request $request, $id)
+    {
+        $project = Project::find($id);
+        if (!$project) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+
+        ProjectAccess::assertCanAccessProject($request->user(), (int) $id);
+
+        $validated = $request->validate([
+            'status' => 'required_without:reopen|nullable|string|in:Done,Planning,In Progress',
+            'reopen' => 'sometimes|boolean',
+        ]);
+
+        if (!empty($validated['reopen'])) {
+            $newStatus = $this->deriveProjectStatusFromTasks((int) $project->id, null);
+        } else {
+            $newStatus = $validated['status'] ?? null;
+            if ($newStatus === null) {
+                return response()->json(['error' => 'status is required'], 422);
+            }
+        }
+
+        $oldStatus = $project->status;
+        $updates = ['status' => $newStatus];
+
+        if ($newStatus === 'Done') {
+            if (!$project->end_date) {
+                $updates['end_date'] = now()->toDateString();
+            }
+            $updates['completion'] = 100;
+        } elseif ($oldStatus === 'Done') {
+            $updates['end_date'] = null;
+            $totalTasks = (int) DB::table('tasks')->where('project_id', $project->id)->count();
+            $doneTasks = (int) DB::table('tasks')
+                ->where('project_id', $project->id)
+                ->where('status', 'Done')
+                ->count();
+            $updates['completion'] = $totalTasks > 0
+                ? (int) round(($doneTasks * 100) / $totalTasks)
+                : 0;
+        }
+
+        $project->update($updates);
+
+        $label = $newStatus === 'Done' ? 'closed' : 'reopened';
+        $this->log(
+            'Project',
+            'Updated Project Status',
+            "Manually {$label} project '{$project->name}' ({$oldStatus} → {$newStatus})"
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'id' => $project->id,
+                'status' => $project->status,
+                'end_date' => $project->end_date,
+                'completion' => $project->completion,
+            ],
+        ]);
     }
 }

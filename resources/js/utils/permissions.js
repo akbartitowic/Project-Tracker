@@ -15,6 +15,7 @@ const ROUTE_PERMISSION_MAP = [
     { path: '/roles', permission: 'access_control.read' },
     { path: '/project-roles', permission: 'project_roles.read' },
     { path: '/system-logs', permission: 'system_log.read' },
+    { path: '/integrasi/projects', permission: 'integrasi.read' },
     { path: '/settings', permission: 'settings.read' },
     { path: '/profile', permission: 'profile.read' },
     { path: '/', permission: 'dashboard.read' },

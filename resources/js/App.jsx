@@ -21,6 +21,7 @@ import CompanyMaster from './pages/CompanyMaster';
 import ProjectCategoryMaster from './pages/ProjectCategoryMaster';
 import SalesCategoryProjectMaster from './pages/SalesCategoryProjectMaster';
 import Sales from './pages/Sales';
+import IntegrationProjects from './pages/IntegrationProjects';
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
@@ -89,6 +90,7 @@ function App() {
           <Route path="finance-report" element={<FinanceReport />} />
           <Route path="finance-realization-report" element={<RealizationReport />} />
           <Route path="system-logs" element={<SystemLogs />} />
+          <Route path="integrasi/projects" element={<IntegrationProjects />} />
         </Route>
       </Routes>
     </Router>

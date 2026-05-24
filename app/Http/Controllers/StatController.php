@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ManhourBucketCalculator;
 use App\Support\ProjectAccess;
+use App\Support\PublicStorageUrl;
 use App\Support\UserAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
 class StatController extends Controller
@@ -93,15 +94,11 @@ class StatController extends Controller
                 (SELECT COUNT(*) FROM projects WHERE 1=1{$projectFilter}) as totalProjects,
                 (SELECT COUNT(*) FROM projects p
                     WHERE 1=1{$projectFilterAlias}
-                    AND NOT (
-                        (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) > 0
-                        AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'Done') = 0
-                    )
+                    AND COALESCE(p.status, '') != 'Done'
                 ) as activeProjects,
                 (SELECT COUNT(*) FROM projects p
                     WHERE 1=1{$projectFilterAlias}
-                    AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) > 0
-                    AND (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'Done') = 0
+                    AND p.status = 'Done'
                 ) as doneProjects,
                 (SELECT COUNT(*) FROM projects WHERE lower(coalesce(methodology, '')) LIKE '%waterfall%'{$projectFilter}) as waterfallProjects,
                 (SELECT COUNT(*) FROM projects WHERE lower(coalesce(methodology, '')) LIKE '%scrum%' OR lower(coalesce(methodology, '')) LIKE '%agile%'{$projectFilter}) as scrumProjects,
@@ -242,10 +239,64 @@ class StatController extends Controller
         }
         $manhourSums = $manhourSumsQuery->groupBy('project_id')->pluck('actual', 'project_id');
 
-        return $projects->map(function($p) use ($taskSums, $manhourSums) {
-            $p->allocated_hours = $taskSums[$p->id] ?? 0;
-            $p->actual_hours = $manhourSums[$p->id] ?? 0;
-            $p->burn_percentage = $p->estimated_hours > 0 ? ($p->allocated_hours * 100.0 / $p->estimated_hours) : 0;
+        $topupsQuery = DB::table('project_allocations')
+            ->select('id', 'project_id', 'topup_hours', 'description', 'created_at')
+            ->where('is_topup', true)
+            ->whereNotNull('topup_hours')
+            ->where('topup_hours', '>', 0)
+            ->orderBy('created_at')
+            ->orderBy('id');
+        if ($projectIds !== null) {
+            $topupsQuery->whereIn('project_id', $projectIds);
+        }
+        $topupsByProject = $topupsQuery->get()->groupBy('project_id');
+
+        $projectIdsList = $projects->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $companyByProject = [];
+        if ($projectIdsList !== []) {
+            $presaleCompanies = DB::table('presales as pr')
+                ->join('companies as c', 'c.id', '=', 'pr.company_id')
+                ->whereIn('pr.converted_project_id', $projectIdsList)
+                ->whereNotNull('pr.converted_project_id')
+                ->select(
+                    'pr.converted_project_id as project_id',
+                    'c.id as company_id',
+                    'c.name as company_name',
+                    'pr.id as presale_id'
+                )
+                ->orderByDesc('pr.id')
+                ->get();
+
+            foreach ($presaleCompanies as $row) {
+                $pid = (int) $row->project_id;
+                if (!isset($companyByProject[$pid])) {
+                    $companyByProject[$pid] = $row;
+                }
+            }
+        }
+
+        return $projects->map(function ($p) use ($taskSums, $manhourSums, $topupsByProject, $companyByProject) {
+            $p->allocated_hours = (float) ($taskSums[$p->id] ?? 0);
+            $p->actual_hours = (float) ($manhourSums[$p->id] ?? 0);
+            $totalManhours = (float) ($p->estimated_hours ?? 0);
+            $p->burn_percentage = $totalManhours > 0 ? ($p->allocated_hours * 100.0 / $totalManhours) : 0;
+
+            $bucketData = ManhourBucketCalculator::build(
+                $totalManhours,
+                $topupsByProject->get($p->id, collect()),
+                $p->allocated_hours,
+            );
+
+            $p->base_quota_hours = $bucketData['base_quota_hours'];
+            $p->topup_total_hours = $bucketData['topup_total_hours'];
+            $p->has_topup = $bucketData['has_topup'];
+            $p->mh_overflow_hours = $bucketData['overflow_hours'];
+            $p->manhour_buckets = $bucketData['buckets'];
+
+            $company = $companyByProject[(int) $p->id] ?? null;
+            $p->company_id = $company ? (int) $company->company_id : null;
+            $p->company_name = $company ? (string) $company->company_name : null;
+
             return $p;
         })->sortByDesc('burn_percentage')->values();
     }
@@ -262,6 +313,407 @@ class StatController extends Controller
         $projectIds = ProjectAccess::metricsProjectIds($request->user());
 
         return response()->json(['data' => $this->getCompanyProjectsData($projectIds)]);
+    }
+
+    public function companyFinancials(Request $request)
+    {
+        $projectIds = ProjectAccess::metricsProjectIds($request->user());
+
+        return response()->json($this->getCompanyFinancialsData($projectIds));
+    }
+
+    public function expensePaymentBreakdown(Request $request)
+    {
+        $projectIds = ProjectAccess::metricsProjectIds($request->user());
+        $dateRange = $this->resolveExpenseReportDateRange($request);
+
+        return response()->json($this->getExpensePaymentBreakdownData($projectIds, $dateRange));
+    }
+
+    /**
+     * @return array{mode: string, start_date: string, end_date: string, label: string}
+     */
+    private function resolveExpenseReportDateRange(Request $request): array
+    {
+        $today = Carbon::today();
+        $mode = (string) $request->query('filter_mode', 'ytd');
+
+        if ($mode === 'month') {
+            $month = (string) $request->query('month', $today->format('Y-m'));
+            $start = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+            $end = $start->copy()->endOfMonth();
+            if ($end->gt($today)) {
+                $end = $today->copy();
+            }
+        } elseif ($mode === 'custom') {
+            $start = Carbon::parse((string) $request->query('start_date', $today->copy()->startOfYear()->toDateString()));
+            $end = Carbon::parse((string) $request->query('end_date', $today->toDateString()));
+            if ($start->gt($end)) {
+                [$start, $end] = [$end, $start];
+            }
+            if ($end->gt($today)) {
+                $end = $today->copy();
+            }
+        } else {
+            $mode = 'ytd';
+            $start = Carbon::create($today->year, 1, 1)->startOfDay();
+            $end = $today->copy();
+        }
+
+        $label = match ($mode) {
+            'month' => $start->format('F Y'),
+            'custom' => $start->format('d M Y') . ' – ' . $end->format('d M Y'),
+            default => '1 Jan ' . $start->year . ' – ' . $end->format('d M Y'),
+        };
+
+        return [
+            'mode' => $mode,
+            'start_date' => $start->toDateString(),
+            'end_date' => $end->toDateString(),
+            'label' => $label,
+        ];
+    }
+
+    /**
+     * @return array{line_count: int, total_amount: float, paid_amount: float, unpaid_amount: float, paid_count: int, unpaid_count: int}
+     */
+    private function emptyExpenseTotals(): array
+    {
+        return [
+            'line_count' => 0,
+            'total_amount' => 0.0,
+            'paid_amount' => 0.0,
+            'unpaid_amount' => 0.0,
+            'paid_count' => 0,
+            'unpaid_count' => 0,
+        ];
+    }
+
+    /**
+     * @return array{target: float, paid: float, unpaid: float, is_fully_paid: bool}
+     */
+    private function allocationLineMetrics(object $row): array
+    {
+        $target = (float) ($row->realized_amount ?? $row->amount ?? 0);
+        if ($target <= 0) {
+            return ['target' => 0.0, 'paid' => 0.0, 'unpaid' => 0.0, 'is_fully_paid' => false];
+        }
+
+        $paid = min((float) ($row->paid_amount ?? 0), $target);
+        $unpaid = max(0, $target - $paid);
+
+        return [
+            'target' => $target,
+            'paid' => $paid,
+            'unpaid' => $unpaid,
+            'is_fully_paid' => $paid >= $target,
+        ];
+    }
+
+    /**
+     * @param  iterable<object>  $lines
+     * @return array{line_count: int, total_amount: float, paid_amount: float, unpaid_amount: float, paid_count: int, unpaid_count: int}
+     */
+    private function sumExpenseMetricsFromLines(iterable $lines): array
+    {
+        $totals = $this->emptyExpenseTotals();
+
+        foreach ($lines as $line) {
+            $metrics = $this->allocationLineMetrics($line);
+            $totals['line_count']++;
+            $totals['total_amount'] += $metrics['target'];
+            $totals['paid_amount'] += $metrics['paid'];
+            $totals['unpaid_amount'] += $metrics['unpaid'];
+            if ($metrics['is_fully_paid']) {
+                $totals['paid_count']++;
+            } else {
+                $totals['unpaid_count']++;
+            }
+        }
+
+        return $totals;
+    }
+
+    /**
+     * @param  iterable<object>  $lines
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildExpenseProjectsBreakdown(iterable $lines): array
+    {
+        return collect($lines)
+            ->groupBy('project_id')
+            ->map(function ($projectLines, $projectId) {
+                $first = $projectLines->first();
+                $metrics = $this->sumExpenseMetricsFromLines($projectLines);
+
+                return array_merge([
+                    'project_id' => (int) $projectId,
+                    'project_name' => (string) ($first->project_name ?? 'Project'),
+                ], $metrics);
+            })
+            ->sortByDesc('total_amount')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  null|array<int>  $scopedProjectIds
+     * @param  array{mode: string, start_date: string, end_date: string, label: string}  $dateRange
+     */
+    private function getExpensePaymentBreakdownData(?array $scopedProjectIds, array $dateRange): array
+    {
+        $emptyTotals = $this->emptyExpenseTotals();
+
+        if ($scopedProjectIds !== null && $scopedProjectIds === []) {
+            return [
+                'filters' => $dateRange,
+                'by_user' => [],
+                'by_category' => [],
+                'totals' => $emptyTotals,
+            ];
+        }
+
+        $linesQuery = DB::table('project_allocations as pa')
+            ->join('projects as p', 'p.id', '=', 'pa.project_id')
+            ->join('finance_categories as fc', 'fc.id', '=', 'pa.category_id')
+            ->leftJoin('users as u', 'u.id', '=', 'pa.user_id')
+            ->where(function ($q) {
+                $q->where('pa.is_topup', false)->orWhereNull('pa.is_topup');
+            })
+            ->whereDate('pa.created_at', '>=', $dateRange['start_date'])
+            ->whereDate('pa.created_at', '<=', $dateRange['end_date'])
+            ->select(
+                'pa.id',
+                'pa.project_id',
+                'pa.user_id',
+                'pa.category_id',
+                'pa.amount',
+                'pa.realized_amount',
+                'pa.paid_amount',
+                'p.name as project_name',
+                'u.name as user_name',
+                'fc.name as category_name'
+            );
+
+        if ($scopedProjectIds !== null) {
+            $linesQuery->whereIn('pa.project_id', $scopedProjectIds);
+        }
+
+        $lines = $linesQuery->get();
+        $totals = $this->sumExpenseMetricsFromLines($lines);
+
+        $byUser = $lines
+            ->filter(fn ($line) => $line->user_id !== null)
+            ->groupBy('user_id')
+            ->map(function ($userLines, $userId) {
+                $first = $userLines->first();
+                $metrics = $this->sumExpenseMetricsFromLines($userLines);
+
+                return array_merge([
+                    'user_id' => (int) $userId,
+                    'user_name' => (string) ($first->user_name ?? 'User'),
+                    'projects' => $this->buildExpenseProjectsBreakdown($userLines),
+                ], $metrics);
+            })
+            ->sortByDesc('total_amount')
+            ->values()
+            ->all();
+
+        $linesByCategory = $lines->groupBy('category_id');
+
+        $byCategory = DB::table('finance_categories')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($cat) use ($linesByCategory) {
+                $categoryLines = $linesByCategory->get((int) $cat->id, collect());
+                $metrics = $this->sumExpenseMetricsFromLines($categoryLines);
+
+                return array_merge([
+                    'category_id' => (int) $cat->id,
+                    'category_name' => (string) $cat->name,
+                    'projects' => $this->buildExpenseProjectsBreakdown($categoryLines),
+                ], $metrics);
+            })
+            ->sortByDesc('total_amount')
+            ->values()
+            ->all();
+
+        return [
+            'filters' => $dateRange,
+            'by_user' => $byUser,
+            'by_category' => $byCategory,
+            'totals' => $totals,
+        ];
+    }
+
+    /**
+     * @param  array<int>  $projectIdsList
+     * @return array<int, object>
+     */
+    private function loadCompanyByProjectMap(array $projectIdsList): array
+    {
+        $companyByProject = [];
+        if ($projectIdsList === []) {
+            return $companyByProject;
+        }
+
+        $presaleCompanies = DB::table('presales as pr')
+            ->join('companies as c', 'c.id', '=', 'pr.company_id')
+            ->whereIn('pr.converted_project_id', $projectIdsList)
+            ->whereNotNull('pr.converted_project_id')
+            ->select(
+                'pr.converted_project_id as project_id',
+                'c.id as company_id',
+                'c.name as company_name',
+                'c.logo_path',
+                'pr.id as presale_id'
+            )
+            ->orderByDesc('pr.id')
+            ->get();
+
+        foreach ($presaleCompanies as $row) {
+            $pid = (int) $row->project_id;
+            if (!isset($companyByProject[$pid])) {
+                $companyByProject[$pid] = $row;
+            }
+        }
+
+        return $companyByProject;
+    }
+
+    /**
+     * @param  null|array<int>  $scopedProjectIds
+     * @return array{data: array<int, array<string, mixed>>, totals: array<string, float|int>}
+     */
+    private function getCompanyFinancialsData(?array $scopedProjectIds = null): array
+    {
+        $emptyTotals = [
+            'revenue' => 0.0,
+            'planning_expense' => 0.0,
+            'realized_expense' => 0.0,
+            'margin' => 0.0,
+            'margin_percentage' => 0.0,
+            'project_count' => 0,
+            'company_count' => 0,
+        ];
+
+        if ($scopedProjectIds !== null && $scopedProjectIds === []) {
+            return ['data' => [], 'totals' => $emptyTotals];
+        }
+
+        $query = DB::table('projects as p')
+            ->leftJoin('project_allocations as pa', 'pa.project_id', '=', 'p.id');
+
+        if ($scopedProjectIds !== null) {
+            $query->whereIn('p.id', $scopedProjectIds);
+        }
+
+        $projects = $query
+            ->select(
+                'p.id',
+                'p.name',
+                'p.status',
+                'p.methodology',
+                'p.quotation_value'
+            )
+            ->selectRaw('COALESCE(SUM(CASE WHEN pa.is_topup = 1 THEN pa.amount ELSE 0 END), 0) as topup_income_raw')
+            ->selectRaw('COALESCE(SUM(CASE WHEN pa.is_topup = 0 OR pa.is_topup IS NULL THEN pa.amount ELSE 0 END), 0) as planning_expense')
+            ->selectRaw('COALESCE(SUM(CASE WHEN pa.is_topup = 0 OR pa.is_topup IS NULL THEN COALESCE(pa.realized_amount, pa.amount) ELSE 0 END), 0) as realized_expense')
+            ->groupBy('p.id', 'p.name', 'p.status', 'p.methodology', 'p.quotation_value')
+            ->orderBy('p.name')
+            ->get();
+
+        if ($projects->isEmpty()) {
+            return ['data' => [], 'totals' => $emptyTotals];
+        }
+
+        $projectIdsList = $projects->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $companyByProject = $this->loadCompanyByProjectMap($projectIdsList);
+
+        $byCompany = [];
+        foreach ($projects as $project) {
+            $methodology = strtolower((string) ($project->methodology ?? ''));
+            $isScrum = str_contains($methodology, 'scrum') || str_contains($methodology, 'agile');
+            $topupIncome = $isScrum ? (float) ($project->topup_income_raw ?? 0) : 0.0;
+            $revenue = (float) ($project->quotation_value ?? 0);
+            $planningExpense = (float) ($project->planning_expense ?? 0);
+            $realizedExpense = (float) ($project->realized_expense ?? 0);
+            $margin = $revenue - $realizedExpense;
+            $marginPct = $revenue > 0 ? round(($margin / $revenue) * 100, 2) : 0.0;
+
+            $projectRow = [
+                'project_id' => (int) $project->id,
+                'project_name' => (string) $project->name,
+                'status' => (string) ($project->status ?? 'Planning'),
+                'methodology' => $project->methodology,
+                'revenue' => $revenue,
+                'topup_income' => $topupIncome,
+                'initial_income' => max(0, $revenue - $topupIncome),
+                'planning_expense' => $planningExpense,
+                'realized_expense' => $realizedExpense,
+                'margin' => $margin,
+                'margin_percentage' => $marginPct,
+            ];
+
+            $company = $companyByProject[(int) $project->id] ?? null;
+            $companyKey = $company ? (string) $company->company_id : '__none__';
+
+            if (!isset($byCompany[$companyKey])) {
+                $byCompany[$companyKey] = [
+                    'company_id' => $company ? (int) $company->company_id : null,
+                    'company_name' => $company ? (string) $company->company_name : 'Tanpa perusahaan',
+                    'logo_url' => $company ? PublicStorageUrl::for($company->logo_path) : null,
+                    'revenue' => 0.0,
+                    'planning_expense' => 0.0,
+                    'realized_expense' => 0.0,
+                    'margin' => 0.0,
+                    'margin_percentage' => 0.0,
+                    'project_count' => 0,
+                    'projects' => [],
+                ];
+            }
+
+            $byCompany[$companyKey]['projects'][] = $projectRow;
+            $byCompany[$companyKey]['revenue'] += $revenue;
+            $byCompany[$companyKey]['planning_expense'] += $planningExpense;
+            $byCompany[$companyKey]['realized_expense'] += $realizedExpense;
+            $byCompany[$companyKey]['margin'] += $margin;
+            $byCompany[$companyKey]['project_count']++;
+        }
+
+        $companies = array_values($byCompany);
+        foreach ($companies as &$company) {
+            $company['margin_percentage'] = $company['revenue'] > 0
+                ? round(($company['margin'] / $company['revenue']) * 100, 2)
+                : 0.0;
+            usort(
+                $company['projects'],
+                fn ($a, $b) => $b['revenue'] <=> $a['revenue']
+                    ?: strcasecmp($a['project_name'], $b['project_name'])
+            );
+        }
+        unset($company);
+
+        usort(
+            $companies,
+            fn ($a, $b) => $b['revenue'] <=> $a['revenue']
+                ?: strcasecmp($a['company_name'], $b['company_name'])
+        );
+
+        $totals = [
+            'revenue' => (float) array_sum(array_column($companies, 'revenue')),
+            'planning_expense' => (float) array_sum(array_column($companies, 'planning_expense')),
+            'realized_expense' => (float) array_sum(array_column($companies, 'realized_expense')),
+            'margin' => (float) array_sum(array_column($companies, 'margin')),
+            'margin_percentage' => 0.0,
+            'project_count' => (int) array_sum(array_column($companies, 'project_count')),
+            'company_count' => count($companies),
+        ];
+        $totals['margin_percentage'] = $totals['revenue'] > 0
+            ? round(($totals['margin'] / $totals['revenue']) * 100, 2)
+            : 0.0;
+
+        return ['data' => $companies, 'totals' => $totals];
     }
 
     /**
@@ -299,8 +751,7 @@ class StatController extends Controller
 
         $doneProjectIds = DB::table('projects as p')
             ->whereIn('p.id', $projectIds)
-            ->whereRaw('(SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) > 0')
-            ->whereRaw("(SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'Done') = 0")
+            ->where('p.status', 'Done')
             ->pluck('p.id')
             ->flip()
             ->all();
@@ -336,9 +787,7 @@ class StatController extends Controller
             $result[] = [
                 'company_id' => $company['company_id'],
                 'company_name' => $company['company_name'],
-                'logo_url' => $company['logo_path']
-                    ? Storage::disk('public')->url($company['logo_path'])
-                    : null,
+                'logo_url' => PublicStorageUrl::for($company['logo_path'] ?? null),
                 'total_projects' => $total,
                 'active_projects' => $active,
                 'done_projects' => $done,

@@ -29,6 +29,7 @@ class PermissionCatalog
             'Finance Categories' => ['create', 'read', 'update', 'delete'],
             'Finance Report' => ['create', 'read', 'delete'],
             'Realization Report' => ['read'],
+            'Integrasi' => ['read'],
             'Teams & Users' => ['create', 'read', 'update', 'delete'],
             'Access Control' => ['create', 'read', 'update', 'delete'],
             'Project Roles' => ['create', 'read', 'update', 'delete'],

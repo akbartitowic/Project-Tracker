@@ -6,6 +6,7 @@ import {
     Briefcase,
     Plus,
     Trash2,
+    Pencil,
     PieChart,
     Info,
     ArrowUpRight,
@@ -17,8 +18,10 @@ import {
     Loader2,
     ArrowRightLeft,
     Ban,
+    CircleDollarSign,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import ManhourBucketBreakdown from '@/components/ManhourBucketBreakdown';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -166,9 +169,11 @@ export default function FinanceMonitoring() {
     // Allocation Form States
     const [newAllocation, setNewAllocation] = useState({
         category_id: '',
+        user_id: '',
         amount: '',
-        description: ''
+        description: '',
     });
+    const [projectMemberOptions, setProjectMemberOptions] = useState([]);
 
     // Top Up / Change Request States
     const [isTopUpOpen, setIsTopUpOpen] = useState(false);
@@ -197,6 +202,16 @@ export default function FinanceMonitoring() {
     const [selectedAllocationForRealization, setSelectedAllocationForRealization] = useState(null);
     const [realizationAmountInput, setRealizationAmountInput] = useState('');
     const [isSavingRealization, setIsSavingRealization] = useState(false);
+    const [markingPaidId, setMarkingPaidId] = useState(null);
+    const [isEditAllocationModalOpen, setIsEditAllocationModalOpen] = useState(false);
+    const [editingAllocation, setEditingAllocation] = useState(null);
+    const [editAllocationForm, setEditAllocationForm] = useState({
+        category_id: '',
+        user_id: '',
+        amount: '',
+        description: '',
+    });
+    const [isSavingEditAllocation, setIsSavingEditAllocation] = useState(false);
     const [isSwitchMhOpen, setIsSwitchMhOpen] = useState(false);
     const [switchMhData, setSwitchMhData] = useState({
         from_key: 'general',
@@ -240,6 +255,7 @@ export default function FinanceMonitoring() {
         try {
             const res = await fetchAPI(`/projects/${id}/finance-summary`);
             setSummary(res.data);
+            setProjectMemberOptions(res.data?.allocation_user_options || []);
             setSelectedProject(id);
 
             const qRes = await fetchAPI(`/projects/${id}/quotas`);
@@ -266,6 +282,7 @@ export default function FinanceMonitoring() {
             setSummary(null);
             setQuotaBreakdown([]);
             setQuotaMeta(null);
+            setProjectMemberOptions([]);
             return;
         }
 
@@ -289,11 +306,13 @@ export default function FinanceMonitoring() {
                 method: 'POST',
                 body: JSON.stringify({
                     project_id: selectedProject,
-                    ...newAllocation,
-                    amount: parseFloat(newAllocation.amount)
-                })
+                    category_id: newAllocation.category_id,
+                    amount: parseFloat(newAllocation.amount),
+                    description: newAllocation.description || null,
+                    user_id: newAllocation.user_id ? parseInt(newAllocation.user_id, 10) : null,
+                }),
             });
-            setNewAllocation({ category_id: '', amount: '', description: '' });
+            setNewAllocation({ category_id: '', user_id: '', amount: '', description: '' });
             loadProjectFinance(selectedProject);
         } catch (error) {
             alert('Failed to add allocation: ' + error.message);
@@ -310,11 +329,114 @@ export default function FinanceMonitoring() {
         }
     };
 
+    const editUserOptions = useMemo(() => {
+        const opts = [...projectMemberOptions];
+        if (editingAllocation?.user_id && !opts.some((o) => String(o.user_id) === String(editingAllocation.user_id))) {
+            opts.unshift({
+                user_id: editingAllocation.user_id,
+                user_name: editingAllocation.user_name || `User #${editingAllocation.user_id}`,
+            });
+        }
+        return opts;
+    }, [projectMemberOptions, editingAllocation]);
+
+    const openEditAllocationModal = (allocation) => {
+        setEditingAllocation(allocation);
+        setEditAllocationForm({
+            category_id: String(allocation.category_id ?? ''),
+            user_id: allocation.user_id ? String(allocation.user_id) : '',
+            amount: String(allocation.amount ?? ''),
+            description: allocation.description || '',
+        });
+        setIsEditAllocationModalOpen(true);
+    };
+
+    const submitEditAllocation = async () => {
+        if (!selectedProject || !editingAllocation) return;
+        if (!editAllocationForm.category_id || !editAllocationForm.amount) {
+            alert('Kategori dan nominal wajib diisi.');
+            return;
+        }
+
+        const amount = parseFloat(editAllocationForm.amount);
+        if (!Number.isFinite(amount)) {
+            alert('Nominal tidak valid.');
+            return;
+        }
+
+        setIsSavingEditAllocation(true);
+        try {
+            await fetchAPI(`/project-allocations/${editingAllocation.id}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    category_id: parseInt(editAllocationForm.category_id, 10),
+                    user_id: editAllocationForm.user_id ? parseInt(editAllocationForm.user_id, 10) : null,
+                    amount,
+                    description: editAllocationForm.description || null,
+                }),
+            });
+            setIsEditAllocationModalOpen(false);
+            setEditingAllocation(null);
+            loadProjectFinance(selectedProject);
+        } catch (error) {
+            alert('Gagal menyimpan perubahan: ' + error.message);
+        } finally {
+            setIsSavingEditAllocation(false);
+        }
+    };
+
     const openRealizationModal = (allocation) => {
         const defaultValue = allocation.realized_amount ?? allocation.amount ?? 0;
         setSelectedAllocationForRealization(allocation);
         setRealizationAmountInput(String(defaultValue));
         setIsRealizationModalOpen(true);
+    };
+
+    const handleMarkPaid = async (allocation, mode = 'add') => {
+        if (!selectedProject || !allocation?.id) return;
+        const targetAmount = Number(allocation.realized_amount ?? allocation.amount ?? 0);
+        const currentPaid = Number(allocation.paid_amount || 0);
+        const remaining = Math.max(0, targetAmount - currentPaid);
+
+        setMarkingPaidId(allocation.id);
+        try {
+            if (mode === 'reset') {
+                if (!window.confirm(`Reset pembayaran untuk "${allocation.category_name}"?`)) {
+                    return;
+                }
+                await fetchAPI(`/project-allocations/${allocation.id}/paid`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ reset: true }),
+                });
+            } else {
+                if (remaining <= 0) {
+                    alert('Pengeluaran ini sudah lunas.');
+                    return;
+                }
+                const suggested = remaining.toFixed(0);
+                const input = window.prompt(
+                    `Input nominal pembayaran untuk "${allocation.category_name}".\nSisa saat ini: ${formatCurrency(remaining)}`,
+                    suggested
+                );
+                if (input === null) return;
+
+                const paymentAmount = Number(input);
+                if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+                    alert('Nominal pembayaran tidak valid.');
+                    return;
+                }
+
+                await fetchAPI(`/project-allocations/${allocation.id}/paid`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ payment_amount: paymentAmount }),
+                });
+            }
+            loadProjectFinance(selectedProject);
+        } catch (error) {
+            alert('Gagal menyimpan pembayaran: ' + error.message);
+        } finally {
+            setMarkingPaidId(null);
+        }
     };
 
     const submitRealization = async () => {
@@ -434,6 +556,13 @@ export default function FinanceMonitoring() {
         return { type: 'role', project_role_id: Number.isFinite(roleId) ? roleId : null };
     };
 
+    const roleFifoRemaining = (row) => {
+        if (row?.fifo_remaining_hours != null) {
+            return Math.max(0, Number(row.fifo_remaining_hours));
+        }
+        return Math.max(0, Number(row.quota_hours || 0) - Number(row.allocated_hours || 0));
+    };
+
     const getTransferRemaining = (key) => {
         if (!key || key === 'general') {
             return Math.max(0, Number(generalQuota.remaining_hours || 0));
@@ -441,7 +570,7 @@ export default function FinanceMonitoring() {
         const roleId = Number(String(key).replace('role:', ''));
         const row = quotaBreakdown.find((q) => q.project_role_id === roleId && q.is_active !== false);
         if (!row) return 0;
-        return Math.max(0, Number(row.quota_hours || 0) - Number(row.allocated_hours || 0));
+        return roleFifoRemaining(row);
     };
 
     const switchSourceOptions = useMemo(() => {
@@ -456,7 +585,7 @@ export default function FinanceMonitoring() {
         quotaBreakdown
             .filter((q) => q.is_active !== false)
             .forEach((q) => {
-                const remaining = Math.max(0, Number(q.quota_hours || 0) - Number(q.allocated_hours || 0));
+                const remaining = roleFifoRemaining(q);
                 if (remaining > 0) {
                     options.push({
                         key: `role:${q.project_role_id}`,
@@ -595,6 +724,7 @@ export default function FinanceMonitoring() {
     const expenseAllocations = allocations.filter((alloc) => !alloc.is_topup);
     const incomeAllocations = allocations.filter((alloc) => alloc.is_topup);
     const activeAllocations = allocationTab === 'income' ? incomeAllocations : expenseAllocations;
+    const expenseByUser = summary?.expense_by_user || [];
     const activeAllocationTotal = activeAllocations.reduce((sum, alloc) => sum + Number(alloc.amount || 0), 0);
     const incomeActionLabel = isWaterfallProject ? 'Change Request' : 'Top Up Quota';
 
@@ -672,7 +802,7 @@ export default function FinanceMonitoring() {
                                     <CardHeader className="pb-3">
                                         <CardTitle className="text-base font-semibold">Completed projects</CardTitle>
                                         <CardDescription>
-                                            All tasks done · {completedProjects.length} project(s)
+                                            Marked as done on board · {completedProjects.length} project(s)
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="p-0">
@@ -814,7 +944,8 @@ export default function FinanceMonitoring() {
                                                 <div className="text-right">
                                                     <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Remaining</div>
                                                     <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                                                        {summary.remaining_hours} <span className="text-xs font-normal opacity-70">Hrs</span>
+                                                        {formatHours(summary.fifo_remaining_hours ?? summary.remaining_hours)}{' '}
+                                                        <span className="text-xs font-normal opacity-70">Hrs (FIFO)</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -870,11 +1001,50 @@ export default function FinanceMonitoring() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
+                                    {allocationTab === 'expense' && expenseByUser.length > 0 && (
+                                        <div className="mb-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/30 p-4">
+                                            <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-3">
+                                                Pengeluaran per user (realisasi)
+                                            </p>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-xs">
+                                                    <thead>
+                                                        <tr className="text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                                                            <th className="text-left font-medium pb-2 pr-4">User</th>
+                                                            <th className="text-right font-medium pb-2 pr-4">Baris</th>
+                                                            <th className="text-right font-medium pb-2 pr-4">Plan</th>
+                                                            <th className="text-right font-medium pb-2">Realisasi</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                                        {expenseByUser.map((row) => (
+                                                            <tr key={row.user_id ?? 'none'}>
+                                                                <td className="py-2 pr-4 font-medium text-slate-800 dark:text-slate-200">
+                                                                    {row.user_name}
+                                                                </td>
+                                                                <td className="py-2 pr-4 text-right text-slate-600">{row.line_count}</td>
+                                                                <td className="py-2 pr-4 text-right text-slate-600">
+                                                                    {formatCurrency(row.planned_total)}
+                                                                </td>
+                                                                <td className="py-2 text-right font-semibold text-slate-900 dark:text-white">
+                                                                    {formatCurrency(row.realized_total)}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-sm">
                                             <thead>
                                                 <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500">
                                                     <th className="text-left font-medium pb-3 px-2">Category</th>
+                                                    {allocationTab === 'expense' && (
+                                                        <th className="text-left font-medium pb-3 px-2">User</th>
+                                                    )}
                                                     <th className="text-left font-medium pb-3 px-2">Description</th>
                                                     <th className="text-right font-medium pb-3 px-2 w-40">
                                                         {allocationTab === 'expense' ? 'Final Expense' : 'Amount'}
@@ -885,7 +1055,7 @@ export default function FinanceMonitoring() {
                                             <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                                                 {activeAllocations.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan="4" className="py-8 text-center text-slate-400 italic">
+                                                        <td colSpan={allocationTab === 'expense' ? 5 : 4} className="py-8 text-center text-slate-400 italic">
                                                             {allocationTab === 'income'
                                                                 ? `Belum ada pemasukan (${incomeActionLabel}) untuk project ini.`
                                                                 : 'Belum ada pengeluaran. Tambahkan alokasi di bawah.'}
@@ -904,19 +1074,49 @@ export default function FinanceMonitoring() {
                                                                     ) : null}
                                                                 </span>
                                                             </td>
+                                                            {allocationTab === 'expense' && (
+                                                                <td className="py-3 px-2 text-slate-600 dark:text-slate-300">
+                                                                    {alloc.user_name || (
+                                                                        <span className="text-slate-400 italic">—</span>
+                                                                    )}
+                                                                </td>
+                                                            )}
                                                             <td className="py-3 px-2 text-slate-500">{alloc.description || '-'}</td>
                                                             <td className={`py-3 px-2 text-right font-medium ${alloc.is_topup ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
                                                                 {alloc.is_topup ? (
                                                                     <>{`+${formatCurrency(alloc.amount)}`}</>
                                                                 ) : (
                                                                     <div className="flex flex-col items-end">
+                                                                        {(() => {
+                                                                            const targetPaid = Number(alloc.realized_amount ?? alloc.amount ?? 0);
+                                                                            const currentPaidRaw = Number(alloc.paid_amount || 0);
+                                                                            const currentPaid = Math.max(0, Math.min(currentPaidRaw, targetPaid));
+                                                                            const remainingPaid = Math.max(0, targetPaid - currentPaid);
+                                                                            const isFullyPaid = remainingPaid <= 0 && targetPaid > 0;
+
+                                                                            return (
+                                                                                <>
                                                                         <span className="font-semibold text-slate-900 dark:text-white">
                                                                             {formatCurrency(alloc.realized_amount ?? alloc.amount)}
                                                                         </span>
                                                                         <span className="text-[10px] text-slate-400">
                                                                             Plan: {formatCurrency(alloc.amount)}
                                                                             {alloc.realized_amount !== null && alloc.realized_amount !== undefined ? ' | Realized' : ' | Pending'}
+                                                                            {` | Paid: ${formatCurrency(currentPaid)} / ${formatCurrency(targetPaid)}`}
                                                                         </span>
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className={`mt-1 text-[10px] ${
+                                                                                isFullyPaid
+                                                                                    ? 'border-emerald-200 text-emerald-700 bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:bg-emerald-950/40'
+                                                                                    : 'border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950/30'
+                                                                            }`}
+                                                                        >
+                                                                            {isFullyPaid ? 'Lunas' : `Sisa ${formatCurrency(remainingPaid)}`}
+                                                                        </Badge>
+                                                                                </>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 )}
                                                             </td>
@@ -926,11 +1126,48 @@ export default function FinanceMonitoring() {
                                                                         <Button
                                                                             variant="outline"
                                                                             size="sm"
+                                                                            onClick={() => openEditAllocationModal(alloc)}
+                                                                            className="h-7 px-2 text-[10px] font-bold border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300"
+                                                                            title="Edit pengeluaran"
+                                                                        >
+                                                                            <Pencil className="size-3 mr-1" />
+                                                                            Edit
+                                                                        </Button>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
                                                                             onClick={() => openRealizationModal(alloc)}
                                                                             className="h-7 px-2 text-[10px] font-bold border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900/40 dark:text-blue-300"
                                                                         >
                                                                             Realization
                                                                         </Button>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            disabled={markingPaidId === alloc.id}
+                                                                            onClick={() => handleMarkPaid(alloc, 'add')}
+                                                                            className="h-7 px-2 text-[10px] font-bold border-amber-200 text-amber-800 hover:bg-amber-50 dark:border-amber-900/40 dark:text-amber-300"
+                                                                            title="Tambah pembayaran (termin)"
+                                                                        >
+                                                                            {markingPaidId === alloc.id ? (
+                                                                                <Loader2 className="size-3 animate-spin" />
+                                                                            ) : (
+                                                                                <CircleDollarSign className="size-3 mr-1 inline" />
+                                                                            )}
+                                                                            Tambah Paid
+                                                                        </Button>
+                                                                        {Number(alloc.paid_amount || 0) > 0 && (
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                disabled={markingPaidId === alloc.id}
+                                                                                onClick={() => handleMarkPaid(alloc, 'reset')}
+                                                                                className="h-7 px-2 text-[10px] font-bold text-slate-500 hover:text-rose-600"
+                                                                                title="Reset nilai pembayaran"
+                                                                            >
+                                                                                Reset
+                                                                            </Button>
+                                                                        )}
                                                                         <Button variant="ghost" size="icon" onClick={() => handleDeleteAllocation(alloc.id)}
                                                                             className="size-7 text-slate-300 hover:text-red-500">
                                                                             <Trash2 className="size-3.5" />
@@ -948,7 +1185,15 @@ export default function FinanceMonitoring() {
                                     {/* Add Allocation Form */}
                                     {allocationTab === 'expense' ? (
                                         <form onSubmit={handleAddAllocation} className="mt-6 p-4 rounded-xl border-2 border-dashed border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20">
-                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                            <p className="text-[11px] text-slate-500 mb-4">
+                                                User opsional — untuk melacak pengeluaran per orang di ringkasan di atas.
+                                                {projectMemberOptions.length === 0 && (
+                                                    <span className="block mt-1 text-amber-600 dark:text-amber-400">
+                                                        Belum ada user terdaftar di sistem.
+                                                    </span>
+                                                )}
+                                            </p>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                                                 <div className="flex flex-col gap-2">
                                                     <span className="text-xs font-bold text-slate-400 uppercase">Category</span>
                                                     <select
@@ -961,7 +1206,22 @@ export default function FinanceMonitoring() {
                                                         {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                                     </select>
                                                 </div>
-                                                <div className="flex flex-col gap-2 md:col-span-1">
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-xs font-bold text-slate-400 uppercase">User (opsional)</span>
+                                                    <select
+                                                        value={newAllocation.user_id}
+                                                        onChange={(e) => setNewAllocation({ ...newAllocation, user_id: e.target.value })}
+                                                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm"
+                                                    >
+                                                        <option value="">— Tidak dipilih —</option>
+                                                        {projectMemberOptions.map((m) => (
+                                                            <option key={m.user_id} value={m.user_id}>
+                                                                {m.user_name || `User #${m.user_id}`}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div className="flex flex-col gap-2">
                                                     <span className="text-xs font-bold text-slate-400 uppercase">Amount</span>
                                                     <div className="relative">
                                                         <Banknote className="absolute left-3 top-3 size-3.5 text-slate-400" />
@@ -1045,7 +1305,12 @@ export default function FinanceMonitoring() {
                                             <option value="">Select Role</option>
                                             {projectRolesList.map(r => {
                                                 const q = quotaBreakdown.find(qb => qb.project_role_id === r.id);
-                                                const label = q ? `${r.name} (Cur: ${q.quota_hours}h, Rem: ${q.quota_hours - q.allocated_hours}h)` : r.name;
+                                                const qRem = q
+                                                    ? (q.fifo_remaining_hours != null
+                                                        ? q.fifo_remaining_hours
+                                                        : q.quota_hours - q.allocated_hours)
+                                                    : 0;
+                                                const label = q ? `${r.name} (Cur: ${q.quota_hours}h, Rem: ${formatHours(qRem)}h FIFO)` : r.name;
                                                 return <option key={r.id} value={r.id}>{label}</option>
                                             })}
                                         </select>
@@ -1205,13 +1470,28 @@ export default function FinanceMonitoring() {
                             <CardTitle className="flex items-center gap-2">
                                 <Clock className="size-5 text-primary" /> Manhour Quota Breakdown
                             </CardTitle>
-                            <CardDescription>Detailed usage of manhours allocated per role for {summary?.project_name}.</CardDescription>
+                            <CardDescription>
+                                FIFO: Initial dipakai dulu, lalu setiap Top Up berurutan. Detail per role di bawah.
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="pt-6">
                             {loadingQuotas ? (
                                 <div className="py-20 text-center text-slate-500">Loading breakdown...</div>
                             ) : (
                                 <div className="space-y-5">
+                                    {quotaMeta?.manhour_buckets?.length > 0 && (
+                                        <div className="rounded-lg border border-primary/20 p-4 bg-primary/5">
+                                            <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-3">
+                                                Project total (FIFO)
+                                            </h4>
+                                            <ManhourBucketBreakdown
+                                                buckets={quotaMeta.manhour_buckets}
+                                                overflowHours={quotaMeta.mh_overflow_hours}
+                                                hasTopup={Number(quotaMeta?.totals?.topup_total_manhours || 0) > 0}
+                                                compact
+                                            />
+                                        </div>
+                                    )}
                                     <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/50 dark:bg-slate-900/20">
                                         <div className="flex items-center justify-between mb-3">
                                             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">General Quota</h4>
@@ -1270,8 +1550,9 @@ export default function FinanceMonitoring() {
                                                 </tr>
                                             ) : (
                                                 quotaBreakdown.map(item => {
-                                                    const remaining = item.quota_hours - item.allocated_hours;
-                                                    const percentUsed = (item.allocated_hours / (item.quota_hours || 1)) * 100;
+                                                    const remaining = roleFifoRemaining(item);
+                                                    const consumed = Number(item.fifo_consumed_hours ?? item.allocated_hours ?? 0);
+                                                    const percentUsed = (consumed / (item.quota_hours || 1)) * 100;
                                                     const isInactive = item.is_active === false;
                                                     const canDeactivate = !isInactive
                                                         && Number(item.quota_hours || 0) <= 0
@@ -1304,7 +1585,7 @@ export default function FinanceMonitoring() {
                                                                 {formatHours(item.allocated_hours)} <span className="text-[10px]">HRS</span>
                                                             </td>
                                                             <td className="py-4 px-2 text-right font-medium text-slate-600 dark:text-slate-400">{formatHours(item.actual_hours)} <span className="text-[10px]">HRS</span></td>
-                                                            <td className={`py-4 px-2 text-right font-bold ${remaining < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                                            <td className={`py-4 px-2 text-right font-bold ${remaining <= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
                                                                 {formatHours(remaining)} <span className="text-[10px]">HRS</span>
                                                             </td>
                                                             <td className="py-4 px-2 text-right">
@@ -1421,6 +1702,82 @@ export default function FinanceMonitoring() {
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isEditAllocationModalOpen} onOpenChange={setIsEditAllocationModalOpen}>
+                <DialogContent className="sm:max-w-[520px]">
+                    <DialogHeader>
+                        <DialogTitle>Edit Pengeluaran</DialogTitle>
+                        <DialogDescription>
+                            Ubah kategori, user, nominal plan, atau keterangan. Realisasi tetap diatur lewat tombol Realization.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <span className="text-sm font-medium">Kategori</span>
+                            <select
+                                value={editAllocationForm.category_id}
+                                onChange={(e) => setEditAllocationForm({ ...editAllocationForm, category_id: e.target.value })}
+                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm"
+                                required
+                            >
+                                <option value="">Pilih kategori</option>
+                                {categories.map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <span className="text-sm font-medium">User (opsional)</span>
+                            <select
+                                value={editAllocationForm.user_id}
+                                onChange={(e) => setEditAllocationForm({ ...editAllocationForm, user_id: e.target.value })}
+                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm"
+                            >
+                                <option value="">— Tidak dipilih —</option>
+                                {editUserOptions.map((m) => (
+                                    <option key={m.user_id} value={m.user_id}>
+                                        {m.user_name || `User #${m.user_id}`}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <span className="text-sm font-medium">Nominal plan (IDR)</span>
+                            <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={editAllocationForm.amount}
+                                onChange={(e) => setEditAllocationForm({ ...editAllocationForm, amount: e.target.value })}
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <span className="text-sm font-medium">Keterangan</span>
+                            <Input
+                                value={editAllocationForm.description}
+                                onChange={(e) => setEditAllocationForm({ ...editAllocationForm, description: e.target.value })}
+                                placeholder="Opsional"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                setIsEditAllocationModalOpen(false);
+                                setEditingAllocation(null);
+                            }}
+                        >
+                            Batal
+                        </Button>
+                        <Button type="button" onClick={submitEditAllocation} disabled={isSavingEditAllocation}>
+                            {isSavingEditAllocation ? 'Menyimpan…' : 'Simpan'}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 
