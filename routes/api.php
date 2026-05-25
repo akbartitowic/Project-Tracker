@@ -76,6 +76,8 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::delete('/project-roles/{project_role}', [ProjectRoleController::class, 'destroy'])->middleware('permission:project_roles.delete');
 
     Route::get('/team-load', [TeamLoadController::class, 'index'])->middleware('permission:load.read');
+    Route::post('/team-load/excluded-dates', [TeamLoadController::class, 'storeExcludedDate'])->middleware('permission:load.read');
+    Route::delete('/team-load/excluded-dates/{id}', [TeamLoadController::class, 'destroyExcludedDate'])->middleware('permission:load.read');
 
     // 4. Tasks Routes
     Route::get('/tasks', [TaskController::class, 'index'])->middleware('permission:project_board.read');

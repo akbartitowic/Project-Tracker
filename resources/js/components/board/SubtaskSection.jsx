@@ -129,9 +129,15 @@ export default function SubtaskSection({
 
     const buildPayload = () => {
         const isBillable = form.billable !== false;
-        const storedHours = !isBillable || isWaterfall
-            ? null
-            : effectiveHoursFromBaseInput(form.estimate, form.rushHour);
+        let storedHours = null;
+        if (isBillable) {
+            if (isWaterfall) {
+                const b = parseFloat(form.estimate);
+                storedHours = Number.isFinite(b) ? Math.max(0, b) : 0;
+            } else {
+                storedHours = effectiveHoursFromBaseInput(form.estimate, form.rushHour);
+            }
+        }
 
         return {
             title: form.title,
@@ -141,7 +147,7 @@ export default function SubtaskSection({
             status: form.status,
             is_billable: isBillable,
             assignee_id: form.assignee !== 'Unassigned' ? parseInt(form.assignee, 10) : null,
-            estimated_hours: isWaterfall || !isBillable ? null : storedHours,
+            estimated_hours: storedHours,
             rush_hour: isWaterfall || isFreelance || !isBillable ? false : form.rushHour,
             project_id: selectedProject.id,
             parent_task_id: parentTaskId,
@@ -221,7 +227,7 @@ export default function SubtaskSection({
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Subtasks ({subtasks.length})
                 </p>
-                {!isFreelance && isScrum && subtasks.length > 0 && (
+                {!isFreelance && subtasks.length > 0 && (
                     <span className="text-xs font-medium text-slate-600 dark:text-slate-400 tabular-nums">
                         Total MH: {formatHours(totalH)} hrs
                     </span>
@@ -255,7 +261,7 @@ export default function SubtaskSection({
                                                 Non-billable
                                             </span>
                                         )}
-                                        {!isFreelance && isScrum && st.is_billable !== false && (
+                                        {!isFreelance && st.is_billable !== false && (
                                             <span className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">
                                                 {formatHours(st.estimated_hours || 0)} hrs
                                             </span>
@@ -457,10 +463,12 @@ export default function SubtaskSection({
                             </Select>
                         </div>
                     </div>
-                    {isScrum && form.billable && (
-                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
+                    {form.billable && (
+                        <div className={`grid grid-cols-1 gap-2 ${isScrum ? 'sm:grid-cols-[1fr_auto] items-end' : ''}`}>
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-600">Estimated MH</label>
+                                <label className="text-xs font-medium text-slate-600">
+                                    Estimated MH {isWaterfall ? '(Team Load)' : ''}
+                                </label>
                                 <Input
                                     type="number"
                                     min="0"
@@ -469,13 +477,15 @@ export default function SubtaskSection({
                                     onChange={(e) => setForm((f) => ({ ...f, estimate: e.target.value }))}
                                 />
                             </div>
-                            <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-2">
-                                <Checkbox
-                                    checked={form.rushHour}
-                                    onCheckedChange={(c) => setForm((f) => ({ ...f, rushHour: c === true }))}
-                                />
-                                <span className="text-xs text-slate-600">Rush hour</span>
-                            </div>
+                            {isScrum && (
+                                <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-2">
+                                    <Checkbox
+                                        checked={form.rushHour}
+                                        onCheckedChange={(c) => setForm((f) => ({ ...f, rushHour: c === true }))}
+                                    />
+                                    <span className="text-xs text-slate-600">Rush hour</span>
+                                </div>
+                            )}
                         </div>
                     )}
                     {!isWaterfall && form.billable && categoryBasedRoleQuotas.length > 0 && (

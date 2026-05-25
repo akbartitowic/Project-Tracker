@@ -693,9 +693,15 @@ export default function ProjectBoard() {
         try {
             const isWaterfall = selectedProject?.methodology === 'Waterfall';
             const isBillable = newTaskBillable !== false;
-            const storedHours = !isBillable || isWaterfall
-                ? null
-                : effectiveHoursFromBaseInput(newTaskEstimate, newTaskRushHour);
+            let storedHours = null;
+            if (isBillable && !hasSubtasks) {
+                if (isWaterfall) {
+                    const b = parseFloat(newTaskEstimate);
+                    storedHours = Number.isFinite(b) ? Math.max(0, b) : 0;
+                } else {
+                    storedHours = effectiveHoursFromBaseInput(newTaskEstimate, newTaskRushHour);
+                }
+            }
             const payload = {
                 title: newTaskTitle,
                 feature_title: newTaskFeatureTitle,
@@ -703,7 +709,7 @@ export default function ProjectBoard() {
                 priority: newTaskPriority,
                 status: newTaskStatus,
                 assignee_id: newTaskAssignee !== 'Unassigned' ? parseInt(newTaskAssignee) : null,
-                estimated_hours: isWaterfall || !isBillable ? null : storedHours,
+                estimated_hours: storedHours,
                 rush_hour: isWaterfall || isFreelance || !isBillable ? false : newTaskRushHour,
                 project_id: selectedProject.id,
                 project_role_id: isWaterfall ? null : (newTaskRoleFilter !== 'All' ? parseInt(newTaskRoleFilter) : null),
@@ -1866,7 +1872,7 @@ export default function ProjectBoard() {
                                     )}
                                 </div>
                             )}
-                            {hasSubtasks && !isFreelance && selectedProject?.methodology !== 'Waterfall' && (
+                            {hasSubtasks && !isFreelance && (
                                 <p className="text-xs text-slate-500 dark:text-slate-400 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 px-3 py-2">
                                     Parent manhours are summed from subtasks ({formatHours(subtasksTotalHours(editingSubtasks))} hrs). Edit hours on each subtask below.
                                 </p>
@@ -1996,10 +2002,17 @@ export default function ProjectBoard() {
                             </div>
                         </section>
 
-                        {selectedProject?.methodology !== 'Waterfall' && !isFreelance && newTaskBillable && !hasSubtasks && (
+                        {!isFreelance && newTaskBillable && !hasSubtasks && (
                             <section className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
-                                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Manhour Estimate</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 sm:items-end">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                    {selectedProject?.methodology === 'Waterfall' ? 'Manhours (MH)' : 'Manhour Estimate'}
+                                </p>
+                                {selectedProject?.methodology === 'Waterfall' && (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Digunakan untuk Team Load (perlu assignee + start & due date).
+                                    </p>
+                                )}
+                                <div className={`grid grid-cols-1 gap-3 ${selectedProject?.methodology !== 'Waterfall' ? 'sm:grid-cols-[1fr_auto] sm:items-end' : ''}`}>
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estimated Manhours</label>
                                         <Input
@@ -2011,23 +2024,25 @@ export default function ProjectBoard() {
                                             placeholder="0"
                                         />
                                     </div>
-                                    <div className="flex items-center gap-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-3 py-2.5 sm:mb-0.5 sm:min-w-[200px]">
-                                        <Checkbox
-                                            id="task-rush-hour"
-                                            checked={newTaskRushHour}
-                                            onCheckedChange={(c) => setNewTaskRushHour(c === true)}
-                                        />
-                                        <div className="flex flex-col gap-0.5 min-w-0">
-                                            <label htmlFor="task-rush-hour" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
-                                                Rush hour
-                                            </label>
-                                            {newTaskRushHour && (
-                                                <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
-                                                    Quota uses input × 1.3
-                                                </span>
-                                            )}
+                                    {selectedProject?.methodology !== 'Waterfall' && (
+                                        <div className="flex items-center gap-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-3 py-2.5 sm:mb-0.5 sm:min-w-[200px]">
+                                            <Checkbox
+                                                id="task-rush-hour"
+                                                checked={newTaskRushHour}
+                                                onCheckedChange={(c) => setNewTaskRushHour(c === true)}
+                                            />
+                                            <div className="flex flex-col gap-0.5 min-w-0">
+                                                <label htmlFor="task-rush-hour" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                                                    Rush hour
+                                                </label>
+                                                {newTaskRushHour && (
+                                                    <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+                                                        Quota uses input × 1.3
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </section>
                         )}

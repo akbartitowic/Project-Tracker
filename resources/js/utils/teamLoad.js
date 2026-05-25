@@ -42,6 +42,26 @@ export function isWeekendDate(dateStr) {
     return day === 0 || day === 6;
 }
 
+/** @param {string} dateStr @param {string[]} excludedDates */
+export function isExcludedLoadDate(dateStr, excludedDates) {
+    return (excludedDates || []).includes(dateStr);
+}
+
+/** @param {string} dateStr @param {string[]} excludedDates */
+export function isNonWorkingLoadDay(dateStr, excludedDates) {
+    return isWeekendDate(dateStr) || isExcludedLoadDate(dateStr, excludedDates);
+}
+
+/** @param {string} dateStr @param {string[]} excludedDateStrings */
+export function nonWorkingDayTitle(dateStr, excludedDateStrings) {
+    if (isExcludedLoadDate(dateStr, excludedDateStrings)) return `${dateStr}: libur kustom (0 MH)`;
+    if (isWeekendDate(dateStr)) return `${dateStr}: weekend (0 MH)`;
+    return '';
+}
+
+export const LOAD_USER_COL_WIDTH = 140;
+export const LOAD_ALL_ROW_HEIGHT = 36;
+
 /** @param {string[]} weekdays */
 export function buildLoadMonthBands(weekdays, dayWidth) {
     const months = [];

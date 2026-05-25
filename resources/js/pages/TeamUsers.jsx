@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { fetchAPI } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isAdminUser } from '../utils/permissions';
-import { User, Shield, Code, Bug, Settings, UserPlus, Edit, Trash2, MessageSquare, Save, Loader2, KeyRound } from 'lucide-react';
+import { User, Shield, Code, Bug, Settings, UserPlus, Edit, Trash2, MessageSquare, Save, Loader2, KeyRound, Search } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -37,6 +37,22 @@ export default function TeamUsers() {
     const [editingUser, setEditingUser] = useState(null);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredUsers = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return users;
+        return users.filter((user) => {
+            const roleName = (user.role?.name || '').toLowerCase();
+            return (
+                user.name?.toLowerCase().includes(q)
+                || user.email?.toLowerCase().includes(q)
+                || roleName.includes(q)
+                || (user.phone_number || '').toLowerCase().includes(q)
+                || (user.status || '').toLowerCase().includes(q)
+            );
+        });
+    }, [users, searchQuery]);
 
     useEffect(() => {
         const loadData = async () => {
@@ -205,6 +221,20 @@ export default function TeamUsers() {
 
                     {/* User Table */}
                     <div className="w-full bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-2xl overflow-hidden shadow-xl transition-colors duration-200">
+                        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-3">
+                            <div className="relative flex-1 min-w-[200px] max-w-md">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                                <Input
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Cari nama, email, role, telepon..."
+                                    className="pl-9 h-10"
+                                />
+                            </div>
+                            <span className="text-xs text-slate-500">
+                                {filteredUsers.length} / {users.length} user
+                            </span>
+                        </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
                                 <thead className="border-b border-slate-100 dark:border-slate-800">
@@ -217,7 +247,16 @@ export default function TeamUsers() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50 dark:divide-slate-900">
-                                    {users.map((user) => (
+                                    {filteredUsers.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="p-8 text-center text-slate-500 text-sm">
+                                                {users.length === 0
+                                                    ? 'Belum ada user.'
+                                                    : 'Tidak ada user yang cocok dengan pencarian.'}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {filteredUsers.map((user) => (
                                         <tr key={user.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
                                             <td className="p-4">
                                                 <div className="flex items-center gap-3">

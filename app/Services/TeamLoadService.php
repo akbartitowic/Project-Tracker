@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Task;
+use App\Models\TeamLoadExcludedDate;
 use App\Models\User;
 use App\Support\WeekdaySchedule;
 use Carbon\Carbon;
@@ -14,25 +15,20 @@ class TeamLoadService
      *   range_start: string,
      *   range_end: string,
      *   timeline_days: list<string>,
+     *   excluded_dates: list<array{id: int, date: string, label: string|null}>,
      *   users: list<array{
      *     id: int,
      *     name: string,
      *     peak_mh: float,
      *     daily_mh: array<string, float>,
-     *     daily_details: array<string, list<array{
-     *       task_id: int,
-     *       title: string,
-     *       feature_title: string|null,
-     *       project_id: int,
-     *       project_name: string,
-     *       mh_per_day: float,
-     *       is_subtask: bool
-     *     }>>
+     *     daily_details: array<string, list<array<string, mixed>>>
      *   }>
      * }
      */
     public function build(): array
     {
+        $excludedDates = $this->excludedDateStrings();
+
         $tasks = Task::query()
             ->whereNotNull('assignee_id')
             ->whereNotNull('start_date')
@@ -48,7 +44,7 @@ class TeamLoadService
         $allDates = [];
 
         foreach ($tasks as $task) {
-            $this->distributeTask($task, $dailyByUser, $detailsByUser, $allDates);
+            $this->distributeTask($task, $dailyByUser, $detailsByUser, $allDates, $excludedDates);
         }
 
         sort($allDates);
@@ -61,7 +57,7 @@ class TeamLoadService
         $users = User::query()
             ->orderBy('name')
             ->get(['id', 'name'])
-            ->map(function (User $user) use ($dailyByUser, $detailsByUser, $timelineDays) {
+            ->map(function (User $user) use ($dailyByUser, $detailsByUser, $timelineDays, $excludedDates) {
                 $raw = $dailyByUser[$user->id] ?? [];
                 $rawDetails = $detailsByUser[$user->id] ?? [];
                 $daily = [];
@@ -74,7 +70,7 @@ class TeamLoadService
                         $daily[$date] = $mh;
                         $details[$date] = $rawDetails[$date] ?? [];
                     }
-                    if ($mh > $peak && ! WeekdaySchedule::isWeekendDate($date)) {
+                    if ($mh > $peak && $this->countsForPeak($date, $excludedDates)) {
                         $peak = $mh;
                     }
                 }
@@ -94,27 +90,59 @@ class TeamLoadService
             'range_start' => $range['range_start'],
             'range_end' => $range['range_end'],
             'timeline_days' => $timelineDays,
+            'excluded_dates' => $this->excludedDatesPayload(),
             'users' => $users,
         ];
+    }
+
+    /** @return list<array{id: int, date: string, label: string|null}> */
+    public function excludedDatesPayload(): array
+    {
+        return TeamLoadExcludedDate::query()
+            ->orderBy('excluded_date')
+            ->get()
+            ->map(fn (TeamLoadExcludedDate $row) => [
+                'id' => $row->id,
+                'date' => $row->excluded_date->toDateString(),
+                'label' => $row->label,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /** @return list<string> */
+    public function excludedDateStrings(): array
+    {
+        return TeamLoadExcludedDate::query()
+            ->orderBy('excluded_date')
+            ->pluck('excluded_date')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString())
+            ->all();
     }
 
     /**
      * @param  array<int, array<string, float>>  $dailyByUser
      * @param  array<int, array<string, list<array<string, mixed>>>  $detailsByUser
      * @param  list<string>  $allDates
+     * @param  list<string>  $excludedDates
      */
-    private function distributeTask(Task $task, array &$dailyByUser, array &$detailsByUser, array &$allDates): void
-    {
+    private function distributeTask(
+        Task $task,
+        array &$dailyByUser,
+        array &$detailsByUser,
+        array &$allDates,
+        array $excludedDates,
+    ): void {
         $start = Carbon::parse($task->start_date)->startOfDay();
         $end = Carbon::parse($task->due_date)->startOfDay();
-        $weekdayDates = WeekdaySchedule::weekdaysBetween($start, $end);
+        $workingDates = WeekdaySchedule::workingDaysBetween($start, $end, $excludedDates);
 
-        if ($weekdayDates === []) {
+        if ($workingDates === []) {
             return;
         }
 
         $hours = (float) $task->estimated_hours;
-        $perDay = $hours / count($weekdayDates);
+        $perDay = $hours / count($workingDates);
         $assigneeId = (int) $task->assignee_id;
 
         if (! isset($dailyByUser[$assigneeId])) {
@@ -134,11 +162,18 @@ class TeamLoadService
             'is_subtask' => $task->parent_task_id !== null,
         ];
 
-        foreach ($weekdayDates as $date) {
+        foreach ($workingDates as $date) {
             $dailyByUser[$assigneeId][$date] = ($dailyByUser[$assigneeId][$date] ?? 0) + $perDay;
             $detailsByUser[$assigneeId][$date][] = $item;
             $allDates[] = $date;
         }
+    }
+
+    /** @param  list<string>  $excludedDates */
+    private function countsForPeak(string $date, array $excludedDates): bool
+    {
+        return ! WeekdaySchedule::isWeekendDate($date)
+            && ! WeekdaySchedule::isExcludedDate($date, $excludedDates);
     }
 
     /**
