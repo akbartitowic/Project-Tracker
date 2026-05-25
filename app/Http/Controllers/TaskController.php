@@ -660,17 +660,6 @@ class TaskController extends Controller
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
-        $est = (float) ($validated['estimated_hours'] ?? 0);
-        $project = Project::find($validated['project_id']);
-
-        if (!UserAccess::isFreelance($user) && $project) {
-            $preview = new Task($validated);
-            $preview->setRelation('project', $project);
-            if ($quotaErr = TaskAggregationService::validateScrumQuota($preview, $est)) {
-                return response()->json($quotaErr, 400);
-            }
-        }
-
         $task = Task::create($validated);
         $this->ensureAssigneeIsProjectMember(
             (int) $task->project_id,
@@ -748,19 +737,6 @@ class TaskController extends Controller
             $validated['project_role_id'] = null;
         } elseif (!$task->parent_task_id) {
             TaskAggregationService::stripParentFieldsWhenHasSubtasks($validated, $task);
-        }
-
-        $project = Project::find($task->project_id);
-        $est = (float) ($validated['estimated_hours'] ?? 0);
-
-        if (!UserAccess::isFreelance($user) && $project && TaskAggregationService::countsTowardQuota($task)) {
-            $preview = new Task(array_merge($task->only([
-                'project_id', 'project_role_id', 'is_billable', 'parent_task_id',
-            ]), $validated));
-            $preview->setRelation('project', $project);
-            if ($quotaErr = TaskAggregationService::validateScrumQuota($preview, $est, (int) $task->id)) {
-                return response()->json($quotaErr, 400);
-            }
         }
 
         $changes = $task->update($validated) ? 1 : 0;

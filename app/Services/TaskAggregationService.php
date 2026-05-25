@@ -79,6 +79,9 @@ class TaskAggregationService
             ->exists();
     }
 
+    /**
+     * Advisory quota check (does not block saves). Returns warning payload when over quota.
+     */
     public static function validateScrumQuota(Task $task, float $additionalHours, ?int $excludeTaskId = null): ?array
     {
         if (!$task->is_billable || $additionalHours <= 0) {
@@ -117,10 +120,11 @@ class TaskAggregationService
 
             $currentUsed = (float) $query->sum('estimated_hours');
 
+            $remaining = $quotaRow->quota_hours - $currentUsed;
             if (($currentUsed + $additionalHours) > $quotaRow->quota_hours) {
                 return [
-                    'error' => 'Role quota exceeded. Remaining for this role: ' . ($quotaRow->quota_hours - $currentUsed) . ' hours.',
-                    'remaining' => $quotaRow->quota_hours - $currentUsed,
+                    'warning' => 'Role quota exceeded. Remaining for this role: ' . $remaining . ' hours.',
+                    'remaining' => $remaining,
                 ];
             }
 
@@ -148,10 +152,11 @@ class TaskAggregationService
 
         $currentGeneralUsed = (float) $query->sum('estimated_hours');
 
+        $remainingGeneral = $generalQuota - $currentGeneralUsed;
         if ($project->total_manhours !== null && ($currentGeneralUsed + $additionalHours) > $generalQuota) {
             return [
-                'error' => 'General quota exceeded. Remaining: ' . ($generalQuota - $currentGeneralUsed) . ' hours.',
-                'remaining' => $generalQuota - $currentGeneralUsed,
+                'warning' => 'General quota exceeded. Remaining: ' . $remainingGeneral . ' hours.',
+                'remaining' => $remainingGeneral,
             ];
         }
 
