@@ -7,7 +7,9 @@ use App\Models\Task;
 use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\TaskAggregationService;
 use App\Support\ProjectAccess;
+use App\Support\TaskBillable;
 use App\Support\UserAccess;
 use App\Traits\LogActivity;
 
@@ -34,7 +36,9 @@ class TaskController extends Controller
         'role_name' => ['role name', 'role_name'],
         'category' => ['category'],
         'due_date' => ['due date', 'due_date'],
+        'start_date' => ['start date', 'start_date'],
         'rush_hour' => ['rush hour', 'rush_hour'],
+        'is_billable' => ['billable', 'is_billable', 'billable type'],
     ];
 
     /**
@@ -79,6 +83,23 @@ class TaskController extends Controller
     /**
      * DB column tasks.estimated_hours is NOT NULL; Waterfall UI sends null — coerce to 0.
      */
+    private function validateTaskDateRange(array $validated): ?array
+    {
+        $start = $validated['start_date'] ?? null;
+        $due = $validated['due_date'] ?? null;
+        if ($start && $due && $start > $due) {
+            return ['error' => 'Due date must be on or after start date.'];
+        }
+
+        return null;
+    }
+
+    private function normalizeBillableFlag(array &$validated): void
+    {
+        $validated['is_billable'] = filter_var($validated['is_billable'] ?? true, FILTER_VALIDATE_BOOLEAN);
+        TaskBillable::applyNonBillable($validated);
+    }
+
     private function normalizeEstimatedHoursForDb(array &$validated): void
     {
         if (!array_key_exists('estimated_hours', $validated)) {
@@ -124,7 +145,9 @@ class TaskController extends Controller
             'role_name' => 7,
             'category' => 8,
             'due_date' => 9,
-            'rush_hour' => 10,
+            'start_date' => 10,
+            'rush_hour' => 11,
+            'is_billable' => 12,
         ];
     }
 
@@ -201,9 +224,21 @@ class TaskController extends Controller
             'role_name' => trim((string) ($get('role_name') ?? '')) ?: null,
             'category' => trim((string) ($get('category') ?? '')) ?: null,
             'due_date' => $this->parseCsvDate($get('due_date')),
+            'start_date' => $this->parseCsvDate($get('start_date')),
             'rush_hour' => $this->parseCsvBool($get('rush_hour')),
+            'is_billable' => $this->parseCsvBillable($get('is_billable')),
             'project_id' => $projectId,
         ];
+    }
+
+    private function parseCsvBillable(mixed $value): bool
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return true;
+        }
+        $normalized = strtolower(trim((string) $value));
+
+        return !in_array($normalized, ['0', 'false', 'no', 'n', 'non-billable', 'non billable', 'nonbillable'], true);
     }
 
     /**
@@ -297,9 +332,38 @@ class TaskController extends Controller
             if (!ProjectAccess::canAccessProject($user, $projectId)) {
                 return response()->json(['error' => 'Forbidden'], 403);
             }
-            $query->where('project_id', $projectId);
+            $query->where('tasks.project_id', $projectId)
+                ->whereNull('tasks.parent_task_id');
+        } else {
+            $query->whereNull('tasks.parent_task_id');
         }
+
         $tasks = $query->get();
+
+        if ($request->has('project_id')) {
+            $taskIds = $tasks->pluck('id');
+            if ($taskIds->isNotEmpty()) {
+                $subtasks = Task::query()
+                    ->leftJoin('users', 'users.id', '=', 'tasks.assignee_id')
+                    ->select('tasks.*')
+                    ->selectRaw('users.name as assignee_name')
+                    ->whereIn('parent_task_id', $taskIds)
+                    ->orderBy('sort_order')
+                    ->orderBy('tasks.id')
+                    ->get()
+                    ->groupBy('parent_task_id');
+
+                $tasks->each(function ($task) use ($subtasks, $user) {
+                    $task->subtasks = $subtasks->get($task->id, collect())->values();
+                    if (UserAccess::isFreelance($user)) {
+                        $task->subtasks->each(fn ($st) => UserAccess::stripTaskManhourFields($st));
+                    }
+                });
+            } else {
+                $tasks->each(fn ($task) => $task->subtasks = collect());
+            }
+        }
+
         if (UserAccess::isFreelance($user)) {
             $tasks->each(fn ($task) => UserAccess::stripTaskManhourFields($task));
         }
@@ -325,7 +389,9 @@ class TaskController extends Controller
                 'Project Role Quota',
                 'Category',
                 'Due Date',
+                'Start Date',
                 'Rush Hour',
+                'Billable',
             ]);
             fputcsv($file, [
                 'Example Task',
@@ -338,6 +404,8 @@ class TaskController extends Controller
                 'Developer',
                 'Developer',
                 '2026-06-30',
+                '2026-06-01',
+                'Yes',
                 'Yes',
             ]);
             fclose($file);
@@ -425,10 +493,16 @@ class TaskController extends Controller
                     $data['rush_hour'] = false;
                     $this->applyRushHourToEstimatedHours($data);
                 } else {
-                    $this->applyRushHourToEstimatedHours($data);
+                    if (!($data['is_billable'] ?? true)) {
+                        $data['estimated_hours'] = 0;
+                        $data['rush_hour'] = false;
+                    } else {
+                        $this->applyRushHourToEstimatedHours($data);
+                    }
                 }
 
                 $this->normalizeEstimatedHoursForDb($data);
+                TaskBillable::applyNonBillable($data);
 
                 if (!empty($data['assignee_email'])) {
                     $assignee = User::where('email', $data['assignee_email'])->first();
@@ -459,7 +533,7 @@ class TaskController extends Controller
                 }
 
                 $est = (float) $data['estimated_hours'];
-                if ($project->methodology === 'Agile Scrum') {
+                if ($project->methodology === 'Agile Scrum' && ($data['is_billable'] ?? true)) {
                     if (!empty($data['project_role_id'])) {
                         $quotaRow = DB::table('project_role_quotas')
                             ->where('project_id', $project->id)
@@ -470,6 +544,7 @@ class TaskController extends Controller
                             $currentUsed = DB::table('tasks')
                                 ->where('project_id', $project->id)
                                 ->where('project_role_id', $data['project_role_id'])
+                                ->where('is_billable', true)
                                 ->sum('estimated_hours');
 
                             if (($currentUsed + $est) > $quotaRow->quota_hours) {
@@ -487,6 +562,7 @@ class TaskController extends Controller
                     $currentGeneralUsed = DB::table('tasks')
                             ->where('project_id', $project->id)
                         ->whereNull('project_role_id')
+                            ->where('is_billable', true)
                             ->sum('estimated_hours');
 
                     if ($project->total_manhours !== null && ($currentGeneralUsed + $est) > $generalQuota) {
@@ -549,11 +625,30 @@ class TaskController extends Controller
             'project_role_id' => 'nullable|exists:project_roles,id',
             'category' => 'nullable|string',
             'due_date' => 'nullable|date',
+            'start_date' => 'nullable|date',
+            'is_billable' => 'nullable|boolean',
+            'parent_task_id' => 'nullable|integer|exists:tasks,id',
         ]);
 
-        $this->normalizeEstimatedHoursForDb($validated);
+        $parentTaskId = isset($validated['parent_task_id']) ? (int) $validated['parent_task_id'] : null;
+        TaskAggregationService::assertValidParent($parentTaskId, (int) $validated['project_id']);
+
+        if ($dateErr = $this->validateTaskDateRange($validated)) {
+            return response()->json($dateErr, 422);
+        }
+
+        $this->normalizeBillableFlag($validated);
         $validated['rush_hour'] = (bool) ($validated['rush_hour'] ?? false);
+        if (!UserAccess::isFreelance($user)) {
+            $this->applyRushHourToEstimatedHours($validated);
+        }
+        $this->normalizeEstimatedHoursForDb($validated);
         $validated['due_date'] = $validated['due_date'] ?? null;
+        $validated['start_date'] = $validated['start_date'] ?? null;
+
+        if ($parentTaskId) {
+            $validated['sort_order'] = (int) Task::where('parent_task_id', $parentTaskId)->max('sort_order') + 1;
+        }
 
         if (UserAccess::isFreelance($user)) {
             $validated['estimated_hours'] = 0;
@@ -565,49 +660,14 @@ class TaskController extends Controller
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
-        $est = (float)($validated['estimated_hours'] ?? 0);
+        $est = (float) ($validated['estimated_hours'] ?? 0);
         $project = Project::find($validated['project_id']);
 
-        if (!UserAccess::isFreelance($user) && $project && $project->methodology === 'Agile Scrum') {
-            if (!empty($validated['project_role_id'])) {
-                $quotaRow = DB::table('project_role_quotas')
-                    ->where('project_id', $project->id)
-                    ->where('project_role_id', $validated['project_role_id'])
-                    ->first();
-
-                if (!$quotaRow) {
-                    return response()->json(['error' => 'No quota defined for this role in this project.'], 400);
-                }
-
-                $currentUsed = DB::table('tasks')
-                    ->where('project_id', $project->id)
-                    ->where('project_role_id', $validated['project_role_id'])
-                    ->sum('estimated_hours');
-
-                if (($currentUsed + $est) > $quotaRow->quota_hours) {
-                    return response()->json([
-                        'error' => "Role quota exceeded. Remaining for this role: " . ($quotaRow->quota_hours - $currentUsed) . " hours.",
-                        'remaining' => $quotaRow->quota_hours - $currentUsed
-                    ], 400);
-                }
-            } else {
-                $mappedRoleQuota = DB::table('project_role_quotas')
-                    ->where('project_id', $project->id)
-                    ->sum('quota_hours');
-
-                $generalQuota = max(0, (float)($project->total_manhours ?? 0) - (float)$mappedRoleQuota);
-
-                $currentGeneralUsed = DB::table('tasks')
-                    ->where('project_id', $project->id)
-                    ->whereNull('project_role_id')
-                    ->sum('estimated_hours');
-
-                if ($project->total_manhours !== null && ($currentGeneralUsed + $est) > $generalQuota) {
-                    return response()->json([
-                        'error' => "General quota exceeded. Remaining: " . ($generalQuota - $currentGeneralUsed) . " hours.",
-                        'remaining' => $generalQuota - $currentGeneralUsed
-                    ], 400);
-                }
+        if (!UserAccess::isFreelance($user) && $project) {
+            $preview = new Task($validated);
+            $preview->setRelation('project', $project);
+            if ($quotaErr = TaskAggregationService::validateScrumQuota($preview, $est)) {
+                return response()->json($quotaErr, 400);
             }
         }
 
@@ -617,8 +677,15 @@ class TaskController extends Controller
             $task->assignee_id ? (int) $task->assignee_id : null,
             $task->project_role_id ? (int) $task->project_role_id : null
         );
-        $this->log('Project', 'Created Task', "Added task '{$task->title}' to project ID: {$task->project_id}");
-        return response()->json(['id' => $task->id]);
+
+        if ($task->parent_task_id) {
+            TaskAggregationService::syncParentEstimatedHours((int) $task->parent_task_id);
+        }
+
+        $label = $task->parent_task_id ? 'subtask' : 'task';
+        $this->log('Project', 'Created Task', "Added {$label} '{$task->title}' to project ID: {$task->project_id}");
+
+        return response()->json(['id' => $task->id, 'parent_task_id' => $task->parent_task_id]);
     }
 
     public function updateStatus(Request $request, $id)
@@ -658,16 +725,42 @@ class TaskController extends Controller
             'project_role_id' => 'nullable|exists:project_roles,id',
             'category' => 'nullable|string',
             'due_date' => 'nullable|date',
+            'start_date' => 'nullable|date',
+            'is_billable' => 'nullable|boolean',
         ]);
 
-        $this->normalizeEstimatedHoursForDb($validated);
+        if ($dateErr = $this->validateTaskDateRange($validated)) {
+            return response()->json($dateErr, 422);
+        }
+
+        $this->normalizeBillableFlag($validated);
         $validated['rush_hour'] = (bool) ($validated['rush_hour'] ?? false);
+        if ($validated['rush_hour'] && !UserAccess::isFreelance($user)) {
+            $this->applyRushHourToEstimatedHours($validated);
+        }
+        $this->normalizeEstimatedHoursForDb($validated);
         $validated['due_date'] = $validated['due_date'] ?? null;
+        $validated['start_date'] = $validated['start_date'] ?? null;
 
         if (UserAccess::isFreelance($user)) {
             $validated['estimated_hours'] = 0;
             $validated['rush_hour'] = false;
             $validated['project_role_id'] = null;
+        } elseif (!$task->parent_task_id) {
+            TaskAggregationService::stripParentFieldsWhenHasSubtasks($validated, $task);
+        }
+
+        $project = Project::find($task->project_id);
+        $est = (float) ($validated['estimated_hours'] ?? 0);
+
+        if (!UserAccess::isFreelance($user) && $project && TaskAggregationService::countsTowardQuota($task)) {
+            $preview = new Task(array_merge($task->only([
+                'project_id', 'project_role_id', 'is_billable', 'parent_task_id',
+            ]), $validated));
+            $preview->setRelation('project', $project);
+            if ($quotaErr = TaskAggregationService::validateScrumQuota($preview, $est, (int) $task->id)) {
+                return response()->json($quotaErr, 400);
+            }
         }
 
         $changes = $task->update($validated) ? 1 : 0;
@@ -678,7 +771,34 @@ class TaskController extends Controller
                 !empty($validated['project_role_id']) ? (int) $validated['project_role_id'] : null
             );
         }
+
+        if ($task->parent_task_id) {
+            TaskAggregationService::syncParentEstimatedHours((int) $task->parent_task_id);
+        } elseif ($changes) {
+            TaskAggregationService::syncParentEstimatedHours((int) $task->id);
+        }
+
         return response()->json(['changes' => $changes]);
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        $user = $request->user();
+        $task = Task::findOrFail($id);
+        if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $parentId = $task->parent_task_id ? (int) $task->parent_task_id : null;
+        $task->delete();
+
+        if ($parentId) {
+            TaskAggregationService::syncParentEstimatedHours($parentId);
+        }
+
+        $this->log('Project', 'Deleted Task', "Deleted task ID: {$id}");
+
+        return response()->json(['message' => 'Task deleted']);
     }
 
     public function bulkEditManhours(Request $request)

@@ -8,6 +8,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ProjectRoleController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\TaskNoteController;
 use App\Http\Controllers\ManhourController;
 use App\Http\Controllers\PresaleController;
 use App\Http\Controllers\FinanceCategoryController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\ProjectCategoryController;
 use App\Http\Controllers\SalesPitchController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\SalesCategoryProjectController;
+use App\Http\Controllers\TeamLoadController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/signup', [AuthController::class, 'signup'])
@@ -73,14 +75,20 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::patch('/project-roles/{project_role}', [ProjectRoleController::class, 'update'])->middleware('permission:project_roles.update');
     Route::delete('/project-roles/{project_role}', [ProjectRoleController::class, 'destroy'])->middleware('permission:project_roles.delete');
 
+    Route::get('/team-load', [TeamLoadController::class, 'index'])->middleware('permission:load.read');
+
     // 4. Tasks Routes
     Route::get('/tasks', [TaskController::class, 'index'])->middleware('permission:project_board.read');
-    Route::post('/tasks', [TaskController::class, 'store'])->middleware('permission:project_board.create');
-    Route::put('/tasks/bulk-edit', [TaskController::class, 'bulkEditManhours'])->middleware('permission:project_board.update');
-    Route::put('/tasks/{id}', [TaskController::class, 'update'])->middleware('permission:project_board.update');
-    Route::put('/tasks/{id}/status', [TaskController::class, 'updateStatus'])->middleware('permission:project_board.update');
     Route::get('/tasks/template', [TaskController::class, 'downloadTemplate'])->middleware('permission:project_board.read');
     Route::post('/tasks/import', [TaskController::class, 'import'])->middleware('permission:project_board.create');
+    Route::post('/tasks', [TaskController::class, 'store'])->middleware('permission:project_board.create');
+    Route::put('/tasks/bulk-edit', [TaskController::class, 'bulkEditManhours'])->middleware('permission:project_board.update');
+    Route::get('/tasks/{taskId}/notes', [TaskNoteController::class, 'index'])->middleware('permission:project_board.read');
+    Route::post('/tasks/{taskId}/notes', [TaskNoteController::class, 'store'])->middleware('permission:project_board.read');
+    Route::delete('/tasks/{taskId}/notes/{noteId}', [TaskNoteController::class, 'destroy'])->middleware('permission:project_board.read');
+    Route::put('/tasks/{id}', [TaskController::class, 'update'])->middleware('permission:project_board.update');
+    Route::delete('/tasks/{id}', [TaskController::class, 'destroy'])->middleware('permission:project_board.update');
+    Route::put('/tasks/{id}/status', [TaskController::class, 'updateStatus'])->middleware('permission:project_board.update');
 
     // 4. Manhours Routes
     Route::get('/manhours', [ManhourController::class, 'index'])->middleware('permission:project_board.read');

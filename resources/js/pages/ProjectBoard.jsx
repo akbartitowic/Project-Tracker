@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
-import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity } from 'lucide-react';
+import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart } from 'lucide-react';
+import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../utils/taskDates';
 import { hasPermission } from '../utils/permissions';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import SubtaskSection, { subtasksTotalHours } from '../components/board/SubtaskSection';
+import TaskNotesSection from '../components/board/TaskNotesSection';
+import { billableHoursForTask, TaskBillingBadges, taskIsEffectivelyNonBillable } from '../utils/taskBillable.jsx';
 import { DndContext, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -58,13 +62,7 @@ function effectiveHoursFromBaseInput(baseStr, rushHour) {
     return rushHour ? Math.round(b * RUSH_HOUR_FACTOR * 1000) / 1000 : b;
 }
 
-function toDateInputValue(value) {
-    if (!value) return '';
-    const s = String(value);
-    return s.length >= 10 ? s.slice(0, 10) : s;
-}
-
-function DraggableTaskCard({ task, onClick, assigneeName, isFreelance }) {
+function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours }) {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: task.id,
         data: { task }
@@ -93,13 +91,25 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance }) {
                     <span className={`${pClass} text-[10px] px-2 py-0.5 rounded uppercase font-bold tracking-wider`}>{task.priority}</span>
                     {!isFreelance && (
                         <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 flex-wrap justify-end">
+                            <TaskBillingBadges task={task} />
                             {task.rush_hour && (
                                 <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30">
                                     Rush hour
                                 </span>
                             )}
+                            {task.subtasks?.length > 0 && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter bg-violet-100 text-violet-800 border border-violet-200 dark:bg-violet-500/15 dark:text-violet-300">
+                                    {task.subtasks.length} sub
+                                </span>
+                            )}
                             <Clock className="size-3.5 shrink-0" />
-                            <span>{task.estimated_hours || 0} hrs</span>
+                            <span>
+                                {task.subtasks?.length > 0
+                                    ? `${formatHours(subtasksTotalHours(task.subtasks))} hrs`
+                                    : taskIsEffectivelyNonBillable(task)
+                                      ? '—'
+                                      : `${task.estimated_hours || 0} hrs`}
+                            </span>
                         </div>
                     )}
                 </div>
@@ -114,6 +124,12 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance }) {
                     </div>
                 )}
                 <h4 className="text-slate-900 dark:text-slate-100 font-medium leading-snug">{task.title}</h4>
+                {formatTaskDateRange(task.start_date, task.due_date) && (
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-1">
+                        <CalendarRange className="size-3 shrink-0" />
+                        {formatTaskDateRange(task.start_date, task.due_date)}
+                    </p>
+                )}
 
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -168,6 +184,8 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
 export default function ProjectBoard() {
     const { projectId } = useParams();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const taskParam = searchParams.get('task');
     const { user } = useAuth();
     const [projects, setProjects] = useState([]);
     const [selectedProject, setSelectedProject] = useState(null);
@@ -210,7 +228,9 @@ export default function ProjectBoard() {
     const [newTaskEstimate, setNewTaskEstimate] = useState('');
     const [newTaskRushHour, setNewTaskRushHour] = useState(false);
     const [newTaskCategory, setNewTaskCategory] = useState('');
+    const [newTaskStartDate, setNewTaskStartDate] = useState('');
     const [newTaskDueDate, setNewTaskDueDate] = useState('');
+    const [newTaskBillable, setNewTaskBillable] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
@@ -373,21 +393,25 @@ export default function ProjectBoard() {
     const loadBoard = async (projectId) => {
         try {
             if (!isFreelance) {
-                const balanceRes = await fetchAPI(`/projects/${projectId}/balance`);
-                if (balanceRes.data) {
-                    const s = balanceRes.data;
-                    let perc = 0;
-                    if (s.total_manhours) {
-                        perc = Math.round((s.allocated_hours / s.total_manhours) * 100);
-                        if (perc > 100) perc = 100;
+                try {
+                    const balanceRes = await fetchAPI(`/projects/${projectId}/balance`);
+                    if (balanceRes.data) {
+                        const s = balanceRes.data;
+                        let perc = 0;
+                        if (s.total_manhours) {
+                            perc = Math.round((s.allocated_hours / s.total_manhours) * 100);
+                            if (perc > 100) perc = 100;
+                        }
+                        setStats({
+                            total_manhours: s.total_manhours,
+                            allocated_hours: s.total_manhours ? Math.round(s.allocated_hours * 10) / 10 : 0,
+                            actual_hours: s.total_manhours ? Math.round(s.actual_hours * 10) / 10 : 0,
+                            remaining: s.total_manhours ? Math.round(s.remaining * 10) / 10 : 0,
+                            perc,
+                        });
                     }
-                    setStats({
-                        total_manhours: s.total_manhours,
-                        allocated_hours: s.total_manhours ? Math.round(s.allocated_hours * 10) / 10 : 0,
-                        actual_hours: s.total_manhours ? Math.round(s.actual_hours * 10) / 10 : 0,
-                        remaining: s.total_manhours ? Math.round(s.remaining * 10) / 10 : 0,
-                        perc
-                    });
+                } catch (balanceErr) {
+                    console.warn('Project board: could not load balance.', balanceErr);
                 }
             } else {
                 setStats({
@@ -412,9 +436,13 @@ export default function ProjectBoard() {
             }
 
             if (!isFreelance) {
-                const quotasRes = await fetchAPI(`/projects/${projectId}/quotas`);
-                if (quotasRes.data) {
-                    setRoleQuotas((quotasRes.data || []).filter((q) => q.is_active !== false));
+                try {
+                    const quotasRes = await fetchAPI(`/projects/${projectId}/quotas`);
+                    if (quotasRes.data) {
+                        setRoleQuotas((quotasRes.data || []).filter((q) => q.is_active !== false));
+                    }
+                } catch (quotasErr) {
+                    console.warn('Project board: could not load quotas.', quotasErr);
                 }
             }
 
@@ -448,7 +476,7 @@ export default function ProjectBoard() {
         }
     }, [projectId, projects, navigate]);
 
-    const handleOpenModal = (status, taskToEdit = null) => {
+    const applyTaskFormState = useCallback((status, taskToEdit = null) => {
         if (taskToEdit) {
             setEditingTaskId(taskToEdit.id);
             setNewTaskTitle(taskToEdit.title);
@@ -457,7 +485,6 @@ export default function ProjectBoard() {
             setNewTaskStatus(taskToEdit.status);
             setNewTaskPriority(taskToEdit.priority);
 
-            // Set role filter based on the assignee's role in the project
             if (taskToEdit.assignee_id) {
                 const memberInfo = projectMembers.find(m => m.user_id === taskToEdit.assignee_id);
                 setNewTaskRoleFilter(memberInfo ? memberInfo.role_name : 'All');
@@ -470,7 +497,9 @@ export default function ProjectBoard() {
             setNewTaskEstimate(baseInputFromStoredHours(taskToEdit.estimated_hours, !!taskToEdit.rush_hour));
             setNewTaskCategory(taskToEdit.category || '');
             setNewTaskRoleFilter(taskToEdit.project_role_id ? taskToEdit.project_role_id.toString() : 'All');
+            setNewTaskStartDate(toDateInputValue(taskToEdit.start_date));
             setNewTaskDueDate(toDateInputValue(taskToEdit.due_date));
+            setNewTaskBillable(taskToEdit.is_billable !== false);
         } else {
             setEditingTaskId(null);
             setNewTaskStatus(status || 'To Do');
@@ -478,8 +507,7 @@ export default function ProjectBoard() {
             setNewTaskFeatureTitle('');
             setNewTaskDescription('');
             setNewTaskPriority('Medium');
-            
-            // Default to 'All' if general quota is defined, else first role quota, else 'All' as fallback
+
             if (selectedProject?.total_manhours > 0) {
                 setNewTaskRoleFilter('All');
             } else if (roleQuotas.length > 0) {
@@ -487,15 +515,82 @@ export default function ProjectBoard() {
             } else {
                 setNewTaskRoleFilter('All');
             }
-            
+
             setNewTaskAssignee('Unassigned');
             setNewTaskEstimate('');
             setNewTaskRushHour(false);
             setNewTaskCategory('');
+            setNewTaskStartDate('');
             setNewTaskDueDate('');
+            setNewTaskBillable(true);
         }
+    }, [projectMembers, roleQuotas, selectedProject]);
+
+    const closeTaskModal = useCallback(() => {
+        setIsModalOpen(false);
+        setEditingTaskId(null);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('task');
+            return next;
+        }, { replace: true });
+    }, [setSearchParams]);
+
+    const handleOpenModal = (status, taskToEdit = null) => {
+        applyTaskFormState(status, taskToEdit);
         setIsModalOpen(true);
+        if (!projectId) return;
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (taskToEdit?.id) {
+                next.set('task', String(taskToEdit.id));
+            } else {
+                next.set('task', 'new');
+            }
+            return next;
+        }, { replace: false });
     };
+
+    useEffect(() => {
+        if (!projectId || !selectedProject) return;
+        if (!taskParam) {
+            if (isModalOpen) {
+                setIsModalOpen(false);
+                setEditingTaskId(null);
+            }
+            return;
+        }
+        if (taskParam === 'new') {
+            if (isModalOpen && !editingTaskId) return;
+            applyTaskFormState('To Do', null);
+            setIsModalOpen(true);
+            return;
+        }
+        const task = tasks.find((t) => String(t.id) === taskParam);
+        if (task) {
+            if (isModalOpen && editingTaskId != null && String(editingTaskId) === taskParam) return;
+            applyTaskFormState(task.status, task);
+            setIsModalOpen(true);
+            return;
+        }
+        if (tasks.length > 0) {
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('task');
+                return next;
+            }, { replace: true });
+        }
+    }, [taskParam, projectId, selectedProject, tasks, applyTaskFormState, isModalOpen, editingTaskId, setSearchParams]);
+
+    useEffect(() => {
+        if (!projectId && taskParam) {
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('task');
+                return next;
+            }, { replace: true });
+        }
+    }, [projectId, taskParam, setSearchParams]);
 
     const visibleRoleQuotas = useMemo(
         () => roleQuotas.filter((quota) => Number(quota.quota_hours || 0) > 0),
@@ -510,6 +605,13 @@ export default function ProjectBoard() {
     const categoryBasedRoleQuotas = visibleRoleQuotas.filter((quota) =>
         newTaskCategory ? quota.role_name === newTaskCategory : true
     );
+
+    const editingTask = useMemo(
+        () => (editingTaskId ? tasks.find((t) => Number(t.id) === Number(editingTaskId)) : null),
+        [editingTaskId, tasks],
+    );
+    const editingSubtasks = editingTask?.subtasks ?? [];
+    const hasSubtasks = editingSubtasks.length > 0;
 
     const formatHours = (value) => {
         const num = Number(value);
@@ -543,15 +645,31 @@ export default function ProjectBoard() {
 
     const mappedRoleQuotaHours = roleQuotas.reduce((sum, quota) => sum + (Number(quota.quota_hours) || 0), 0);
     const generalQuotaFromPresales = Math.max(0, (Number(selectedProject?.total_manhours) || 0) - mappedRoleQuotaHours);
-    const generalAllocatedHours = tasks
-        .filter((task) => !task.project_role_id)
-        .reduce((sum, task) => sum + (Number(task.estimated_hours) || 0), 0);
+    const generalAllocatedHours = tasks.reduce((sum, task) => {
+        if (Array.isArray(task.subtasks) && task.subtasks.length > 0) {
+            return sum + task.subtasks
+                .filter((st) => !st.project_role_id && st.is_billable !== false)
+                .reduce((s, st) => s + (Number(st.estimated_hours) || 0), 0);
+        }
+        if (!task.project_role_id && task.is_billable !== false) {
+            return sum + (Number(task.estimated_hours) || 0);
+        }
+        return sum;
+    }, 0);
     const generalQuotaRemaining = Math.max(0, generalQuotaFromPresales - generalAllocatedHours);
     const showGeneralQuotaCard = generalQuotaFromPresales > 0;
     const hasQuotaSummary = visibleRoleQuotas.length > 0 || showGeneralQuotaCard;
     const headerTotalManhours = stats.total_manhours ?? selectedProject?.total_manhours;
     const headerUsedManhours = useMemo(() => {
         const fromTasks = tasks.reduce((sum, task) => {
+            if (Array.isArray(task.subtasks) && task.subtasks.length > 0) {
+                return sum + task.subtasks.reduce((s, st) => {
+                    if (st.is_billable === false) return s;
+                    if (normalizeBoardTaskStatus(st.status) === 'To Do') return s;
+                    return s + (Number(st.estimated_hours) || 0);
+                }, 0);
+            }
+            if (task.is_billable === false) return sum;
             if (normalizeBoardTaskStatus(task.status) === 'To Do') return sum;
             return sum + (Number(task.estimated_hours) || 0);
         }, 0);
@@ -566,10 +684,18 @@ export default function ProjectBoard() {
 
     const handleSubmitTask = async (e) => {
         e.preventDefault();
+        const dateErr = validateTaskDateRange(newTaskStartDate, newTaskDueDate);
+        if (dateErr) {
+            alert(dateErr);
+            return;
+        }
         setIsSubmitting(true);
         try {
             const isWaterfall = selectedProject?.methodology === 'Waterfall';
-            const storedHours = isWaterfall ? null : effectiveHoursFromBaseInput(newTaskEstimate, newTaskRushHour);
+            const isBillable = newTaskBillable !== false;
+            const storedHours = !isBillable || isWaterfall
+                ? null
+                : effectiveHoursFromBaseInput(newTaskEstimate, newTaskRushHour);
             const payload = {
                 title: newTaskTitle,
                 feature_title: newTaskFeatureTitle,
@@ -577,20 +703,24 @@ export default function ProjectBoard() {
                 priority: newTaskPriority,
                 status: newTaskStatus,
                 assignee_id: newTaskAssignee !== 'Unassigned' ? parseInt(newTaskAssignee) : null,
-                estimated_hours: isWaterfall ? null : storedHours,
-                rush_hour: isWaterfall || isFreelance ? false : newTaskRushHour,
+                estimated_hours: isWaterfall || !isBillable ? null : storedHours,
+                rush_hour: isWaterfall || isFreelance || !isBillable ? false : newTaskRushHour,
                 project_id: selectedProject.id,
                 project_role_id: isWaterfall ? null : (newTaskRoleFilter !== 'All' ? parseInt(newTaskRoleFilter) : null),
                 category: newTaskCategory || null,
+                start_date: newTaskStartDate || null,
                 due_date: newTaskDueDate || null,
             };
+            if (!hasSubtasks) {
+                payload.is_billable = isBillable;
+            }
 
             if (editingTaskId) {
                 await fetchAPI(`/tasks/${editingTaskId}`, { method: 'PUT', body: JSON.stringify(payload) });
             } else {
                 await fetchAPI('/tasks', { method: 'POST', body: JSON.stringify(payload) });
             }
-            setIsModalOpen(false);
+            closeTaskModal();
             await loadBoard(selectedProject.id);
             await syncSelectedProjectFromList(selectedProject.id);
         } catch (error) {
@@ -1311,6 +1441,22 @@ export default function ProjectBoard() {
                             <Button
                                 variant="outline"
                                 className="flex items-center gap-2"
+                                onClick={() => navigate(`/board/${selectedProject.id}/dashboard`)}
+                            >
+                                <BarChart3 className="size-4" />
+                                <span>Dashboard</span>
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="flex items-center gap-2"
+                                onClick={() => navigate(`/board/${selectedProject.id}/gantt`)}
+                            >
+                                <GanttChart className="size-4" />
+                                <span>Gantt</span>
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="flex items-center gap-2"
                                 onClick={() => openAssignMembersModal(selectedProject)}
                             >
                                 <UserPlus className="size-4" />
@@ -1508,6 +1654,7 @@ export default function ProjectBoard() {
                                             key={task.id}
                                             task={task}
                                             isFreelance={isFreelance}
+                                            formatHours={formatHours}
                                             assigneeName={task.assignee_id ? assigneeNameById[task.assignee_id] : null}
                                             onClick={(t) => handleOpenModal(t.status, t)}
                                         />
@@ -1601,13 +1748,20 @@ export default function ProjectBoard() {
                                         {!isFreelance && (
                                             <td className="px-6 py-4 text-right text-slate-500 dark:text-slate-400">
                                                 <div className="flex items-center justify-end gap-1.5 font-medium text-sm flex-wrap">
+                                                    <TaskBillingBadges task={task} />
                                                     {task.rush_hour && (
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30">
                                                             Rush hour
                                                         </span>
                                                     )}
                                                     <Clock className="size-3.5 shrink-0" />
-                                                    <span>{task.estimated_hours || 0} hrs</span>
+                                                    <span>
+                                                        {task.subtasks?.length > 0
+                                                            ? `${formatHours(subtasksTotalHours(task.subtasks))} hrs`
+                                                            : taskIsEffectivelyNonBillable(task)
+                                                              ? '—'
+                                                              : `${task.estimated_hours || 0} hrs`}
+                                                    </span>
                                                 </div>
                                             </td>
                                         )}
@@ -1625,12 +1779,28 @@ export default function ProjectBoard() {
             )}
 
             {/* Modal */}
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="sm:max-w-[600px]">
-                    <DialogHeader>
+            <Dialog
+                open={isModalOpen}
+                onOpenChange={(open) => {
+                    if (!open) closeTaskModal();
+                    else setIsModalOpen(true);
+                }}
+            >
+                <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-3xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
+                    <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
                         <DialogTitle>{editingTaskId ? 'Edit Task' : 'Add New Task'}</DialogTitle>
+                        {selectedProject && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                {selectedProject.name} · {selectedProject.methodology || 'Project'}
+                            </p>
+                        )}
                     </DialogHeader>
-                    <form className="flex flex-col gap-5 py-2 max-h-[75vh] overflow-y-auto px-1" onSubmit={handleSubmitTask}>
+                    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+                    <form
+                        id="task-edit-form"
+                        className="flex flex-col px-6 py-5 gap-5"
+                        onSubmit={handleSubmitTask}
+                    >
                         <section className="space-y-3">
                             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Task Details</p>
                             <div className="flex flex-col gap-1.5">
@@ -1647,32 +1817,65 @@ export default function ProjectBoard() {
                                 </label>
                                 <Textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} placeholder="Enter detailed description..." className="min-h-[72px] resize-y" />
                             </div>
-                            {categoryOptions.length > 0 && (
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</label>
-                                    <Select value={newTaskCategory} onValueChange={(val) => {
-                                        setNewTaskCategory(val);
-                                        const matchedQuota = roleQuotas.find((q) => q.role_name === val);
-                                        if (matchedQuota) {
-                                            setNewTaskRoleFilter(matchedQuota.project_role_id.toString());
-                                        }
-                                    }}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select category" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {categoryOptions.map((categoryName) => (
-                                                <SelectItem key={categoryName} value={categoryName}>{categoryName}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                            {(categoryOptions.length > 0 || (!isFreelance && !hasSubtasks)) && (
+                                <div className={`grid grid-cols-1 gap-3 ${categoryOptions.length > 0 && !isFreelance && !hasSubtasks ? 'sm:grid-cols-2' : ''}`}>
+                                    {categoryOptions.length > 0 && (
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</label>
+                                            <Select value={newTaskCategory} onValueChange={(val) => {
+                                                setNewTaskCategory(val);
+                                                const matchedQuota = roleQuotas.find((q) => q.role_name === val);
+                                                if (matchedQuota) {
+                                                    setNewTaskRoleFilter(matchedQuota.project_role_id.toString());
+                                                }
+                                            }}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Select category" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {categoryOptions.map((categoryName) => (
+                                                        <SelectItem key={categoryName} value={categoryName}>{categoryName}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+                                    {!isFreelance && !hasSubtasks && (
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Billing type</label>
+                                            <Select
+                                                value={newTaskBillable ? 'billable' : 'non-billable'}
+                                                onValueChange={(val) => {
+                                                    const billable = val === 'billable';
+                                                    setNewTaskBillable(billable);
+                                                    if (!billable) {
+                                                        setNewTaskEstimate('');
+                                                        setNewTaskRushHour(false);
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Billing type" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="billable">Billable</SelectItem>
+                                                    <SelectItem value="non-billable">Non-billable</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
                                 </div>
+                            )}
+                            {hasSubtasks && !isFreelance && selectedProject?.methodology !== 'Waterfall' && (
+                                <p className="text-xs text-slate-500 dark:text-slate-400 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 px-3 py-2">
+                                    Parent manhours are summed from subtasks ({formatHours(subtasksTotalHours(editingSubtasks))} hrs). Edit hours on each subtask below.
+                                </p>
                             )}
                         </section>
 
                         <section className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
                             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status & Schedule</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="flex flex-col gap-1.5">
                                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Priority</label>
                                     <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
@@ -1701,17 +1904,42 @@ export default function ProjectBoard() {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                        Due Date <span className="text-slate-400 font-normal">(Optional)</span>
-                                    </label>
-                                    <Input
-                                        type="date"
-                                        value={newTaskDueDate}
-                                        onChange={(e) => setNewTaskDueDate(e.target.value)}
-                                        className="w-full"
-                                    />
+                            </div>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3 space-y-3">
+                                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                    <CalendarRange className="size-3.5" />
+                                    Timeline
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                            Start date <span className="text-slate-400 font-normal">(Optional)</span>
+                                        </label>
+                                        <Input
+                                            type="date"
+                                            value={newTaskStartDate}
+                                            onChange={(e) => setNewTaskStartDate(e.target.value)}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                            Due date <span className="text-slate-400 font-normal">(Optional)</span>
+                                        </label>
+                                        <Input
+                                            type="date"
+                                            value={newTaskDueDate}
+                                            min={newTaskStartDate || undefined}
+                                            onChange={(e) => setNewTaskDueDate(e.target.value)}
+                                            className="w-full"
+                                        />
+                                    </div>
                                 </div>
+                                {formatTaskDateRange(newTaskStartDate, newTaskDueDate) && (
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                        {formatTaskDateRange(newTaskStartDate, newTaskDueDate)}
+                                    </p>
+                                )}
                             </div>
                         </section>
 
@@ -1768,7 +1996,7 @@ export default function ProjectBoard() {
                             </div>
                         </section>
 
-                        {selectedProject?.methodology !== 'Waterfall' && !isFreelance && (
+                        {selectedProject?.methodology !== 'Waterfall' && !isFreelance && newTaskBillable && !hasSubtasks && (
                             <section className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
                                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Manhour Estimate</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 sm:items-end">
@@ -1803,15 +2031,52 @@ export default function ProjectBoard() {
                                 </div>
                             </section>
                         )}
-
-                        <DialogFooter className="mt-1 pt-4 border-t border-slate-200 dark:border-slate-800">
-                            <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                            <Button type="submit" disabled={isSubmitting}>
-                                {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
-                                {editingTaskId ? 'Save Changes' : 'Create Task'}
-                            </Button>
-                        </DialogFooter>
                     </form>
+
+                    {editingTaskId && selectedProject && (
+                        <div className="px-6 pb-5 border-t border-slate-200 dark:border-slate-800">
+                            <SubtaskSection
+                                parentTaskId={editingTaskId}
+                                subtasks={editingSubtasks}
+                                onChanged={async () => {
+                                    await loadBoard(selectedProject.id);
+                                    await syncSelectedProjectFromList(selectedProject.id);
+                                }}
+                                selectedProject={selectedProject}
+                                isFreelance={isFreelance}
+                                categoryOptions={categoryOptions}
+                                roleQuotas={roleQuotas}
+                                assigneeSelectOptions={assigneeSelectOptions}
+                                formatHours={formatHours}
+                                currentUserId={user?.id}
+                                canDeleteAnyNotes={canUpdateBoard}
+                            />
+                        </div>
+                    )}
+
+                    {editingTaskId ? (
+                        <div className="px-6 pb-5">
+                            <TaskNotesSection
+                                taskId={editingTaskId}
+                                taskLabel={newTaskTitle || editingTask?.title}
+                                currentUserId={user?.id}
+                                canDeleteAny={canUpdateBoard}
+                            />
+                        </div>
+                    ) : (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 px-6 pb-5">
+                            Save the task first, then edit it again to add subtasks and notes.
+                        </p>
+                    )}
+                    </div>
+
+                    <DialogFooter className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 bg-slate-50/80 dark:bg-slate-900/40">
+                        <Button type="button" variant="outline" onClick={closeTaskModal}>Cancel</Button>
+                        <Button type="submit" form="task-edit-form" disabled={isSubmitting}>
+                            {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                            {editingTaskId ? 'Save Changes' : 'Create Task'}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

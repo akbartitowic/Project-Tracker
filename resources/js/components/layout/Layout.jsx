@@ -17,6 +17,9 @@ export default function Layout() {
         if (pathname === '/') return 'Executive Overview';
         if (pathname === '/create-project') return 'List Project';
         if (pathname === '/board') return 'Project Board';
+        if (pathname === '/team-load') return 'Load';
+        if (pathname.includes('/board/') && pathname.endsWith('/gantt')) return 'Project Gantt';
+        if (pathname.includes('/board/') && pathname.endsWith('/dashboard')) return 'Project Dashboard';
         if (pathname === '/users') return 'Team & Users';
         if (pathname === '/manhours') return 'Manhours Ledger';
         if (pathname === '/reports') return 'Reports';

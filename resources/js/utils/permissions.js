@@ -5,6 +5,7 @@ const ROUTE_PERMISSION_MAP = [
     { path: '/presales', permission: 'presales.read' },
     { path: '/create-project', permission: 'list_project.read' },
     { path: '/board', permission: 'project_board.read' },
+    { path: '/team-load', permission: 'load.read' },
     { path: '/generate-report', permission: 'generate_report.read' },
     { path: '/reports', permission: 'reports.read' },
     { path: '/finance-monitoring', permission: 'finance_monitoring.read' },

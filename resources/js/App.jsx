@@ -3,6 +3,8 @@ import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import ProjectList from './pages/ProjectList';
 import ProjectBoard from './pages/ProjectBoard';
+import ProjectBoardDashboard from './pages/ProjectBoardDashboard';
+import ProjectBoardGantt from './pages/ProjectBoardGantt';
 import TeamUsers from './pages/TeamUsers';
 import ProjectRoles from './pages/ProjectRoles';
 import SystemRoles from './pages/SystemRoles';
@@ -22,6 +24,7 @@ import ProjectCategoryMaster from './pages/ProjectCategoryMaster';
 import SalesCategoryProjectMaster from './pages/SalesCategoryProjectMaster';
 import Sales from './pages/Sales';
 import IntegrationProjects from './pages/IntegrationProjects';
+import TeamLoad from './pages/TeamLoad';
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
@@ -76,7 +79,10 @@ function App() {
           <Route path="presales-project-categories" element={<ProjectCategoryMaster />} />
           <Route path="sales-category-projects" element={<SalesCategoryProjectMaster />} />
           <Route path="create-project" element={<ProjectList />} />
+          <Route path="board/:projectId/dashboard" element={<ProjectBoardDashboard />} />
+          <Route path="board/:projectId/gantt" element={<ProjectBoardGantt />} />
           <Route path="board/:projectId?" element={<ProjectBoard />} />
+          <Route path="team-load" element={<TeamLoad />} />
           <Route path="users" element={<TeamUsers />} />
           <Route path="roles" element={<SystemRoles />} />
           <Route path="project-roles" element={<ProjectRoles />} />

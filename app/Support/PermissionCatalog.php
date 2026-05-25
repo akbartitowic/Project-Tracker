@@ -23,6 +23,7 @@ class PermissionCatalog
             'Sales Category Project' => ['create', 'read', 'update', 'delete'],
             'List Project' => ['create', 'read', 'update', 'delete'],
             'Project Board' => ['create', 'read', 'update'],
+            'Load' => ['read'],
             'Reports' => ['read'],
             'Generate Report' => ['create', 'read'],
             'Finance Monitoring' => ['create', 'read', 'update', 'delete'],
@@ -60,6 +61,17 @@ class PermissionCatalog
             'profile.read',
             'profile.update',
         ];
+    }
+
+    /**
+     * Operation — team capacity / Load menu (all projects, all assignees).
+     * Grant via Access Control; not included on board-member or freelance defaults.
+     *
+     * @return list<string>
+     */
+    public static function teamLoadPermissionSlugs(): array
+    {
+        return ['load.read'];
     }
 
     public static function sync(): void

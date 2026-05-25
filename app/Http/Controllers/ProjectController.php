@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Support\ManhourBucketCalculator;
+use App\Support\TaskBillable;
 use App\Models\ProjectMember;
 use App\Models\ProjectRoleQuota;
 use App\Models\ProjectRole;
@@ -52,21 +53,21 @@ class ProjectController extends Controller
                     ELSE 'Planning'
                 END as status
             ")
-            ->selectRaw("(SELECT COALESCE(SUM(t.estimated_hours), 0) FROM tasks t WHERE t.project_id = projects.id) as allocated_hours")
-            ->selectRaw("
+            ->selectRaw('(SELECT ' . TaskBillable::sumBillableEstimatedHours('t') . ' FROM tasks t WHERE t.project_id = projects.id) as allocated_hours')
+            ->selectRaw('
                 CASE
                     WHEN projects.total_manhours IS NOT NULL AND projects.total_manhours > 0
-                        THEN ROUND(((SELECT COALESCE(SUM(t.estimated_hours), 0) FROM tasks t WHERE t.project_id = projects.id) * 100.0) / projects.total_manhours, 2)
+                        THEN ROUND(((SELECT ' . TaskBillable::sumBillableEstimatedHours('t') . ' FROM tasks t WHERE t.project_id = projects.id) * 100.0) / projects.total_manhours, 2)
                     ELSE NULL
                 END as usage_percentage
-            ")
-            ->selectRaw("
+            ')
+            ->selectRaw('
                 CASE
                     WHEN projects.total_manhours IS NOT NULL
-                        THEN projects.total_manhours - (SELECT COALESCE(SUM(t.estimated_hours), 0) FROM tasks t WHERE t.project_id = projects.id)
+                        THEN projects.total_manhours - (SELECT ' . TaskBillable::sumBillableEstimatedHours('t') . ' FROM tasks t WHERE t.project_id = projects.id)
                     ELSE NULL
                 END as remaining_manhours
-            ")
+            ')
             ->selectRaw("(SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id) as total_tasks")
             ->selectRaw("(SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status = 'Reopen') as reopen_tasks")
             ->selectRaw("(SELECT COUNT(*) FROM tasks t WHERE t.project_id = projects.id AND t.status = 'Done') as done_tasks")
@@ -235,7 +236,7 @@ class ProjectController extends Controller
         $quotas = DB::table('project_role_quotas as pq')
             ->join('project_roles as pr', 'pq.project_role_id', '=', 'pr.id')
             ->select('pq.*', 'pr.name as role_name')
-            ->selectRaw("(SELECT CAST(COALESCE(SUM(estimated_hours), 0) AS FLOAT) FROM tasks WHERE project_id = pq.project_id AND project_role_id = pq.project_role_id) as allocated_hours")
+            ->selectRaw('(SELECT CAST(' . TaskBillable::sumBillableEstimatedHours('tasks') . ' AS FLOAT) FROM tasks WHERE project_id = pq.project_id AND project_role_id = pq.project_role_id) as allocated_hours')
             ->selectRaw("(SELECT CAST(COALESCE(SUM(hours), 0) AS FLOAT) FROM manhours WHERE project_id = pq.project_id AND project_role_id = pq.project_role_id) as actual_hours")
             ->selectRaw("(SELECT COUNT(*) FROM tasks WHERE project_id = pq.project_id AND project_role_id = pq.project_role_id) as task_count")
             ->where('pq.project_id', $id)
@@ -290,9 +291,11 @@ class ProjectController extends Controller
         $generalTopupQuota = max(0, $topupHoursTotal - $topupRoleQuotaTotal);
         $generalCurrentQuota = $generalBaseQuota + $generalTopupQuota;
 
-        $generalAllocatedHours = (float) DB::table('tasks')
+        $generalAllocatedHours = (float) Task::query()
             ->where('project_id', $id)
             ->whereNull('project_role_id')
+            ->where('is_billable', true)
+            ->quotaEligible()
             ->sum('estimated_hours');
 
         $generalActualHours = (float) DB::table('manhours')
@@ -306,8 +309,10 @@ class ProjectController extends Controller
             $generalAllocatedHours,
         );
 
-        $totalAllocatedHours = (float) DB::table('tasks')
+        $totalAllocatedHours = (float) Task::query()
             ->where('project_id', $id)
+            ->where('is_billable', true)
+            ->quotaEligible()
             ->sum('estimated_hours');
 
         $projectFifo = ManhourBucketCalculator::build(
@@ -354,7 +359,11 @@ class ProjectController extends Controller
         }
         ProjectAccess::assertCanAccessProject($user, (int) $id);
 
-        $allocatedHours = (float) Task::where('project_id', $id)->sum('estimated_hours');
+        $allocatedHours = (float) Task::query()
+            ->where('project_id', $id)
+            ->where('is_billable', true)
+            ->quotaEligible()
+            ->sum('estimated_hours');
         $actualHours = Manhour::where('project_id', $id)->sum('hours');
 
         $topupRows = DB::table('project_allocations')

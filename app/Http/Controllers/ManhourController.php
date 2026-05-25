@@ -21,7 +21,7 @@ class ManhourController extends Controller
         $query = DB::table('manhours as m')
             ->leftJoin('users as u', 'm.user_id', '=', 'u.id')
             ->leftJoin('projects as p', 'm.project_id', '=', 'p.id')
-            ->select('m.id', 'm.date', 'm.hours', 'm.description', 'u.name as user_name', 'p.name as project_name');
+            ->select('m.id', 'm.user_id', 'm.date', 'm.hours', 'm.description', 'u.name as user_name', 'p.name as project_name');
 
         ProjectAccess::applyProjectScope($query, 'm.project_id', $user);
 
