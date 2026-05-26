@@ -3,11 +3,25 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle2, Pencil, Plus } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
+import {
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  ExternalLink,
+  FileText,
+  Layers,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  Users,
+} from 'lucide-react';
 import { MENU_NEW_PROJECT } from '../constants/menuLabels';
 
 const TAB_KEYS = ['Business', 'Operation'];
@@ -19,6 +33,30 @@ const PATH_TO_TAB = {
   business: 'Business',
   operation: 'Operation',
 };
+
+const formatIdr = (val) =>
+  new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(Number(val) || 0);
+
+function StepPill({ label, done, active, locked }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold',
+        done && 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
+        !done && active && 'border-primary/30 bg-primary/10 text-primary',
+        !done && !active && locked && 'border-slate-200 bg-slate-50 text-slate-400 dark:border-slate-700 dark:bg-slate-800/50',
+        !done && !active && !locked && 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900/40',
+      )}
+    >
+      {done ? <CheckCircle2 className="size-3.5" /> : <span className="size-1.5 rounded-full bg-current opacity-50" />}
+      {label}
+    </span>
+  );
+}
 
 export default function Presales() {
   const navigate = useNavigate();
@@ -35,6 +73,8 @@ export default function Presales() {
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [listSearch, setListSearch] = useState('');
+  const [businessSaving, setBusinessSaving] = useState(false);
   const [feedbackDialog, setFeedbackDialog] = useState({
     open: false,
     title: '',
@@ -73,6 +113,20 @@ export default function Presales() {
     () => presales.filter((item) => !item.converted_project_id),
     [presales]
   );
+  const filteredPresales = useMemo(() => {
+    const q = listSearch.trim().toLowerCase();
+    if (!q) return visiblePresales;
+    return visiblePresales.filter((item) => {
+      const company = item.company?.name || '';
+      const category = item.project_category?.name || '';
+      const name = item.project_name || item.name || '';
+      return (
+        name.toLowerCase().includes(q)
+        || company.toLowerCase().includes(q)
+        || category.toLowerCase().includes(q)
+      );
+    });
+  }, [visiblePresales, listSearch]);
   const usedWinPitchIds = useMemo(
     () => new Set((presales || []).map((item) => item.sales_pitch_id).filter((id) => id != null)),
     [presales]
@@ -285,25 +339,30 @@ export default function Presales() {
 
   const saveBusiness = async () => {
     if (!selected) return;
+    setBusinessSaving(true);
     try {
       await submitBusinessData();
       await loadAll();
       showFeedback('Berhasil', 'Data Business tersimpan.');
     } catch (error) {
       showFeedback('Gagal Simpan Business', `Gagal menyimpan data Business: ${error.message}`);
+    } finally {
+      setBusinessSaving(false);
     }
   };
 
   const acknowledgeBusiness = async () => {
     if (!selected) return;
+    setBusinessSaving(true);
     try {
-      // Keep UX simple: acknowledge always persists current Business form first.
       await submitBusinessData();
       await fetchAPI(`/presales/${selected.id}/business/acknowledge`, { method: 'POST' });
       await loadAll();
       showFeedback('Berhasil', 'Business acknowledged.');
     } catch (error) {
       showFeedback('Gagal Acknowledge Business', `Gagal acknowledge Business: ${error.message}`);
+    } finally {
+      setBusinessSaving(false);
     }
   };
 
@@ -406,122 +465,228 @@ export default function Presales() {
   };
 
   if (loading) {
-    return <div className="p-4 text-slate-500 sm:p-6 lg:p-8">Memuat {MENU_NEW_PROJECT}...</div>;
+    return (
+      <div className="flex h-[calc(100dvh-4.25rem)] items-center justify-center text-slate-500">
+        <Loader2 className="mr-2 size-5 animate-spin" />
+        Memuat {MENU_NEW_PROJECT}...
+      </div>
+    );
   }
 
+  const renderUrlField = (label, value, onChange, placeholder) => (
+    <label className="block space-y-1.5">
+      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+      <div className="flex gap-2">
+        <Input
+          value={value}
+          disabled={isProceeded}
+          onChange={onChange}
+          placeholder={placeholder}
+          className="h-9"
+        />
+        {value?.trim() && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            asChild
+          >
+            <a href={value} target="_blank" rel="noopener noreferrer" aria-label={`Buka ${label}`}>
+              <ExternalLink className="size-4" />
+            </a>
+          </Button>
+        )}
+      </div>
+    </label>
+  );
+
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{MENU_NEW_PROJECT}</h1>
-          <p className="text-slate-500 mt-1">
-            Untuk opportunity dengan goals dan scope yang sudah pasti — alur Business dan Operation sampai Proceed ke List Project dan Board.
-          </p>
+    <>
+    <div className="flex h-[calc(100dvh-4.25rem)] min-h-0 flex-col overflow-hidden bg-slate-50/80 dark:bg-background-dark">
+      <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 dark:border-slate-800 dark:bg-[#151b28]">
+        <div className="mx-auto flex max-w-[1400px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Briefcase className="size-5" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-white">
+                  {MENU_NEW_PROJECT}
+                </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Alur Business → Operation → Proceed ke board
+                </p>
+              </div>
+            </div>
+          </div>
+          <Button size="sm" className="gap-1.5 shadow-md shadow-primary/15" onClick={() => setIsNewOpen(true)}>
+            <Plus className="size-4" />
+            Opportunity baru
+          </Button>
         </div>
-        <Button onClick={() => setIsNewOpen(true)}>
-          <Plus className="size-4 mr-2" />
-          {MENU_NEW_PROJECT}
-        </Button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <Card className="xl:col-span-4">
-          <CardHeader>
-            <CardTitle>New Project List</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 max-h-[70vh] overflow-y-auto">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col gap-4 overflow-hidden p-4 sm:flex-row sm:p-5">
+        <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28] sm:w-80">
+          <div className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              Opportunity aktif ({visiblePresales.length})
+            </p>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                placeholder="Cari project / company..."
+                className="h-8 pl-8 text-sm"
+              />
+            </div>
+          </div>
+          <div className="board-column-scroll min-h-0 flex-1 overflow-y-auto p-2">
             {visiblePresales.length === 0 ? (
-              <div className="space-y-3">
-                <p className="text-slate-500">Tidak ada opportunity aktif. Project yang sudah proceed dapat dilihat di List Project.</p>
-                <Button variant="outline" onClick={() => navigate('/create-project')}>
-                  Go to List Project
+              <div className="space-y-3 px-2 py-4 text-center">
+                <p className="text-sm text-slate-500">Belum ada opportunity aktif.</p>
+                <Button variant="outline" size="sm" onClick={() => navigate('/create-project')}>
+                  Lihat List Project
                 </Button>
               </div>
+            ) : filteredPresales.length === 0 ? (
+              <p className="px-2 py-6 text-center text-sm text-slate-500">Tidak ada hasil pencarian</p>
             ) : (
-              visiblePresales.map((item) => (
-                <div
-                  key={item.id}
-                  className={`w-full text-left border rounded-lg p-3 transition cursor-pointer ${
-                    selectedId === item.id ? 'border-primary bg-primary/5' : 'hover:bg-slate-50'
-                  }`}
-                  onClick={() => setSelectedId(item.id)}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-semibold">{item.project_name || item.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {item.company?.name || '-'} - {item.project_category?.name || '-'}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0"
-                      disabled={!!item.converted_project_id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditOpportunity(item);
-                      }}
-                      title="Edit Opportunity"
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2 max-w-full">
-                    {item.business_acknowledged_at && (
-                      <Badge className="bg-blue-600 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
-                        Business Ack
-                      </Badge>
-                    )}
-                    {item.operation_acknowledged_at && (
-                      <Badge className="bg-green-600 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
-                        Operation Ack
-                      </Badge>
-                    )}
-                    {item.converted_project_id && (
-                      <Badge className="bg-emerald-600 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
-                        Proceeded
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ))
+              <ul className="space-y-1">
+                {filteredPresales.map((item) => {
+                  const isSelected = selectedId === item.id;
+                  return (
+                    <li key={item.id}>
+                      <div
+                        className={cn(
+                          'group flex w-full items-start gap-1 rounded-lg transition-colors',
+                          isSelected
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/60',
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(item.id)}
+                          className="min-w-0 flex-1 px-2.5 py-2.5 text-left"
+                        >
+                          <p className={cn('truncate text-sm font-semibold', isSelected ? 'text-white' : 'text-slate-900 dark:text-white')}>
+                            {item.project_name || item.name}
+                          </p>
+                          <p className={cn('mt-0.5 flex items-center gap-1 truncate text-[11px]', isSelected ? 'text-white/80' : 'text-slate-500')}>
+                            <Building2 className="size-3 shrink-0" />
+                            {item.company?.name || '—'}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {item.business_acknowledged_at && (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'h-5 border-blue-200 px-1.5 text-[10px]',
+                                  isSelected && 'border-white/40 bg-white/15 text-white',
+                                )}
+                              >
+                                Business
+                              </Badge>
+                            )}
+                            {item.operation_acknowledged_at && (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'h-5 border-emerald-200 px-1.5 text-[10px]',
+                                  isSelected && 'border-white/40 bg-white/15 text-white',
+                                )}
+                              >
+                                Operation
+                              </Badge>
+                            )}
+                          </div>
+                        </button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            'mr-1 mt-1.5 h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100',
+                            isSelected && 'text-white/80 hover:bg-white/20 hover:text-white opacity-100',
+                          )}
+                          disabled={!!item.converted_project_id}
+                          onClick={() => openEditOpportunity(item)}
+                          title="Edit opportunity"
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </aside>
 
-        <Card className="xl:col-span-8">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
           {!selected ? (
-            <CardContent className="p-8 text-slate-500">Pilih opportunity dulu.</CardContent>
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 p-10 text-slate-400">
+              <Briefcase className="size-10 opacity-25" />
+              <p className="text-sm font-medium">Pilih opportunity untuk mengisi data Business</p>
+            </div>
           ) : (
             <>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div>
-                    <CardTitle>{selected.project_name}</CardTitle>
-                    <p className="text-sm text-slate-500 mt-1">
-                      {selected.company?.name || '-'} | {selected.project_category?.name || '-'}
+              <div className="shrink-0 border-b border-slate-100 px-4 py-4 sm:px-5 dark:border-slate-800">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-lg font-bold text-slate-900 dark:text-white">
+                      {selected.project_name}
+                    </h2>
+                    <p className="mt-0.5 text-sm text-slate-500">
+                      {selected.company?.name || '—'} · {selected.project_category?.name || '—'}
                     </p>
+                    {selected.estimated_budget != null && Number(selected.estimated_budget) > 0 && (
+                      <p className="mt-1 text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Budget: {formatIdr(selected.estimated_budget)}
+                      </p>
+                    )}
                     {isProceeded && (
-                      <p className="text-xs text-emerald-600 mt-1 font-medium">
-                        Opportunity sudah di-proceed ke project board, semua field dikunci.
+                      <p className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                        Sudah di-proceed — form dikunci.
                       </p>
                     )}
                   </div>
-                  {canProceed && (
-                    <Button onClick={proceedProject}>
-                      <CheckCircle2 className="size-4 mr-2" />
-                      Proceed Project
-                    </Button>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canProceed && (
+                      <Button size="sm" className="gap-1.5" onClick={proceedProject}>
+                        <CheckCircle2 className="size-4" />
+                        Proceed Project
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex gap-2 mt-4">
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <StepPill label="Business" done={!!selected.business_acknowledged_at} active={activeTab === 'Business'} />
+                  <StepPill
+                    label="Operation"
+                    done={!!selected.operation_acknowledged_at}
+                    active={activeTab === 'Operation'}
+                    locked={!canOpenOperation}
+                  />
+                </div>
+
+                <div className="mt-3 inline-flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
                   {TAB_KEYS.map((tab) => {
                     const disabled = tab === 'Operation' && !canOpenOperation;
                     return (
                       <Button
                         key={tab}
-                        variant={activeTab === tab ? 'default' : 'outline'}
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                          'h-8 px-3',
+                          activeTab === tab && 'bg-primary text-white shadow-sm hover:bg-primary hover:text-white',
+                        )}
                         disabled={disabled}
                         onClick={() => navigate(`/presales/${TAB_TO_PATH[tab]}`)}
                       >
@@ -530,171 +695,282 @@ export default function Presales() {
                     );
                   })}
                 </div>
-              </CardHeader>
+              </div>
 
-              <CardContent className="space-y-6">
+              <div className="board-column-scroll min-h-0 flex-1 overflow-y-auto">
                 {activeTab === 'Business' && (
-                  <div className="space-y-4">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <label className="space-y-2">
-                        <span className="text-sm font-medium">Deck URL</span>
-                        <Input
-                          value={businessForm.deck_url}
-                          disabled={isProceeded}
-                          onChange={(e) => updateBusinessForm((prev) => ({ ...prev, deck_url: e.target.value }))}
-                        />
-                      </label>
-                      <label className="space-y-2">
-                        <span className="text-sm font-medium">Quotation URL</span>
-                        <Input
-                          value={businessForm.quotation_url}
-                          disabled={isProceeded}
-                          onChange={(e) => updateBusinessForm((prev) => ({ ...prev, quotation_url: e.target.value }))}
-                        />
-                      </label>
-                    </div>
-                    <label className="space-y-2 block">
-                      <span className="text-sm font-medium">Google Drive URL</span>
-                      <Input
-                        value={businessForm.drive_url}
-                        disabled={isProceeded}
-                        onChange={(e) => updateBusinessForm((prev) => ({ ...prev, drive_url: e.target.value }))}
-                      />
-                    </label>
+                  <div className="space-y-5 p-4 sm:p-5">
+                    <Card className="border-slate-200/90 shadow-none dark:border-slate-700/80">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <FileText className="size-4 text-primary" />
+                          Dokumen &amp; tautan
+                        </CardTitle>
+                        <CardDescription>Deck, quotation, dan folder Google Drive untuk tim delivery.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          {renderUrlField(
+                            'Deck URL',
+                            businessForm.deck_url,
+                            (e) => updateBusinessForm((prev) => ({ ...prev, deck_url: e.target.value })),
+                            'https://...',
+                          )}
+                          {renderUrlField(
+                            'Quotation URL',
+                            businessForm.quotation_url,
+                            (e) => updateBusinessForm((prev) => ({ ...prev, quotation_url: e.target.value })),
+                            'https://...',
+                          )}
+                        </div>
+                        {renderUrlField(
+                          'Google Drive URL',
+                          businessForm.drive_url,
+                          (e) => updateBusinessForm((prev) => ({ ...prev, drive_url: e.target.value })),
+                          'https://drive.google.com/...',
+                        )}
+                      </CardContent>
+                    </Card>
 
-                    <div>
-                      <p className="text-sm font-medium mb-2">Methodology</p>
-                      <div className="flex gap-4">
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            checked={businessForm.methodology === 'Agile Scrum'}
-                            disabled={isProceeded}
-                            onChange={() => updateBusinessForm((prev) => ({ ...prev, methodology: 'Agile Scrum' }))}
-                          />
-                          Agile Scrum
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            checked={businessForm.methodology === 'Waterfall'}
-                            disabled={isProceeded}
-                            onChange={() => updateBusinessForm((prev) => ({ ...prev, methodology: 'Waterfall' }))}
-                          />
-                          Waterfall
-                        </label>
-                      </div>
-                    </div>
-
-                    {businessForm.methodology === 'Agile Scrum' && (
-                      <label className="space-y-2 block">
-                        <span className="text-sm font-medium">Total MH</span>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={businessForm.total_manhours}
-                          disabled
-                          readOnly
-                        />
-                      </label>
-                    )}
-
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Kebutuhan Role</p>
-                      <div className="grid md:grid-cols-2 gap-2">
-                        {projectRoles.map((role) => (
-                          <label key={role.id} className="border rounded p-2 flex items-center justify-between">
-                            <span>{role.name}</span>
-                            <input
-                              type="checkbox"
-                              checked={businessForm.role_ids.includes(role.id)}
+                    <Card className="border-slate-200/90 shadow-none dark:border-slate-700/80">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Layers className="size-4 text-primary" />
+                          Metodologi &amp; manhour
+                        </CardTitle>
+                        <CardDescription>
+                          Pilih metodologi project. Untuk Agile Scrum, total MH dihitung dari jumlah MH per role.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="inline-flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
+                          {['Agile Scrum', 'Waterfall'].map((method) => (
+                            <button
+                              key={method}
+                              type="button"
                               disabled={isProceeded}
-                              onChange={() => toggleRole(role.id)}
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    {businessForm.methodology === 'Agile Scrum' && businessForm.role_ids.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium">MH Business per Role</p>
-                        <div className="space-y-2">
-                          {businessForm.role_ids.map((roleId) => {
-                            const role = projectRoles.find((r) => r.id === roleId);
+                              className={cn(
+                                'rounded-md px-4 py-2 text-sm font-medium transition-colors',
+                                businessForm.methodology === method
+                                  ? 'bg-primary text-white shadow-sm'
+                                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
+                              )}
+                              onClick={() => updateBusinessForm((prev) => ({ ...prev, methodology: method }))}
+                            >
+                              {method}
+                            </button>
+                          ))}
+                        </div>
+                        {businessForm.methodology === 'Agile Scrum' && (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800/40">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                              Total MH (otomatis)
+                            </p>
+                            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
+                              {businessForm.total_manhours !== '' ? businessForm.total_manhours : '0'}
+                              <span className="ml-1 text-sm font-normal text-slate-500">jam</span>
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-slate-200/90 shadow-none dark:border-slate-700/80">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Users className="size-4 text-primary" />
+                          Kebutuhan role
+                        </CardTitle>
+                        <CardDescription>Pilih role yang dibutuhkan project ini.</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          {projectRoles.map((role) => {
+                            const checked = businessForm.role_ids.includes(role.id);
                             return (
-                              <div key={roleId} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                                <div className="w-40 shrink-0 text-sm">{role?.name || `Role ${roleId}`}</div>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.25"
-                                  value={businessForm.role_mh?.[roleId] ?? ''}
+                              <label
+                                key={role.id}
+                                className={cn(
+                                  'flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 transition-colors',
+                                  checked
+                                    ? 'border-primary/40 bg-primary/5 dark:bg-primary/10'
+                                    : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/40',
+                                  isProceeded && 'cursor-not-allowed opacity-60',
+                                )}
+                              >
+                                <Checkbox
+                                  checked={checked}
                                   disabled={isProceeded}
-                                  onChange={(e) =>
-                                    updateBusinessForm((prev) => ({
-                                      ...prev,
-                                      role_mh: { ...(prev.role_mh || {}), [roleId]: e.target.value },
-                                    }))
-                                  }
-                                  placeholder="Isi MH role"
+                                  onCheckedChange={() => toggleRole(role.id)}
                                 />
-                              </div>
+                                <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                                  {role.name}
+                                </span>
+                              </label>
                             );
                           })}
                         </div>
-                      </div>
+                      </CardContent>
+                    </Card>
+
+                    {businessForm.methodology === 'Agile Scrum' && businessForm.role_ids.length > 0 && (
+                      <Card className="border-slate-200/90 shadow-none dark:border-slate-700/80">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base">MH Business per role</CardTitle>
+                          <CardDescription>Alokasi manhour per role untuk perhitungan kuota board.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead className="border-b border-slate-200 bg-slate-50/80 text-left text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800/40">
+                                <tr>
+                                  <th className="px-4 py-2.5 font-medium">Role</th>
+                                  <th className="px-4 py-2.5 font-medium text-right w-36">MH</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {businessForm.role_ids.map((roleId) => {
+                                  const role = projectRoles.find((r) => r.id === roleId);
+                                  return (
+                                    <tr key={roleId}>
+                                      <td className="px-4 py-2.5 font-medium text-slate-800 dark:text-slate-200">
+                                        {role?.name || `Role ${roleId}`}
+                                      </td>
+                                      <td className="px-4 py-2.5">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          step="0.25"
+                                          className="h-8 text-right tabular-nums"
+                                          value={businessForm.role_mh?.[roleId] ?? ''}
+                                          disabled={isProceeded}
+                                          onChange={(e) =>
+                                            updateBusinessForm((prev) => ({
+                                              ...prev,
+                                              role_mh: { ...(prev.role_mh || {}), [roleId]: e.target.value },
+                                            }))
+                                          }
+                                          placeholder="0"
+                                        />
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
                     )}
 
-
-                    <div className="flex gap-2">
-                      <Button onClick={acknowledgeBusiness} disabled={isProceeded}>
-                        Acknowledge
-                      </Button>
+                    <div className="sticky bottom-0 -mx-4 flex flex-col gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm sm:-mx-5 sm:flex-row sm:items-center sm:justify-between sm:px-5 dark:border-slate-800 dark:bg-[#151b28]/95">
+                      <p className="text-xs text-slate-500">
+                        {selected.business_acknowledged_at
+                          ? `Business di-acknowledge · ${new Date(selected.business_acknowledged_at).toLocaleString('id-ID')}`
+                          : 'Belum di-acknowledge — simpan draft atau acknowledge setelah data lengkap.'}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isProceeded || businessSaving}
+                          onClick={saveBusiness}
+                        >
+                          {businessSaving ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : null}
+                          Simpan draft
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isProceeded || businessSaving || !!selected.business_acknowledged_at}
+                          onClick={acknowledgeBusiness}
+                        >
+                          Acknowledge Business
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {activeTab === 'Operation' && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-slate-600">Pilih user berdasarkan role yang sudah disepakati.</p>
-                    {businessForm.role_ids.map((roleId) => {
-                      const role = projectRoles.find((r) => r.id === roleId);
-                      return (
-                        <div key={roleId} className="border rounded-lg p-3 space-y-2">
-                          <p className="font-medium">{role?.name || `Role ${roleId}`}</p>
-                          <div className="grid md:grid-cols-2 gap-2">
-                            {users.map((user) => {
-                              const checked = (operationAssignments[roleId] || []).includes(user.id);
-                              return (
-                                <label key={user.id} className="border rounded p-2 flex items-center justify-between">
-                                  <span className="text-sm">
-                                    {user.name} <span className="text-slate-400">({user.role?.name || user.role})</span>
-                                  </span>
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    disabled={isProceeded}
-                                    onChange={(e) => setAssignmentUsers(roleId, user.id, e.target.checked)}
-                                  />
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div className="flex gap-2">
-                      <Button onClick={acknowledgeOperation} disabled={isProceeded}>
-                        Acknowledge
-                      </Button>
+                  <div className="space-y-5 p-4 sm:p-5">
+                    {businessForm.role_ids.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700">
+                        Lengkapi kebutuhan role di tab Business terlebih dahulu.
+                      </p>
+                    ) : (
+                      businessForm.role_ids.map((roleId) => {
+                        const role = projectRoles.find((r) => r.id === roleId);
+                        return (
+                          <Card key={roleId} className="border-slate-200/90 shadow-none dark:border-slate-700/80">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-base">{role?.name || `Role ${roleId}`}</CardTitle>
+                              <CardDescription>Assign anggota tim untuk role ini.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {users.map((user) => {
+                                  const checked = (operationAssignments[roleId] || []).includes(user.id);
+                                  return (
+                                    <label
+                                      key={user.id}
+                                      className={cn(
+                                        'flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2',
+                                        checked
+                                          ? 'border-primary/40 bg-primary/5'
+                                          : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700',
+                                        isProceeded && 'cursor-not-allowed opacity-60',
+                                      )}
+                                    >
+                                      <Checkbox
+                                        checked={checked}
+                                        disabled={isProceeded}
+                                        onCheckedChange={(c) => setAssignmentUsers(roleId, user.id, c === true)}
+                                      />
+                                      <span className="min-w-0 text-sm">
+                                        <span className="font-medium text-slate-800 dark:text-slate-200">{user.name}</span>
+                                        <span className="block truncate text-[11px] text-slate-500">
+                                          {user.role?.name || user.role}
+                                        </span>
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })
+                    )}
+                    <div className="sticky bottom-0 -mx-4 flex flex-col gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm sm:-mx-5 sm:flex-row sm:items-center sm:justify-between sm:px-5 dark:border-slate-800 dark:bg-[#151b28]/95">
+                      <p className="text-xs text-slate-500">
+                        {selected.operation_acknowledged_at
+                          ? `Operation di-acknowledge · ${new Date(selected.operation_acknowledged_at).toLocaleString('id-ID')}`
+                          : 'Assign user per role lalu acknowledge Operation.'}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" size="sm" disabled={isProceeded} onClick={saveOperation}>
+                          Simpan draft
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isProceeded || !!selected.operation_acknowledged_at}
+                          onClick={acknowledgeOperation}
+                        >
+                          Acknowledge Operation
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}
-              </CardContent>
+              </div>
             </>
           )}
-        </Card>
+        </section>
       </div>
+    </div>
 
       <Dialog open={isNewOpen} onOpenChange={setIsNewOpen}>
         <DialogContent>
@@ -900,6 +1176,6 @@ export default function Presales() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

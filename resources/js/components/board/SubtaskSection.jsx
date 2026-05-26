@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { fetchAPI } from '../../services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Plus, Trash2, Pencil, CalendarRange, MessageSquare } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import TaskNotesSection from './TaskNotesSection';
+import AssigneeSearchSelect from './AssigneeSearchSelect';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../../utils/taskDates';
+import { parseOptionalManhoursInput } from '../../utils/taskBillable.jsx';
 
 const RUSH_HOUR_FACTOR = 1.3;
 
@@ -114,6 +117,7 @@ export default function SubtaskSection({
         setEditingId(st.id);
         setForm({
             title: st.title || '',
+            description: st.description || '',
             priority: st.priority || 'Medium',
             status: st.status || 'To Do',
             assignee: st.assignee_id ? String(st.assignee_id) : 'Unassigned',
@@ -129,7 +133,7 @@ export default function SubtaskSection({
 
     const buildPayload = () => {
         const isBillable = form.billable !== false;
-        let storedHours = null;
+        let storedHours = 0;
         if (isBillable) {
             if (isWaterfall) {
                 const b = parseFloat(form.estimate);
@@ -137,12 +141,16 @@ export default function SubtaskSection({
             } else {
                 storedHours = effectiveHoursFromBaseInput(form.estimate, form.rushHour);
             }
+        } else {
+            storedHours = parseOptionalManhoursInput(form.estimate) ?? 0;
         }
+
+        const description = form.description.trim();
 
         return {
             title: form.title,
             feature_title: form.title,
-            description: null,
+            description: description || null,
             priority: form.priority,
             status: form.status,
             is_billable: isBillable,
@@ -247,6 +255,11 @@ export default function SubtaskSection({
                             >
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{st.title}</p>
+                                    {st.description?.trim() && (
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 whitespace-pre-wrap">
+                                            {st.description.trim()}
+                                        </p>
+                                    )}
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                         <span
                                             className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border ${statusTriggerClass(statusLabel)}`}
@@ -261,9 +274,12 @@ export default function SubtaskSection({
                                                 Non-billable
                                             </span>
                                         )}
-                                        {!isFreelance && st.is_billable !== false && (
+                                        {!isFreelance && (st.is_billable !== false || Number(st.estimated_hours) > 0) && (
                                             <span className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">
                                                 {formatHours(st.estimated_hours || 0)} hrs
+                                                {st.is_billable === false && Number(st.estimated_hours) > 0 && (
+                                                    <span className="text-slate-400"> load</span>
+                                                )}
                                             </span>
                                         )}
                                         {formatTaskDateRange(st.start_date, st.due_date) && (
@@ -353,6 +369,15 @@ export default function SubtaskSection({
                         value={form.title}
                         onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                     />
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Description</label>
+                        <Textarea
+                            placeholder="Deskripsi subtask (opsional)..."
+                            value={form.description}
+                            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                            className="min-h-[72px] resize-y text-sm"
+                        />
+                    </div>
                     <div className={`grid grid-cols-1 gap-3 ${categoryOptions.length > 0 ? 'sm:grid-cols-2' : ''}`}>
                         {categoryOptions.length > 0 && (
                             <div className="space-y-1">
@@ -452,32 +477,36 @@ export default function SubtaskSection({
                         </div>
                         <div className="space-y-1 sm:col-span-2">
                             <label className="text-xs font-medium text-slate-600">Assignee</label>
-                            <Select value={form.assignee} onValueChange={(v) => setForm((f) => ({ ...f, assignee: v }))}>
-                                <SelectTrigger className="h-9"><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Unassigned">Unassigned</SelectItem>
-                                    {assigneeSelectOptions.map((opt) => (
-                                        <SelectItem key={opt.id} value={opt.id.toString()}>{opt.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <AssigneeSearchSelect
+                                value={form.assignee}
+                                onChange={(v) => setForm((f) => ({ ...f, assignee: v }))}
+                                options={assigneeSelectOptions}
+                                placeholder="Ketik min. 2 karakter..."
+                            />
                         </div>
                     </div>
-                    {form.billable && (
-                        <div className={`grid grid-cols-1 gap-2 ${isScrum ? 'sm:grid-cols-[1fr_auto] items-end' : ''}`}>
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-600">
-                                    Estimated MH {isWaterfall ? '(Team Load)' : ''}
-                                </label>
-                                <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.5"
-                                    value={form.estimate}
-                                    onChange={(e) => setForm((f) => ({ ...f, estimate: e.target.value }))}
-                                />
-                            </div>
-                            {isScrum && (
+                    <div className={`grid grid-cols-1 gap-2 ${form.billable && isScrum ? 'sm:grid-cols-[1fr_auto] items-end' : ''}`}>
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium text-slate-600">
+                                Estimated MH
+                                {!form.billable && (
+                                    <span className="font-normal text-slate-400"> (opsional, Team Load)</span>
+                                )}
+                                {form.billable && isWaterfall && (
+                                    <span className="font-normal text-slate-400"> (Team Load)</span>
+                                )}
+                            </label>
+                            <Input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={form.estimate}
+                                disabled={isProceeded}
+                                placeholder={form.billable ? '0' : 'Opsional'}
+                                onChange={(e) => setForm((f) => ({ ...f, estimate: e.target.value }))}
+                            />
+                        </div>
+                        {form.billable && isScrum && (
                                 <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-2">
                                     <Checkbox
                                         checked={form.rushHour}
@@ -486,8 +515,7 @@ export default function SubtaskSection({
                                     <span className="text-xs text-slate-600">Rush hour</span>
                                 </div>
                             )}
-                        </div>
-                    )}
+                    </div>
                     {!isWaterfall && form.billable && categoryBasedRoleQuotas.length > 0 && (
                         <div className="space-y-1">
                             <label className="text-xs font-medium text-slate-600">Role quota</label>

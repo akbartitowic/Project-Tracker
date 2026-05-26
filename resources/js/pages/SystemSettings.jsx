@@ -2,12 +2,40 @@ import { useState, useEffect } from 'react';
 import { fetchAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { hasPermission } from '../utils/permissions';
-import { Settings, Database, AlertTriangle, RefreshCcw, CheckCircle2, ShieldAlert, Mail, Save, Loader2, Send } from 'lucide-react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+    Settings,
+    Database,
+    AlertTriangle,
+    RefreshCcw,
+    CheckCircle2,
+    ShieldAlert,
+    Mail,
+    Save,
+    Loader2,
+    Send,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from '@/components/ui/dialog';
+
+const SMTP_FIELDS = [
+    { name: 'mail_host', label: 'SMTP Host', placeholder: 'smtp.gmail.com', half: true },
+    { name: 'mail_port', label: 'Port', placeholder: '587', half: true },
+    { name: 'mail_username', label: 'Username', placeholder: 'email@example.com', half: true },
+    { name: 'mail_password', label: 'Password', placeholder: '••••••••', half: true, password: true },
+    { name: 'mail_encryption', label: 'Encryption', placeholder: 'tls atau ssl', half: true },
+    { name: 'mail_from_address', label: 'From address', placeholder: 'no-reply@app.com', half: true },
+    { name: 'mail_from_name', label: 'From name', placeholder: 'Project Tracker', half: false },
+];
 
 export default function SystemSettings() {
     const { user } = useAuth();
@@ -18,7 +46,6 @@ export default function SystemSettings() {
     const [isLoading, setIsLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
 
-    // SMTP Settings State
     const [smtpSettings, setSmtpSettings] = useState({
         mail_host: '',
         mail_port: '',
@@ -26,7 +53,7 @@ export default function SystemSettings() {
         mail_password: '',
         mail_encryption: 'tls',
         mail_from_address: '',
-        mail_from_name: ''
+        mail_from_name: '',
     });
     const [isSmtpLoading, setIsSmtpLoading] = useState(true);
     const [isSavingSmtp, setIsSavingSmtp] = useState(false);
@@ -38,13 +65,10 @@ export default function SystemSettings() {
                 const keys = Object.keys(smtpSettings).join(',');
                 const res = await fetchAPI(`/settings/all?keys=${keys}`);
                 if (res.status === 'success' && res.data) {
-                    setSmtpSettings(prev => ({
-                        ...prev,
-                        ...res.data
-                    }));
+                    setSmtpSettings((prev) => ({ ...prev, ...res.data }));
                 }
             } catch (err) {
-                console.error("Failed to load SMTP settings", err);
+                console.error('Failed to load SMTP settings', err);
             } finally {
                 setIsSmtpLoading(false);
             }
@@ -54,7 +78,7 @@ export default function SystemSettings() {
 
     const handleSmtpChange = (e) => {
         const { name, value } = e.target;
-        setSmtpSettings(prev => ({ ...prev, [name]: value }));
+        setSmtpSettings((prev) => ({ ...prev, [name]: value }));
     };
 
     const saveSmtpSettings = async () => {
@@ -62,11 +86,11 @@ export default function SystemSettings() {
         try {
             await fetchAPI('/settings/update', {
                 method: 'POST',
-                body: JSON.stringify(smtpSettings)
+                body: JSON.stringify(smtpSettings),
             });
-            alert("SMTP Settings updated successfully");
+            alert('Pengaturan SMTP berhasil disimpan.');
         } catch (err) {
-            alert("Error saving SMTP settings: " + err.message);
+            alert(`Gagal menyimpan: ${err.message}`);
         } finally {
             setIsSavingSmtp(false);
         }
@@ -77,15 +101,11 @@ export default function SystemSettings() {
         try {
             const res = await fetchAPI('/settings/test-smtp', {
                 method: 'POST',
-                body: JSON.stringify(smtpSettings)
+                body: JSON.stringify(smtpSettings),
             });
-            if (res.status === 'success') {
-                alert(res.message);
-            } else {
-                alert("Test Failed: " + res.message);
-            }
+            alert(res.status === 'success' ? res.message : `Gagal: ${res.message}`);
         } catch (err) {
-            alert("Network Error: " + err.message);
+            alert(`Error: ${err.message}`);
         } finally {
             setIsTestingSmtp(false);
         }
@@ -99,192 +119,205 @@ export default function SystemSettings() {
                 setSuccessMessage(res.message);
                 setResetStep(3);
             } else {
-                alert(res.message || "Failed to reset data");
+                alert(res.message || 'Gagal reset data');
                 setIsResetModalOpen(false);
             }
         } catch (err) {
-            alert("Error: " + err.message);
+            alert(`Error: ${err.message}`);
             setIsResetModalOpen(false);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const resetFlow = () => {
-        setIsResetModalOpen(true);
-        setResetStep(1);
-        setSuccessMessage('');
-    };
-
     return (
-        <div className="mx-auto max-w-4xl space-y-10 p-4 pb-16 text-slate-900 transition-colors duration-200 sm:p-6 sm:pb-20 lg:p-8 dark:text-white">
-            <header>
-                <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 border border-primary/20">
-                    <Settings className="size-10 text-primary" />
-                </div>
-                <h1 className="text-3xl font-black tracking-tight">System Settings</h1>
-                <p className="text-slate-500 font-medium mt-1">Global configuration, SMTP mail server & system maintenance.</p>
-            </header>
+        <div className="min-h-full bg-slate-50/80 dark:bg-background-dark">
+            <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
+                <header className="flex items-start gap-3">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <Settings className="size-5" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Settings</h1>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            Konfigurasi email dan pemeliharaan data sistem.
+                        </p>
+                    </div>
+                </header>
 
-            <div className="grid grid-cols-1 gap-10">
-                {/* SMTP Configuration */}
-                <Card className="border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/20 dark:shadow-none overflow-hidden bg-white dark:bg-[#1e2532]">
-                    <CardHeader className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                        <div className="flex items-center gap-3 text-primary">
-                            <Mail className="size-5" />
-                            <CardTitle className="text-lg font-bold">SMTP Configuration</CardTitle>
-                        </div>
-                        <CardDescription>Configure the outgoing mail server for notifications and reports.</CardDescription>
+                <Card className="border-slate-200/90 shadow-none dark:border-slate-800">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <Mail className="size-4 text-primary" />
+                            Email (SMTP)
+                        </CardTitle>
+                        <CardDescription>Server untuk notifikasi dan email sistem.</CardDescription>
                     </CardHeader>
-                    <CardContent className="p-8">
+                    <CardContent className="space-y-4">
                         {isSmtpLoading ? (
-                            <div className="flex items-center justify-center py-10">
-                                <Loader2 className="size-8 text-primary animate-spin" />
+                            <div className="flex justify-center py-10">
+                                <Loader2 className="size-6 animate-spin text-primary" />
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">SMTP Host</label>
-                                    <Input name="mail_host" value={smtpSettings.mail_host} onChange={handleSmtpChange} placeholder="smtp.gmail.com" />
+                            <>
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    {SMTP_FIELDS.map((field) => (
+                                        <div
+                                            key={field.name}
+                                            className={field.half ? 'space-y-1.5' : 'space-y-1.5 sm:col-span-2'}
+                                        >
+                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                {field.label}
+                                            </label>
+                                            {field.password ? (
+                                                <PasswordInput
+                                                    name={field.name}
+                                                    value={smtpSettings[field.name]}
+                                                    onChange={handleSmtpChange}
+                                                    placeholder={field.placeholder}
+                                                    className="h-9"
+                                                />
+                                            ) : (
+                                                <Input
+                                                    name={field.name}
+                                                    value={smtpSettings[field.name]}
+                                                    onChange={handleSmtpChange}
+                                                    placeholder={field.placeholder}
+                                                    className="h-9"
+                                                />
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">SMTP Port</label>
-                                    <Input name="mail_port" value={smtpSettings.mail_port} onChange={handleSmtpChange} placeholder="587" />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Username</label>
-                                    <Input name="mail_username" value={smtpSettings.mail_username} onChange={handleSmtpChange} placeholder="email@example.com" />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Password</label>
-                                    <PasswordInput name="mail_password" value={smtpSettings.mail_password} onChange={handleSmtpChange} placeholder="********" />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Encryption</label>
-                                    <Input name="mail_encryption" value={smtpSettings.mail_encryption} onChange={handleSmtpChange} placeholder="tls or ssl" />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">From Address</label>
-                                    <Input name="mail_from_address" value={smtpSettings.mail_from_address} onChange={handleSmtpChange} placeholder="no-reply@app.com" />
-                                </div>
-                                <div className="md:col-span-2 space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">From Name</label>
-                                    <Input name="mail_from_name" value={smtpSettings.mail_from_name} onChange={handleSmtpChange} placeholder="Project Tracker System" />
-                                </div>
-                                <div className="md:col-span-2 pt-6 flex flex-col sm:flex-row gap-4">
-                                    <Button 
-                                        variant="outline" 
-                                        onClick={testSmtpConnection} 
+                                <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-800 sm:flex-row">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="gap-1.5 sm:flex-1"
+                                        onClick={testSmtpConnection}
                                         disabled={isTestingSmtp || !smtpSettings.mail_host}
-                                        className="flex-1 gap-2 h-11 border-slate-200 dark:border-slate-700 font-bold"
                                     >
-                                        {isTestingSmtp ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-4" />}
-                                        Test Connection
+                                        {isTestingSmtp ? (
+                                            <Loader2 className="size-4 animate-spin" />
+                                        ) : (
+                                            <Send className="size-4" />
+                                        )}
+                                        Tes koneksi
                                     </Button>
-                                    <Button 
-                                        onClick={saveSmtpSettings} 
-                                        disabled={isSavingSmtp} 
-                                        className="flex-1 gap-2 shadow-lg shadow-primary/20 h-11 text-base font-bold"
+                                    <Button
+                                        type="button"
+                                        className="gap-1.5 sm:flex-1"
+                                        onClick={saveSmtpSettings}
+                                        disabled={isSavingSmtp}
                                     >
-                                        {isSavingSmtp ? <Loader2 className="size-5 animate-spin" /> : <Save className="size-5" />}
-                                        Save Configuration
+                                        {isSavingSmtp ? (
+                                            <Loader2 className="size-4 animate-spin" />
+                                        ) : (
+                                            <Save className="size-4" />
+                                        )}
+                                        Simpan
                                     </Button>
                                 </div>
-                            </div>
+                            </>
                         )}
                     </CardContent>
                 </Card>
 
-                {/* Data Maintenance */}
                 {canResetData && (
-                <Card className="border-rose-100 dark:border-rose-900/30 overflow-hidden shadow-xl shadow-rose-200/5 bg-white dark:bg-[#1e2532]">
-                    <CardHeader className="bg-rose-50/50 dark:bg-rose-900/10 border-b border-rose-100 dark:border-rose-900/20">
-                        <div className="flex items-center gap-3 text-rose-600">
-                            <Database className="size-5" />
-                            <CardTitle className="text-lg font-bold">Data Maintenance</CardTitle>
-                        </div>
-                        <CardDescription className="text-rose-600/70">Wipe transactional records and reset the system.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-8">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                            <div>
-                                <h4 className="font-bold text-lg">Reset Transactional Data</h4>
-                                <p className="text-sm text-slate-500 max-w-md mt-2 leading-relaxed">
-                                    Removes all Projects, Tasks, Manhours, Finance, and System Logs. <br />
-                                    <span className="font-bold text-rose-500">Authentication, User Roles, and Permissions will stay intact.</span>
-                                </p>
-                            </div>
-                            <Button variant="destructive" onClick={resetFlow} className="gap-2 shadow-lg shadow-rose-500/20 h-11 px-8 font-bold">
+                    <Card className="border-rose-200/80 bg-rose-50/30 shadow-none dark:border-rose-900/40 dark:bg-rose-950/10">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-base text-rose-800 dark:text-rose-300">
+                                <Database className="size-4" />
+                                Pemeliharaan data
+                            </CardTitle>
+                            <CardDescription className="text-rose-700/80 dark:text-rose-400/80">
+                                Hapus data transaksi. User, role, dan permission tetap ada.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md">
+                                Menghapus project, task, manhour, finance, dan log. Tindakan tidak dapat dibatalkan.
+                            </p>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                className="shrink-0 gap-1.5"
+                                onClick={() => {
+                                    setIsResetModalOpen(true);
+                                    setResetStep(1);
+                                    setSuccessMessage('');
+                                }}
+                            >
                                 <RefreshCcw className="size-4" />
-                                Wipe Records
+                                Reset data
                             </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
                 )}
             </div>
 
-            {/* Reset Confirmation Dialog */}
             {canResetData && (
-            <Dialog open={isResetModalOpen} onOpenChange={setIsResetModalOpen}>
-                <DialogContent className="sm:max-w-[425px]">
-                    {resetStep === 1 && (
-                        <>
-                            <DialogHeader>
-                                <div className="mx-auto size-16 rounded-full bg-rose-100 dark:bg-rose-900/20 flex items-center justify-center mb-4">
-                                    <AlertTriangle className="size-8 text-rose-600" />
+                <Dialog open={isResetModalOpen} onOpenChange={setIsResetModalOpen}>
+                    <DialogContent className="sm:max-w-md">
+                        {resetStep === 1 && (
+                            <>
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2">
+                                        <AlertTriangle className="size-5 text-rose-500" />
+                                        Reset data transaksi?
+                                    </DialogTitle>
+                                    <DialogDescription>
+                                        Semua project dan data terkait akan dihapus permanen.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter className="gap-2 sm:gap-0">
+                                    <Button variant="outline" onClick={() => setIsResetModalOpen(false)}>
+                                        Batal
+                                    </Button>
+                                    <Button variant="destructive" onClick={() => setResetStep(2)}>
+                                        Lanjut
+                                    </Button>
+                                </DialogFooter>
+                            </>
+                        )}
+                        {resetStep === 2 && (
+                            <>
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2">
+                                        <ShieldAlert className="size-5 text-amber-500" />
+                                        Konfirmasi terakhir
+                                    </DialogTitle>
+                                    <DialogDescription>
+                                        User dan role tidak terhapus. Data project akan hilang selamanya.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter className="gap-2 sm:gap-0">
+                                    <Button variant="outline" onClick={() => setIsResetModalOpen(false)}>
+                                        Batal
+                                    </Button>
+                                    <Button variant="destructive" onClick={handleResetData} disabled={isLoading}>
+                                        {isLoading && <Loader2 className="mr-1 size-4 animate-spin" />}
+                                        Ya, reset
+                                    </Button>
+                                </DialogFooter>
+                            </>
+                        )}
+                        {resetStep === 3 && (
+                            <>
+                                <div className="flex flex-col items-center py-4 text-center">
+                                    <CheckCircle2 className="mb-3 size-12 text-emerald-500" />
+                                    <DialogTitle>Berhasil</DialogTitle>
+                                    <DialogDescription className="mt-2">{successMessage}</DialogDescription>
                                 </div>
-                                <DialogTitle className="text-center text-2xl font-black">Are you sure?</DialogTitle>
-                                <DialogDescription className="text-center mt-2">
-                                    This will wipe all transaction records. This action is irreversible.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter className="flex flex-col sm:flex-row gap-3 mt-6">
-                                <Button variant="ghost" onClick={() => setIsResetModalOpen(false)} className="flex-1">Take me back</Button>
-                                <Button variant="destructive" onClick={() => setResetStep(2)} className="flex-1">Yes, Continue</Button>
-                            </DialogFooter>
-                        </>
-                    )}
-
-                    {resetStep === 2 && (
-                        <>
-                            <DialogHeader>
-                                <div className="mx-auto size-16 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center mb-4">
-                                    <ShieldAlert className="size-8 text-orange-600" />
-                                </div>
-                                <DialogTitle className="text-center text-2xl font-black">Final Warning</DialogTitle>
-                                <DialogDescription className="text-center mt-2">
-                                    Users and Roles will remain. All project-related data will be gone forever.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter className="flex flex-col sm:flex-row gap-3 mt-6">
-                                <Button variant="ghost" onClick={() => setIsResetModalOpen(false)} className="flex-1">Cancel</Button>
-                                <Button variant="destructive" onClick={handleResetData} disabled={isLoading} className="flex-1 gap-2">
-                                    {isLoading ? <Loader2 className="size-4 animate-spin" /> : null}
-                                    Confirm & Wipe
-                                </Button>
-                            </DialogFooter>
-                        </>
-                    )}
-
-                    {resetStep === 3 && (
-                        <>
-                            <div className="py-8 flex flex-col items-center">
-                                <div className="size-20 rounded-full bg-emerald-100 dark:bg-emerald-900/20 flex items-center justify-center mb-6 shadow-lg shadow-emerald-500/10">
-                                    <CheckCircle2 className="size-12 text-emerald-600 animate-in zoom-in duration-500" />
-                                </div>
-                                <h3 className="text-3xl font-black mb-2">Clean Slate!</h3>
-                                <p className="text-slate-500 dark:text-slate-400 text-center font-medium">{successMessage}</p>
-                            </div>
-                            <DialogFooter>
-                                <Button onClick={() => window.location.reload()} className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20 font-bold">
-                                    Wonderful, Reload UI
-                                </Button>
-                            </DialogFooter>
-                        </>
-                    )}
-                </DialogContent>
-            </Dialog>
+                                <DialogFooter>
+                                    <Button className="w-full" onClick={() => window.location.reload()}>
+                                        Muat ulang halaman
+                                    </Button>
+                                </DialogFooter>
+                            </>
+                        )}
+                    </DialogContent>
+                </Dialog>
             )}
         </div>
     );

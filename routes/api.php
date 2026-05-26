@@ -27,6 +27,7 @@ use App\Http\Controllers\SalesPitchController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\SalesCategoryProjectController;
 use App\Http\Controllers\TeamLoadController;
+use App\Http\Controllers\ProjectNoteController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/signup', [AuthController::class, 'signup'])
@@ -44,6 +45,10 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/projects/{id}/quotas', [ProjectController::class, 'quotas'])->middleware('permission:project_board.read');
     Route::get('/projects/{id}/balance', [ProjectController::class, 'balance'])->middleware('permission:project_board.read');
     Route::get('/projects/{id}/members', [ProjectController::class, 'members'])->middleware('permission:project_board.read');
+    Route::get('/projects/{id}/notes', [ProjectNoteController::class, 'index'])->middleware('permission:project_board.read');
+    Route::post('/projects/{id}/notes', [ProjectNoteController::class, 'store'])->middleware('permission:project_board.read');
+    Route::put('/projects/{id}/notes/{noteId}', [ProjectNoteController::class, 'update'])->middleware('permission:project_board.read');
+    Route::delete('/projects/{id}/notes/{noteId}', [ProjectNoteController::class, 'destroy'])->middleware('permission:project_board.read');
     Route::get('/projects/{id}/assignment-options', [ProjectController::class, 'assignmentOptions'])->middleware('permission:list_project.update');
     Route::put('/projects/{id}/members', [ProjectController::class, 'syncMembers'])->middleware('permission:list_project.update');
     Route::patch('/projects/{id}/status', [ProjectController::class, 'updateStatus'])->middleware('permission:project_board.update');

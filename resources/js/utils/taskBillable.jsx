@@ -71,6 +71,20 @@ export function TaskBillingBadges({ task, className = '' }) {
     );
 }
 
+/** Parse MH input; empty string → null (optional field). */
+export function parseOptionalManhoursInput(value) {
+    const raw = String(value ?? '').trim();
+    if (raw === '') return null;
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return n;
+}
+
+/** Hours stored on task for Team Load (billable or non-billable). */
+export function loadHoursForTask(task) {
+    return Number(task?.estimated_hours) || 0;
+}
+
 export function billableHoursForTask(task) {
     if (taskHasSubtasks(task)) {
         return subtasksTotalHours(task.subtasks);

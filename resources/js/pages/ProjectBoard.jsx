@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
-import { Clock, Plus, MoreHorizontal, PiggyBank, Loader2, ArrowLeft, Briefcase, GripVertical, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart } from 'lucide-react';
+import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search } from 'lucide-react';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../utils/taskDates';
 import { hasPermission } from '../utils/permissions';
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,10 +13,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import SubtaskSection, { subtasksTotalHours } from '../components/board/SubtaskSection';
+import AssigneeSearchSelect from '../components/board/AssigneeSearchSelect';
 import TaskNotesSection from '../components/board/TaskNotesSection';
-import { billableHoursForTask, TaskBillingBadges, taskIsEffectivelyNonBillable } from '../utils/taskBillable.jsx';
+import ProjectNotesPanel from '../components/board/ProjectNotesPanel';
+import {
+    billableHoursForTask,
+    loadHoursForTask,
+    parseOptionalManhoursInput,
+    TaskBillingBadges,
+    taskIsEffectivelyNonBillable,
+} from '../utils/taskBillable.jsx';
 import { DndContext, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -82,60 +91,72 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
     };
     const pClass = prioColors[task.priority] || prioColors.Low;
 
+    const assigneeLabel = task.assignee_id
+        ? (task.assignee_name || assigneeName || `Assignee ${task.assignee_id}`)
+        : 'Unassigned';
+    const leafLoadH = loadHoursForTask(task);
+    const hoursLabel = task.subtasks?.length > 0
+        ? `${formatHours(subtasksTotalHours(task.subtasks))}h`
+        : leafLoadH > 0 || !taskIsEffectivelyNonBillable(task)
+          ? `${formatHours(leafLoadH)}h`
+          : null;
+
     return (
         <div ref={setNodeRef} style={style} className="relative group touch-none" {...attributes} {...listeners}>
-            <Card className="p-4 cursor-pointer hover:border-primary/50 transition-colors shadow-sm" onClick={(e) => {
-                onClick(task);
-            }}>
-                <div className="flex justify-between items-start mb-2">
-                    <span className={`${pClass} text-[10px] px-2 py-0.5 rounded uppercase font-bold tracking-wider`}>{task.priority}</span>
-                    {!isFreelance && (
-                        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 flex-wrap justify-end">
-                            <TaskBillingBadges task={task} />
-                            {task.rush_hour && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30">
-                                    Rush hour
-                                </span>
-                            )}
-                            {task.subtasks?.length > 0 && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter bg-violet-100 text-violet-800 border border-violet-200 dark:bg-violet-500/15 dark:text-violet-300">
-                                    {task.subtasks.length} sub
-                                </span>
-                            )}
-                            <Clock className="size-3.5 shrink-0" />
-                            <span>
-                                {task.subtasks?.length > 0
-                                    ? `${formatHours(subtasksTotalHours(task.subtasks))} hrs`
-                                    : taskIsEffectivelyNonBillable(task)
-                                      ? '—'
-                                      : `${task.estimated_hours || 0} hrs`}
-                            </span>
-                        </div>
+            <Card
+                className="cursor-pointer border-slate-200/90 p-3 shadow-sm transition-colors hover:border-primary/40 dark:border-slate-700/80"
+                onClick={() => onClick(task)}
+            >
+                <div className="mb-2 flex flex-wrap items-center gap-1">
+                    <span className={`${pClass} rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide`}>
+                        {task.priority}
+                    </span>
+                    {!isFreelance && <TaskBillingBadges task={task} />}
+                    {task.rush_hour && (
+                        <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                            Rush
+                        </span>
+                    )}
+                    {task.subtasks?.length > 0 && (
+                        <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300">
+                            {task.subtasks.length} sub
+                        </span>
+                    )}
+                    {!isFreelance && hoursLabel && (
+                        <span className="ml-auto flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-slate-500 dark:text-slate-400">
+                            <Clock className="size-3 shrink-0" />
+                            {hoursLabel}
+                        </span>
                     )}
                 </div>
-                {task.feature_title && (
-                    <div className="flex items-center gap-2 mb-1">
-                        <div className="text-[10px] font-bold text-primary uppercase tracking-wide">{task.feature_title}</div>
+
+                {(task.feature_title || task.category) && (
+                    <div className="mb-1 flex flex-wrap items-center gap-1">
+                        {task.feature_title && (
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-primary">{task.feature_title}</span>
+                        )}
                         {task.category && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-tighter">
+                            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tight text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                                 {task.category}
                             </span>
                         )}
                     </div>
                 )}
-                <h4 className="text-slate-900 dark:text-slate-100 font-medium leading-snug">{task.title}</h4>
+
+                <h4 className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-100">{task.title}</h4>
+
                 {formatTaskDateRange(task.start_date, task.due_date) && (
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-1">
+                    <p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
                         <CalendarRange className="size-3 shrink-0" />
                         {formatTaskDateRange(task.start_date, task.due_date)}
                     </p>
                 )}
 
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                        <span>{task.assignee_id ? (task.assignee_name || assigneeName || `Assignee ${task.assignee_id}`) : 'Unassigned'}</span>
-                    </div>
-                    {task.description && <FileText className="size-3.5 text-slate-400" />}
+                <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                    <span className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400" title={assigneeLabel}>
+                        {assigneeLabel}
+                    </span>
+                    {task.description && <FileText className="size-3.5 shrink-0 text-slate-400" aria-label="Has description" />}
                 </div>
             </Card>
         </div>
@@ -149,30 +170,33 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
     return (
         <div
             ref={setNodeRef}
-            className={`flex flex-col w-80 bg-slate-100 dark:bg-[#151b28]/50 rounded-xl border-2 transition-colors duration-200 h-full ${isOver ? 'border-primary/50 bg-primary/5 dark:bg-primary/5' : 'border-transparent dark:border-slate-800/50'}`}
+            className={cn(
+                'flex h-full max-h-full w-[min(18rem,88vw)] shrink-0 snap-start flex-col rounded-xl border bg-slate-50/90 transition-colors duration-200 dark:bg-[#151b28]/60 sm:w-72',
+                isOver
+                    ? 'border-primary/40 bg-primary/5 shadow-sm dark:bg-primary/5'
+                    : 'border-slate-200/80 dark:border-slate-800/60',
+            )}
         >
-            <div className="p-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800/50">
-                <div className="flex items-center gap-2">
-                    <span className={`size-2 rounded-full ${color}`}></span>
-                    <h3 className="font-semibold text-slate-700 dark:text-slate-200">{title}</h3>
-                    <div className="flex items-center gap-1.5 ml-1">
-                        <Badge variant="secondary" className="px-1.5 py-0 h-5 grid place-items-center">{count}</Badge>
-                        <span className="text-[10px] font-black text-slate-400">{perc}%</span>
-                    </div>
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 px-3 py-2.5 dark:border-slate-800/50">
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className={cn('size-2 shrink-0 rounded-full', color)} />
+                    <h3 className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</h3>
+                    <Badge variant="secondary" className="h-5 shrink-0 px-1.5 py-0 tabular-nums">{count}</Badge>
+                    <span className="shrink-0 text-[10px] font-semibold text-slate-400">{perc}%</span>
                 </div>
-                {title === 'To Do' && (
-                    <button className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                        <MoreHorizontal className="size-5" />
-                    </button>
+            </div>
+            <div className="board-column-scroll relative flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2.5">
+                {children}
+                {count === 0 && (
+                    <p className="pointer-events-none py-6 text-center text-xs text-slate-400 dark:text-slate-500">
+                        Drop tasks here
+                    </p>
                 )}
             </div>
-            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 no-scrollbar relative min-h-[150px]">
-                {children}
-            </div>
             {title === 'To Do' && (
-                <div className="p-3 border-t border-slate-200 dark:border-slate-800/50">
-                    <Button variant="outline" className="w-full border-dashed" onClick={onAddTask}>
-                        <Plus className="size-4 mr-2" />
+                <div className="shrink-0 border-t border-slate-200/80 p-2 dark:border-slate-800/50">
+                    <Button variant="outline" size="sm" className="h-8 w-full border-dashed text-xs" onClick={onAddTask}>
+                        <Plus className="mr-1.5 size-3.5" />
                         Add Task
                     </Button>
                 </div>
@@ -214,6 +238,7 @@ export default function ProjectBoard() {
     const [viewMode, setViewMode] = useState('kanban');
     const [listViewMode, setListViewMode] = useState('grid');
     const [projectListTab, setProjectListTab] = useState('active');
+    const [projectListSearch, setProjectListSearch] = useState('');
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -245,6 +270,7 @@ export default function ProjectBoard() {
     const [bulkEditRoleFilter, setBulkEditRoleFilter] = useState('All');
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
     const [isUpdatingProjectStatus, setIsUpdatingProjectStatus] = useState(false);
+    const [isProjectNotesOpen, setIsProjectNotesOpen] = useState(false);
     const isFreelance = isFreelanceUser(user);
     const canUpdateBoard = hasPermission(user, 'project_board.update');
 
@@ -681,6 +707,10 @@ export default function ProjectBoard() {
         if (total <= 0) return 0;
         return Math.min(100, Math.round((headerUsedManhours / total) * 1000) / 10);
     }, [headerUsedManhours, headerTotalManhours]);
+    const headerRemainingManhours = useMemo(() => {
+        const total = Number(headerTotalManhours) || 0;
+        return Math.max(0, total - headerUsedManhours);
+    }, [headerTotalManhours, headerUsedManhours]);
 
     const handleSubmitTask = async (e) => {
         e.preventDefault();
@@ -693,13 +723,17 @@ export default function ProjectBoard() {
         try {
             const isWaterfall = selectedProject?.methodology === 'Waterfall';
             const isBillable = newTaskBillable !== false;
-            let storedHours = null;
-            if (isBillable && !hasSubtasks) {
-                if (isWaterfall) {
-                    const b = parseFloat(newTaskEstimate);
-                    storedHours = Number.isFinite(b) ? Math.max(0, b) : 0;
+            let storedHours = 0;
+            if (!hasSubtasks) {
+                if (isBillable) {
+                    if (isWaterfall) {
+                        const b = parseFloat(newTaskEstimate);
+                        storedHours = Number.isFinite(b) ? Math.max(0, b) : 0;
+                    } else {
+                        storedHours = effectiveHoursFromBaseInput(newTaskEstimate, newTaskRushHour);
+                    }
                 } else {
-                    storedHours = effectiveHoursFromBaseInput(newTaskEstimate, newTaskRushHour);
+                    storedHours = parseOptionalManhoursInput(newTaskEstimate) ?? 0;
                 }
             }
             const payload = {
@@ -1016,6 +1050,18 @@ export default function ProjectBoard() {
     );
     const displayedProjects = projectListTab === 'done' ? doneProjects : activeProjects;
 
+    const filteredDisplayedProjects = useMemo(() => {
+        const q = projectListSearch.trim().toLowerCase();
+        if (!q) return displayedProjects;
+        return displayedProjects.filter(
+            (p) =>
+                (p.name || '').toLowerCase().includes(q)
+                || (p.methodology || '').toLowerCase().includes(q)
+                || (p.status || '').toLowerCase().includes(q)
+                || (p.budget_status || '').toLowerCase().includes(q),
+        );
+    }, [displayedProjects, projectListSearch]);
+
     const displayProjectStatus = useMemo(() => {
         if (!selectedProject) return 'Planning';
         if (selectedProject.status === 'Done') return 'Done';
@@ -1023,105 +1069,125 @@ export default function ProjectBoard() {
         return selectedProject.status || 'Planning';
     }, [selectedProject, tasks]);
 
+    const projectStatusBadgeClass = (status) =>
+        cn(
+            status === 'Done' && 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300',
+            status === 'In Progress' && 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300',
+            status !== 'Done' && status !== 'In Progress' && 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-300',
+        );
+
     if (!selectedProject) {
         return (
-            <div className="flex-1 w-full overflow-y-auto bg-slate-50/50 p-4 sm:p-6 lg:p-8 dark:bg-background-dark">
-                <div className="max-w-[1200px] mx-auto">
-                    <div className="mb-8 flex justify-between items-start">
+            <div className="min-h-full overflow-y-auto bg-slate-50/80 dark:bg-background-dark">
+                <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6 lg:p-8">
+                    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                         <div>
-                            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Select Project Board</h1>
-                            <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Choose a project to view its kanban board and manage tasks.</p>
+                            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Project Board</h1>
+                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                Pilih project untuk membuka kanban dan mengelola task.
+                            </p>
                         </div>
-                        <div className="flex flex-wrap gap-3 items-center">
-                            <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg mr-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
                                 <Button
-                                    variant={listViewMode === 'grid' ? 'secondary' : 'ghost'}
+                                    variant="ghost"
                                     size="sm"
-                                    className={`px-2 h-8 ${listViewMode === 'grid' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                                    className={cn('h-8 px-2.5', listViewMode === 'grid' && 'bg-slate-100 dark:bg-slate-800')}
                                     onClick={() => setListViewMode('grid')}
+                                    title="Grid"
                                 >
                                     <LayoutGrid className="size-4" />
                                 </Button>
                                 <Button
-                                    variant={listViewMode === 'table' ? 'secondary' : 'ghost'}
+                                    variant="ghost"
                                     size="sm"
-                                    className={`px-2 h-8 ${listViewMode === 'table' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                                    className={cn('h-8 px-2.5', listViewMode === 'table' && 'bg-slate-100 dark:bg-slate-800')}
                                     onClick={() => setListViewMode('table')}
+                                    title="Table"
                                 >
                                     <List className="size-4" />
                                 </Button>
                             </div>
-                            {isEditMode && displayedProjects.length > 0 && (
-                                <Button
-                                    variant="secondary"
-                                    className="border border-slate-200 dark:border-slate-800"
-                                    onClick={() => toggleAllProjects(displayedProjects)}
-                                >
-                                    {selectedProjectIds.length === displayedProjects.length ? "Deselect All" : "Select All"}
+                            {isEditMode && filteredDisplayedProjects.length > 0 && (
+                                <Button variant="outline" size="sm" onClick={() => toggleAllProjects(filteredDisplayedProjects)}>
+                                    {selectedProjectIds.length === filteredDisplayedProjects.length ? 'Batal semua' : 'Pilih semua'}
                                 </Button>
                             )}
                             {isEditMode && selectedProjectIds.length > 0 && (
-                                <Button
-                                    variant="destructive"
-                                    className="shadow-lg shadow-red-500/20"
-                                    onClick={() => setIsDeleteModalOpen(true)}
-                                >
-                                    Delete Selected ({selectedProjectIds.length})
+                                <Button variant="destructive" size="sm" onClick={() => setIsDeleteModalOpen(true)}>
+                                    Hapus ({selectedProjectIds.length})
                                 </Button>
                             )}
                             <Button
-                                variant={isEditMode ? "default" : "outline"}
+                                variant={isEditMode ? 'secondary' : 'outline'}
+                                size="sm"
                                 onClick={() => {
                                     setIsEditMode(!isEditMode);
-                                    if (isEditMode) setSelectedProjectIds([]); // clear when exiting
+                                    if (isEditMode) setSelectedProjectIds([]);
                                 }}
                             >
-                                {isEditMode ? "Done Managing" : "Manage Projects"}
+                                {isEditMode ? 'Selesai' : 'Kelola'}
                             </Button>
                         </div>
-                    </div>
+                    </header>
 
-                    <div className="mb-6 flex flex-wrap items-center gap-2">
-                        <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/50 p-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
                             <Button
                                 type="button"
-                                variant={projectListTab === 'active' ? 'secondary' : 'ghost'}
+                                variant="ghost"
                                 size="sm"
-                                className={`gap-2 ${projectListTab === 'active' ? 'bg-white shadow-sm dark:bg-slate-700' : ''}`}
+                                className={cn('h-8 gap-1.5 px-3', projectListTab === 'active' && 'bg-primary text-white hover:bg-primary hover:text-white')}
                                 onClick={() => {
                                     setProjectListTab('active');
                                     setSelectedProjectIds([]);
                                 }}
                             >
-                                <Activity className="size-4" />
                                 Aktif
-                                <span className="text-xs text-slate-500">({activeProjects.length})</span>
+                                <span className="text-xs opacity-80">({activeProjects.length})</span>
                             </Button>
                             <Button
                                 type="button"
-                                variant={projectListTab === 'done' ? 'secondary' : 'ghost'}
+                                variant="ghost"
                                 size="sm"
-                                className={`gap-2 ${projectListTab === 'done' ? 'bg-white shadow-sm dark:bg-slate-700' : ''}`}
+                                className={cn('h-8 gap-1.5 px-3', projectListTab === 'done' && 'bg-primary text-white hover:bg-primary hover:text-white')}
                                 onClick={() => {
                                     setProjectListTab('done');
                                     setSelectedProjectIds([]);
                                 }}
                             >
-                                <CheckCircle2 className="size-4" />
                                 Done
-                                <span className="text-xs text-slate-500">({doneProjects.length})</span>
+                                <span className="text-xs opacity-80">({doneProjects.length})</span>
                             </Button>
+                        </div>
+                        <div className="relative w-full sm:max-w-xs">
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+                            <Input
+                                value={projectListSearch}
+                                onChange={(e) => setProjectListSearch(e.target.value)}
+                                placeholder="Cari project..."
+                                className="h-9 pl-8 bg-white dark:bg-slate-900"
+                            />
                         </div>
                     </div>
 
-                    {listViewMode === 'grid' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {displayedProjects.map(project => (
+                    {filteredDisplayedProjects.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-sm text-slate-500 dark:border-slate-700">
+                            {displayedProjects.length === 0
+                                ? projectListTab === 'done'
+                                    ? 'Belum ada project Done.'
+                                    : 'Belum ada project aktif.'
+                                : 'Tidak ada hasil pencarian.'}
+                        </div>
+                    ) : listViewMode === 'grid' ? (
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {filteredDisplayedProjects.map((project) => (
                                 <Card
                                     key={project.id}
-                                    className={`group cursor-pointer transition-all hover:-translate-y-1 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md relative
-                                        ${isEditMode && selectedProjectIds.includes(project.id) ? 'border-red-500 shadow-md shadow-red-500/10' : 'hover:shadow-xl hover:border-primary/50'}
-                                    `}
+                                    className={cn(
+                                        'group relative cursor-pointer border-slate-200/90 bg-white shadow-none transition-colors hover:border-primary/40 dark:border-slate-800 dark:bg-[#151b28]',
+                                        isEditMode && selectedProjectIds.includes(project.id) && 'border-rose-400 ring-1 ring-rose-200',
+                                    )}
                                     onClick={() => {
                                         if (isEditMode) {
                                             toggleProjectSelection(project.id);
@@ -1131,14 +1197,14 @@ export default function ProjectBoard() {
                                     }}
                                 >
                                     {isEditMode ? (
-                                        <div className="absolute top-4 right-4 z-20 pointer-events-none">
+                                        <div className="absolute right-3 top-3 z-10 pointer-events-none">
                                             <Checkbox
                                                 checked={selectedProjectIds.includes(project.id)}
                                                 tabIndex={-1}
                                             />
                                         </div>
                                     ) : (
-                                        <div className="absolute top-2 right-2 z-20 flex items-center gap-1">
+                                        <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                                             {canUpdateBoard && project.status !== 'Done' && (
                                                 <Button
                                                     variant="ghost"
@@ -1195,42 +1261,35 @@ export default function ProjectBoard() {
                                             </Button>
                                         </div>
                                     )}
-                                    <CardContent className="p-6">
-                                        <div className="flex justify-between items-start mb-4">
+                                    <CardContent className="p-4">
+                                        <div className="flex gap-3">
                                             <ProjectCompanyIcon logoUrl={project.company_logo_url} projectName={project.name} size="lg" />
-                                            <Badge variant="outline" className={
-                                                project.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' :
-                                                    project.status === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30' :
-                                                        'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-900/30'
-                                            }>
-                                                {project.status}
-                                            </Badge>
+                                            <div className="min-w-0 flex-1 pr-8">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <h3 className="truncate font-semibold text-slate-900 dark:text-white">{project.name}</h3>
+                                                    <Badge variant="outline" className={cn('shrink-0 text-[10px]', projectStatusBadgeClass(project.status))}>
+                                                        {project.status}
+                                                    </Badge>
+                                                </div>
+                                                <p className="mt-0.5 text-xs text-slate-500">
+                                                    {project.methodology} · {project.budget_status || '—'}
+                                                </p>
+                                                {!isFreelance && project.total_manhours > 0 && (
+                                                    <p className="mt-2 flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
+                                                        <Clock className="size-3 shrink-0" />
+                                                        {project.methodology === 'Agile Scrum'
+                                                            ? `${formatHours(project.remaining_manhours)}h sisa · ${Number(project.usage_percentage || 0).toFixed(0)}%`
+                                                            : `${formatHours(project.total_manhours)}h kuota`}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{project.name}</h3>
-                                        <p className="text-sm font-medium text-slate-500 line-clamp-2">{project.methodology} • {project.budget_status}</p>
-
-                                        {!isFreelance && project.methodology === 'Agile Scrum' && project.total_manhours ? (
-                                            <div className="mt-4 space-y-1 text-sm text-slate-600 dark:text-slate-400">
-                                                <div className="flex items-center gap-2">
-                                                    <Clock className="size-4" />
-                                                    <span>Remaining: {formatHours(project.remaining_manhours)} hrs</span>
-                                                </div>
-                                                <div className="text-xs font-semibold text-primary">
-                                                    Usage: {Number(project.usage_percentage || 0).toFixed(1)}%
-                                                </div>
-                                            </div>
-                                        ) : !isFreelance && project.total_manhours ? (
-                                            <div className="mt-4 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                                <Clock className="size-4" />
-                                                <span>{project.total_manhours} hrs total quota</span>
-                                            </div>
-                                        ) : null}
                                     </CardContent>
                                 </Card>
                             ))}
                         </div>
                     ) : (
-                        <div className="bg-white dark:bg-[#151b28] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
                             <table className="w-full text-left text-sm whitespace-nowrap">
                                 <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                                     <tr>
@@ -1243,7 +1302,7 @@ export default function ProjectBoard() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                                    {displayedProjects.map(project => (
+                                    {filteredDisplayedProjects.map((project) => (
                                         <tr
                                             key={project.id}
                                             className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedProjectIds.includes(project.id) ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
@@ -1267,11 +1326,7 @@ export default function ProjectBoard() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <Badge variant="outline" className={
-                                                    project.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' :
-                                                        project.status === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30' :
-                                                            'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-900/30'
-                                                }>
+                                                <Badge variant="outline" className={projectStatusBadgeClass(project.status)}>
                                                     {project.status}
                                                 </Badge>
                                             </td>
@@ -1361,291 +1416,318 @@ export default function ProjectBoard() {
                             </table>
                         </div>
                     )}
-                    {displayedProjects.length === 0 && (
-                        <div className="col-span-full py-12 text-center text-slate-500">
-                            {projectListTab === 'done'
-                                ? 'Belum ada project yang ditandai Done.'
-                                : 'Tidak ada project aktif. Buat project baru atau cek tab Done.'}
-                        </div>
-                    )}
                 </div>
             </div>
         );
     }
 
-    return (
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background-light dark:bg-background-dark transition-colors duration-200 h-full">
-            {/* Project Header & Stats */}
-            <div className="flex flex-col gap-4 p-5 sm:p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28] shrink-0 transition-colors duration-200">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                        <Button variant="ghost" className="mb-2 -ml-3 text-slate-500" onClick={() => navigate('/board')}>
-                            <ArrowLeft className="size-4 mr-2" />
-                            Back to Projects
-                        </Button>
-                        <div className="flex items-center gap-3">
-                            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{selectedProject.name}</h1>
-                            <Badge variant="outline" className={
-                                displayProjectStatus === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30' :
-                                    displayProjectStatus === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30' :
-                                        'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-900/30'
-                            }>
-                                {displayProjectStatus}
-                            </Badge>
-                        </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{selectedProject.methodology} Board</p>
-                        {!isFreelance && headerTotalManhours != null && Number(headerTotalManhours) > 0 && (
-                            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 max-w-2xl">
-                                <p className="text-sm text-slate-600 dark:text-slate-300 flex items-center gap-1.5 shrink-0">
-                                    <Clock className="size-3.5 shrink-0 text-primary" />
-                                    <span>
-                                        <span className="font-semibold text-slate-900 dark:text-white">{formatHours(headerTotalManhours)} hrs</span>
-                                        <span className="text-slate-500 dark:text-slate-400"> total</span>
-                                    </span>
-                                </p>
-                                <div className="flex-1 min-w-[140px] max-w-md">
-                                    <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-                                        <span>Digunakan {formatHours(headerUsedManhours)} hrs</span>
-                                        <span>{headerUsagePercent}%</span>
-                                    </div>
-                                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                                        <div
-                                            className="h-full rounded-full bg-primary transition-all"
-                                            style={{ width: `${headerUsagePercent}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+    const renderQuotaMiniCard = (key, roleName, alloc, qh, realP) => {
+        const p = Math.min(100, realP);
+        const isOver = alloc > qh;
+        return (
+            <div
+                key={key}
+                className="w-[148px] shrink-0 snap-start rounded-lg border border-slate-200/80 bg-white px-3 py-2 dark:border-slate-700/80 dark:bg-slate-900/40"
+            >
+                <div className="mb-1 flex items-center justify-between gap-2">
+                    <p className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-500" title={roleName}>
+                        {roleName}
+                    </p>
+                    <span className={cn('shrink-0 text-[10px] font-bold', realP > 80 ? 'text-rose-500' : 'text-primary')}>
+                        {realP}%
+                    </span>
+                </div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">
+                    {formatHours(alloc)}
+                    <span className="text-[10px] font-normal text-slate-400"> / {formatHours(qh)}h</span>
+                </p>
+                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                    <div
+                        className={cn(
+                            'h-full rounded-full transition-all',
+                            realP > 90 ? 'bg-rose-500' : realP > 70 ? 'bg-orange-500' : 'bg-primary',
                         )}
-                    </div>
-                    <div className="flex gap-3">
-                        <div className="flex items-center -space-x-2 mr-1">
-                            {assignedProjectUsers.slice(0, 2).map((member) => (
-                                <div
-                                    key={member.user_id}
-                                    title={member.user_name}
-                                    className="inline-flex items-center justify-center size-8 rounded-full ring-2 ring-white dark:ring-[#151b28] bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200"
-                                >
-                                    {(member.user_name || 'U').charAt(0).toUpperCase()}
-                                </div>
-                            ))}
-                            {assignedProjectUsers.length > 2 && (
-                                <div className="flex items-center justify-center size-8 rounded-full ring-2 ring-white dark:ring-[#151b28] bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300">
-                                    +{assignedProjectUsers.length - 2}
-                                </div>
-                            )}
-                            {assignedProjectUsers.length === 0 && (
-                                <div className="inline-flex items-center justify-center size-8 rounded-full ring-2 ring-white dark:ring-[#151b28] bg-slate-100 dark:bg-slate-700 text-[10px] font-medium text-slate-500">
-                                    0
-                                </div>
-                            )}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 self-center mr-1">
-                            {assignedProjectUsers.length} member{assignedProjectUsers.length === 1 ? '' : 's'}
-                        </div>
-                        <div className="flex gap-2 mr-2 border-r border-slate-200 dark:border-slate-800 pr-4">
-                            <Button
-                                variant="outline"
-                                className="flex items-center gap-2"
-                                onClick={() => navigate(`/board/${selectedProject.id}/dashboard`)}
-                            >
-                                <BarChart3 className="size-4" />
-                                <span>Dashboard</span>
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="flex items-center gap-2"
-                                onClick={() => navigate(`/board/${selectedProject.id}/gantt`)}
-                            >
-                                <GanttChart className="size-4" />
-                                <span>Gantt</span>
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="flex items-center gap-2"
-                                onClick={() => openAssignMembersModal(selectedProject)}
-                            >
-                                <UserPlus className="size-4" />
-                                <span>Assign Members</span>
-                            </Button>
-                            {canUpdateBoard && selectedProject?.status !== 'Done' && (
-                                <Button
+                        style={{ width: `${p}%` }}
+                    />
+                </div>
+                {isOver && (
+                    <p className="mt-0.5 text-[9px] font-bold text-rose-500">+{(alloc - qh).toFixed(1)}h</p>
+                )}
+            </div>
+        );
+    };
+
+    return (
+        <div className="flex h-[calc(100dvh-4.25rem)] min-h-0 flex-col overflow-hidden bg-background-light dark:bg-background-dark transition-colors duration-200">
+            {/* Project Header & Stats */}
+            <div className="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
+                <div className="flex flex-col gap-3 p-4 sm:p-5">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 flex-1">
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                                <Button variant="ghost" size="sm" className="-ml-2 h-8 text-slate-500" onClick={() => navigate('/board')}>
+                                    <ArrowLeft className="mr-1 size-4" />
+                                    Back
+                                </Button>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-white">{selectedProject.name}</h1>
+                                <Badge
                                     variant="outline"
-                                    className="flex items-center gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
-                                    disabled={isUpdatingProjectStatus}
-                                    onClick={() => handleCloseProject(selectedProject)}
-                                >
-                                    {isUpdatingProjectStatus ? (
-                                        <Loader2 className="size-4 animate-spin" />
-                                    ) : (
-                                        <CheckCircle2 className="size-4" />
+                                    className={cn(
+                                        displayProjectStatus === 'Done' && 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30',
+                                        displayProjectStatus === 'In Progress' && 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30',
+                                        displayProjectStatus !== 'Done' && displayProjectStatus !== 'In Progress' && 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-900/30',
                                     )}
-                                    <span>Mark Done</span>
-                                </Button>
-                            )}
-                            {canUpdateBoard && selectedProject?.status === 'Done' && (
-                                <Button
-                                    variant="outline"
-                                    className="flex items-center gap-2"
-                                    disabled={isUpdatingProjectStatus}
-                                    onClick={() => handleReopenProject(selectedProject)}
                                 >
-                                    {isUpdatingProjectStatus ? (
-                                        <Loader2 className="size-4 animate-spin" />
-                                    ) : (
-                                        <RotateCcw className="size-4" />
-                                    )}
-                                    <span>Reopen Project</span>
-                                </Button>
-                            )}
-                            {!isFreelance && isTaskBulkEditMode && selectedTaskIds.length > 0 && (
-                                <Button
-                                    variant="default"
-                                    className="shadow-lg shadow-primary/20"
-                                    onClick={() => setIsBulkEditTaskModalOpen(true)}
-                                >
-                                    Edit Selected ({selectedTaskIds.length})
-                                </Button>
-                            )}
-                            {!isFreelance && (
-                                <Button
-                                    variant={isTaskBulkEditMode ? "secondary" : "outline"}
-                                    className={isTaskBulkEditMode ? "bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700" : ""}
-                                    onClick={() => {
-                                        if (!isTaskBulkEditMode && viewMode !== 'list') setViewMode('list');
-                                        setIsTaskBulkEditMode(!isTaskBulkEditMode);
-                                        if (isTaskBulkEditMode) setSelectedTaskIds([]);
-                                    }}
-                                >
-                                    {isTaskBulkEditMode ? "Cancel" : "Manage Tasks"}
-                                </Button>
-                            )}
+                                    {displayProjectStatus}
+                                </Badge>
+                            </div>
+                            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{selectedProject.methodology} Board</p>
                         </div>
-                        <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg mr-2">
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <div className="flex gap-0.5 rounded-lg border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-700 dark:bg-slate-800/50">
                             <Button
-                                variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+                                variant="ghost"
                                 size="sm"
-                                className={`px-2 h-8 ${viewMode === 'kanban' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                                className={cn('h-8 px-2.5', viewMode === 'kanban' && 'bg-white shadow-sm dark:bg-slate-700')}
                                 onClick={() => setViewMode('kanban')}
+                                title="Kanban view"
                             >
                                 <LayoutGrid className="size-4" />
                             </Button>
                             <Button
-                                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                                variant="ghost"
                                 size="sm"
-                                className={`px-2 h-8 ${viewMode === 'list' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                                className={cn('h-8 px-2.5', viewMode === 'list' && 'bg-white shadow-sm dark:bg-slate-700')}
                                 onClick={() => setViewMode('list')}
+                                title="List view"
                             >
                                 <List className="size-4" />
                             </Button>
                         </div>
-                        <Button variant="outline" className="flex items-center gap-2" onClick={() => {
-                            setImportFile(null);
-                            setImportResult(null);
-                            setIsImportModalOpen(true);
-                        }}>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={() => {
+                                setImportFile(null);
+                                setImportResult(null);
+                                setIsImportModalOpen(true);
+                            }}
+                        >
                             <Upload className="size-4" />
-                            <span>Import</span>
+                            <span className="hidden sm:inline">Import</span>
                         </Button>
-                        <Button className="flex items-center gap-2 shadow-lg shadow-primary/20" onClick={() => handleOpenModal('To Do')}>
-                            <Plus className="size-5" />
-                            <span>Add Task</span>
+                        <Button size="sm" className="gap-1.5 shadow-md shadow-primary/20" onClick={() => handleOpenModal('To Do')}>
+                            <Plus className="size-4" />
+                            Add Task
                         </Button>
                     </div>
                 </div>
 
-                {/* Stats Cards */}
-                {selectedProject?.methodology === 'Waterfall' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                        {waterfallProgressCards.map((item) => (
-                            <Card key={item.status} className="bg-slate-50 dark:bg-[#1e2532] border-none shadow-none">
-                                <CardContent className="p-4">
-                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{item.status}</p>
-                                    <div className="mt-2 flex items-end justify-between">
-                                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{item.percentage}%</p>
-                                        <p className="text-xs text-slate-500">{item.count} task</p>
-                                    </div>
-                                    <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-3">
-                                        <div
-                                            className="h-1.5 rounded-full bg-primary transition-all"
-                                            style={{ width: `${item.percentage}%` }}
-                                        ></div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                ) : !isFreelance && hasQuotaSummary && (
-                    <div className="flex flex-wrap gap-2">
-                        {visibleRoleQuotas.map((quota) => {
-                            const alloc = Number(quota.allocated_hours) || 0;
-                            const qh = Number(quota.quota_hours) || 0;
-                            const realP = qh > 0 ? Math.round((alloc / qh) * 100) : 0;
-                            const p = Math.min(100, realP);
-                            const isOver = alloc > qh;
-                            return (
+                    <div className="flex flex-col gap-3 border-t border-slate-100 pt-3 dark:border-slate-800 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                    <button
+                        type="button"
+                        onClick={() => openAssignMembersModal(selectedProject)}
+                        className="inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-left transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                    >
+                        <div className="flex items-center -space-x-2">
+                            {assignedProjectUsers.slice(0, 3).map((member) => (
                                 <div
-                                    key={quota.id}
-                                    className="min-w-[148px] flex-1 max-w-[220px] rounded-lg border border-slate-200/80 dark:border-slate-700/80 bg-slate-50/80 dark:bg-[#1e2532]/80 px-3 py-2.5"
+                                    key={member.user_id}
+                                    title={member.user_name}
+                                    className="inline-flex size-7 items-center justify-center rounded-full bg-white text-[10px] font-bold text-slate-700 ring-2 ring-slate-50 dark:bg-slate-600 dark:text-slate-200 dark:ring-slate-800"
                                 >
-                                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate" title={quota.role_name}>
-                                            {quota.role_name}
-                                        </p>
-                                        <span className={`text-[10px] font-bold shrink-0 ${realP > 80 ? 'text-rose-500' : 'text-primary'}`}>
-                                            {realP}%
-                                        </span>
-                                    </div>
-                                    <div className="flex items-baseline justify-between gap-2">
-                                        <p className="text-sm font-bold text-slate-900 dark:text-white">
-                                            {formatHours(alloc)}
-                                            <span className="text-[10px] font-normal text-slate-400"> / {formatHours(qh)}h</span>
-                                        </p>
-                                        {isOver ? (
-                                            <span className="text-[9px] font-bold text-rose-500 shrink-0">+{(alloc - qh).toFixed(1)}h</span>
-                                        ) : null}
-                                    </div>
-                                    <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                                        <div
-                                            className={`h-full rounded-full transition-all ${realP > 90 ? 'bg-rose-500' : realP > 70 ? 'bg-orange-500' : 'bg-primary'}`}
-                                            style={{ width: `${p}%` }}
-                                        />
-                                    </div>
+                                    {(member.user_name || 'U').charAt(0).toUpperCase()}
                                 </div>
-                            );
-                        })}
-                        {showGeneralQuotaCard && (
-                            <div
-                                key="general-quota"
-                                className="min-w-[148px] flex-1 max-w-[220px] rounded-lg border border-slate-200/80 dark:border-slate-700/80 bg-slate-50/80 dark:bg-[#1e2532]/80 px-3 py-2.5"
+                            ))}
+                            {assignedProjectUsers.length === 0 && (
+                                <div className="inline-flex size-7 items-center justify-center rounded-full bg-white text-[10px] font-medium text-slate-400 ring-2 ring-slate-50 dark:bg-slate-600 dark:ring-slate-800">
+                                    —
+                                </div>
+                            )}
+                        </div>
+                        <span className="text-sm text-slate-600 dark:text-slate-300">
+                            {assignedProjectUsers.length} member{assignedProjectUsers.length === 1 ? '' : 's'}
+                        </span>
+                        <UserPlus className="size-3.5 text-slate-400" />
+                    </button>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex flex-wrap rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1.5 px-2.5 text-slate-600 dark:text-slate-300"
+                                onClick={() => navigate(`/board/${selectedProject.id}/dashboard`)}
                             >
-                                <div className="flex items-center justify-between gap-2 mb-1.5">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">General</p>
-                                    <span className={`text-[10px] font-bold shrink-0 ${(generalAllocatedHours / generalQuotaFromPresales) * 100 > 80 ? 'text-rose-500' : 'text-primary'}`}>
-                                        {Math.round((generalAllocatedHours / generalQuotaFromPresales) * 100)}%
-                                    </span>
-                                </div>
-                                <p className="text-sm font-bold text-slate-900 dark:text-white">
-                                    {formatHours(generalAllocatedHours)}
-                                    <span className="text-[10px] font-normal text-slate-400"> / {formatHours(generalQuotaFromPresales)}h</span>
-                                </p>
-                                <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                                    <div
-                                        className={`h-full rounded-full transition-all ${(generalAllocatedHours / generalQuotaFromPresales) * 100 > 90 ? 'bg-rose-500' : (generalAllocatedHours / generalQuotaFromPresales) * 100 > 70 ? 'bg-orange-500' : 'bg-primary'}`}
-                                        style={{ width: `${Math.min(100, (generalAllocatedHours / generalQuotaFromPresales) * 100)}%` }}
-                                    />
-                                </div>
-                            </div>
+                                <BarChart3 className="size-4 shrink-0" />
+                                <span className="hidden md:inline">Dashboard</span>
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1.5 px-2.5 text-slate-600 dark:text-slate-300"
+                                onClick={() => navigate(`/board/${selectedProject.id}/gantt`)}
+                            >
+                                <GanttChart className="size-4 shrink-0" />
+                                <span className="hidden md:inline">Gantt</span>
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1.5 px-2.5 text-slate-600 dark:text-slate-300"
+                                onClick={() => setIsProjectNotesOpen(true)}
+                            >
+                                <BookOpen className="size-4 shrink-0" />
+                                <span className="hidden md:inline">Notes</span>
+                            </Button>
+                        </div>
+
+                        {!isFreelance && (
+                            <Button
+                                variant={isTaskBulkEditMode ? 'secondary' : 'outline'}
+                                size="sm"
+                                className="h-8"
+                                onClick={() => {
+                                    if (!isTaskBulkEditMode && viewMode !== 'list') setViewMode('list');
+                                    setIsTaskBulkEditMode(!isTaskBulkEditMode);
+                                    if (isTaskBulkEditMode) setSelectedTaskIds([]);
+                                }}
+                            >
+                                {isTaskBulkEditMode ? 'Cancel' : 'Manage Tasks'}
+                            </Button>
+                        )}
+                        {!isFreelance && isTaskBulkEditMode && selectedTaskIds.length > 0 && (
+                            <Button
+                                size="sm"
+                                className="h-8 shadow-md shadow-primary/20"
+                                onClick={() => setIsBulkEditTaskModalOpen(true)}
+                            >
+                                Edit ({selectedTaskIds.length})
+                            </Button>
+                        )}
+                        {canUpdateBoard && selectedProject?.status !== 'Done' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5"
+                                disabled={isUpdatingProjectStatus}
+                                onClick={() => handleCloseProject(selectedProject)}
+                            >
+                                {isUpdatingProjectStatus ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                    <CheckCircle2 className="size-4" />
+                                )}
+                                Mark Done
+                            </Button>
+                        )}
+                        {canUpdateBoard && selectedProject?.status === 'Done' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5"
+                                disabled={isUpdatingProjectStatus}
+                                onClick={() => handleReopenProject(selectedProject)}
+                            >
+                                {isUpdatingProjectStatus ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                    <RotateCcw className="size-4" />
+                                )}
+                                Reopen
+                            </Button>
                         )}
                     </div>
-                )}
+                    </div>
+
+                    {/* Metrics */}
+                    {selectedProject?.methodology === 'Waterfall' ? (
+                        <div className="board-metrics-scroll -mx-1 border-t border-slate-100 px-1 pt-3 dark:border-slate-800">
+                            <div className="flex w-max min-w-full snap-x snap-proximity gap-2 pb-1">
+                                {waterfallProgressCards.map((item) => (
+                                    <div
+                                        key={item.status}
+                                        className="w-[148px] shrink-0 snap-start rounded-lg border border-slate-200/80 bg-white px-3 py-2 dark:border-slate-700/80 dark:bg-slate-900/40"
+                                    >
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.status}</p>
+                                        <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{item.percentage}%</p>
+                                        <p className="text-[10px] text-slate-500">{item.count} task</p>
+                                        <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                                            <div className="h-full rounded-full bg-primary" style={{ width: `${item.percentage}%` }} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                            {!isFreelance && headerTotalManhours != null && Number(headerTotalManhours) > 0 && (
+                                <div className="rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700/80 dark:bg-slate-800/30">
+                                    <div className="mb-2 grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+                                        <div>
+                                            <p className="tabular-nums text-base font-bold text-slate-900 dark:text-white">
+                                                {formatHours(headerUsedManhours)} <span className="text-xs font-medium text-slate-500">hrs</span>
+                                            </p>
+                                            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Terpakai</p>
+                                        </div>
+                                        <div className="px-1 text-center">
+                                            <p className="flex items-center justify-center gap-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                                                <Clock className="size-3 shrink-0" />
+                                                Total
+                                            </p>
+                                            <p className="tabular-nums text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                                {formatHours(headerTotalManhours)} hrs
+                                            </p>
+                                            <p className="tabular-nums text-[10px] text-slate-500">{headerUsagePercent}%</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className={cn(
+                                                'tabular-nums text-base font-bold',
+                                                headerRemainingManhours <= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white',
+                                            )}>
+                                                {formatHours(headerRemainingManhours)} <span className="text-xs font-medium text-slate-500">hrs</span>
+                                            </p>
+                                            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Sisa</p>
+                                        </div>
+                                    </div>
+                                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                                        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${headerUsagePercent}%` }} />
+                                    </div>
+                                </div>
+                            )}
+                            {!isFreelance && hasQuotaSummary && (
+                                <div className="board-metrics-scroll -mx-1 px-1">
+                                    <div className="flex w-max min-w-full snap-x snap-proximity gap-2 pb-1">
+                                        {visibleRoleQuotas.map((quota) => {
+                                            const alloc = Number(quota.allocated_hours) || 0;
+                                            const qh = Number(quota.quota_hours) || 0;
+                                            const realP = qh > 0 ? Math.round((alloc / qh) * 100) : 0;
+                                            return renderQuotaMiniCard(quota.id, quota.role_name, alloc, qh, realP);
+                                        })}
+                                        {showGeneralQuotaCard && renderQuotaMiniCard(
+                                            'general-quota',
+                                            'General',
+                                            generalAllocatedHours,
+                                            generalQuotaFromPresales,
+                                            Math.round((generalAllocatedHours / generalQuotaFromPresales) * 100),
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Board / List View */}
             {viewMode === 'kanban' ? (
-                <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-6">
+                <div className="board-scroll-x relative flex-1 min-h-0 overflow-x-auto overflow-y-hidden bg-slate-100/50 p-3 sm:p-4 dark:bg-[#0d1118]/50">
                     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-                        <div className="flex h-full gap-6 min-w-max pb-6">
+                        <div className="flex h-full min-w-min gap-3 sm:gap-4">
                             {COLUMNS.map(col => (
                                 <BoardColumn
                                     key={col.title}
@@ -1671,7 +1753,7 @@ export default function ProjectBoard() {
                     </DndContext>
                 </div>
             ) : (
-                <div className="flex-1 min-h-0 overflow-auto p-6">
+                <div className="board-column-scroll flex-1 min-h-0 overflow-auto p-3 sm:p-4">
                     <div className="bg-white dark:bg-[#151b28] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
                         <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
@@ -1855,7 +1937,6 @@ export default function ProjectBoard() {
                                                     const billable = val === 'billable';
                                                     setNewTaskBillable(billable);
                                                     if (!billable) {
-                                                        setNewTaskEstimate('');
                                                         setNewTaskRushHour(false);
                                                     }
                                                 }}
@@ -1985,46 +2066,46 @@ export default function ProjectBoard() {
                                 )}
                                 <div className="flex flex-col gap-1.5">
                                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Assignee</label>
-                                    <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
-                                        <SelectTrigger className="w-full min-w-0">
-                                            <SelectValue placeholder="Unassigned" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Unassigned">Unassigned</SelectItem>
-                                            {assigneeSelectOptions.map((opt) => (
-                                                <SelectItem key={opt.id} value={opt.id.toString()}>
-                                                    {opt.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <AssigneeSearchSelect
+                                        value={newTaskAssignee}
+                                        onChange={setNewTaskAssignee}
+                                        options={assigneeSelectOptions}
+                                        placeholder="Ketik min. 2 karakter..."
+                                    />
                                 </div>
                             </div>
                         </section>
 
-                        {!isFreelance && newTaskBillable && !hasSubtasks && (
+                        {!isFreelance && !hasSubtasks && (
                             <section className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
                                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                     {selectedProject?.methodology === 'Waterfall' ? 'Manhours (MH)' : 'Manhour Estimate'}
                                 </p>
-                                {selectedProject?.methodology === 'Waterfall' && (
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        Digunakan untuk Team Load (perlu assignee + start & due date).
-                                    </p>
-                                )}
-                                <div className={`grid grid-cols-1 gap-3 ${selectedProject?.methodology !== 'Waterfall' ? 'sm:grid-cols-[1fr_auto] sm:items-end' : ''}`}>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    {newTaskBillable
+                                        ? selectedProject?.methodology === 'Waterfall'
+                                            ? 'Digunakan untuk Team Load (perlu assignee + start & due date) dan kuota billable.'
+                                            : 'Memotong kuota billable. Rush hour ×1.3 hanya untuk task billable.'
+                                        : 'Opsional — tidak memotong kuota project, tetapi dipakai untuk perhitungan Team Load (assignee + tanggal).'}
+                                </p>
+                                <div className={`grid grid-cols-1 gap-3 ${newTaskBillable && selectedProject?.methodology !== 'Waterfall' ? 'sm:grid-cols-[1fr_auto] sm:items-end' : ''}`}>
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Estimated Manhours</label>
+                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                            Estimated Manhours
+                                            {!newTaskBillable && (
+                                                <span className="text-slate-400 font-normal"> (opsional)</span>
+                                            )}
+                                        </label>
                                         <Input
                                             type="number"
                                             value={newTaskEstimate}
                                             onChange={e => setNewTaskEstimate(e.target.value)}
                                             min="0"
                                             step="0.5"
-                                            placeholder="0"
+                                            placeholder={newTaskBillable ? '0' : 'Kosongkan jika tidak dipakai'}
                                         />
                                     </div>
-                                    {selectedProject?.methodology !== 'Waterfall' && (
+                                    {newTaskBillable && selectedProject?.methodology !== 'Waterfall' && (
                                         <div className="flex items-center gap-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-3 py-2.5 sm:mb-0.5 sm:min-w-[200px]">
                                             <Checkbox
                                                 id="task-rush-hour"
@@ -2333,6 +2414,28 @@ export default function ProjectBoard() {
                             </DialogFooter>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isProjectNotesOpen} onOpenChange={setIsProjectNotesOpen}>
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+                    <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+                        <DialogTitle className="flex items-center gap-2">
+                            <BookOpen className="size-5 text-primary" />
+                            Project Notes
+                        </DialogTitle>
+                        <DialogDescription>
+                            Note, link development, dan dokumen penting untuk project ini.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
+                        <ProjectNotesPanel
+                            projectId={selectedProject?.id}
+                            projectName={selectedProject?.name}
+                            currentUserId={user?.id}
+                            canDeleteAny={canUpdateBoard}
+                        />
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

@@ -143,6 +143,7 @@ export default function Reports() {
     const [expenseEndDate, setExpenseEndDate] = useState(expenseDefaults.today);
     const [expandedProjectIds, setExpandedProjectIds] = useState(() => new Set());
     const [expandedCompanyIds, setExpandedCompanyIds] = useState(() => new Set());
+    const [expandedPortfolioCompanyKeys, setExpandedPortfolioCompanyKeys] = useState(() => new Set());
     const [expandedExpenseUserIds, setExpandedExpenseUserIds] = useState(() => new Set());
     const [expandedExpenseCategoryIds, setExpandedExpenseCategoryIds] = useState(() => new Set());
 
@@ -304,6 +305,17 @@ export default function Reports() {
         });
     };
 
+    const portfolioCompanyKey = (row) => (row?.company_id != null ? String(row.company_id) : '__none__');
+
+    const togglePortfolioCompanyExpand = (companyKey) => {
+        setExpandedPortfolioCompanyKeys((prev) => {
+            const next = new Set(prev);
+            if (next.has(companyKey)) next.delete(companyKey);
+            else next.add(companyKey);
+            return next;
+        });
+    };
+
     const companyFinancialKey = (row) => (row.company_id != null ? String(row.company_id) : '__none__');
 
     const portfolioSummary = useMemo(() => {
@@ -318,7 +330,7 @@ export default function Reports() {
     const portfolioByCompany = useMemo(() => {
         const groups = new Map();
         for (const p of projectRows) {
-            const companyKey = p.company_id != null ? String(p.company_id) : '__none__';
+            const companyKey = portfolioCompanyKey(p);
             const companyName = p.company_name || 'Tanpa perusahaan';
             if (!groups.has(companyKey)) {
                 groups.set(companyKey, {
@@ -337,6 +349,51 @@ export default function Reports() {
         return Array.from(groups.values()).sort(
             (a, b) => b.quota - a.quota || String(a.company_name).localeCompare(String(b.company_name))
         );
+    }, [projectRows]);
+
+    const portfolioProjectsByCompany = useMemo(() => {
+        const groups = new Map();
+        for (const p of projectRows) {
+            const companyKey = portfolioCompanyKey(p);
+            const companyName = p.company_name || 'Tanpa perusahaan';
+            if (!groups.has(companyKey)) {
+                groups.set(companyKey, {
+                    companyKey,
+                    company_id: p.company_id,
+                    company_name: companyName,
+                    projects: [],
+                    quota: 0,
+                    allocated: 0,
+                    actual: 0,
+                    base_quota_hours: 0,
+                    topup_total_hours: 0,
+                });
+            }
+            const g = groups.get(companyKey);
+            g.projects.push(p);
+            g.quota += p.quota;
+            g.allocated += p.allocated;
+            g.actual += p.actual;
+            g.base_quota_hours += p.base_quota_hours;
+            g.topup_total_hours += p.topup_total_hours;
+        }
+        return Array.from(groups.values())
+            .map((g) => {
+                const burn = g.quota > 0 ? (g.allocated / g.quota) * 100 : 0;
+                const hasQuota = g.quota > 0;
+                return {
+                    ...g,
+                    project_count: g.projects.length,
+                    burn,
+                    hasQuota,
+                    health: healthFromBurn(burn, hasQuota),
+                    onTrack: g.projects.filter((p) => p.health.tone === 'emerald').length,
+                    atRisk: g.projects.filter((p) => ['amber', 'rose'].includes(p.health.tone)).length,
+                };
+            })
+            .sort(
+                (a, b) => b.quota - a.quota || String(a.company_name).localeCompare(String(b.company_name)),
+            );
     }, [projectRows]);
 
     const revenueTotals = useMemo(() => {
@@ -1164,7 +1221,7 @@ export default function Reports() {
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold">Project portfolio &amp; manhour health</CardTitle>
                         <CardDescription>
-                            Per-project quota, allocation, and burn rate. FIFO: Initial dipakai dulu, lalu Top Up #1, #2, … Expand baris untuk detail per pool.
+                            Dikelompokkan per company. Expand company untuk detail project, lalu expand project untuk breakdown pool MH (FIFO).
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -1172,7 +1229,7 @@ export default function Reports() {
                             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-xs uppercase tracking-wide">
                                 <tr>
                                     <th className="px-2 py-3 font-medium w-8" aria-label="Expand" />
-                                    <th className="px-4 py-3 font-medium text-left">Project</th>
+                                    <th className="px-4 py-3 font-medium text-left">Company / Project</th>
                                     <th className="px-4 py-3 font-medium text-left">Methodology</th>
                                     <th className="px-4 py-3 font-medium text-right">Quota</th>
                                     <th className="px-4 py-3 font-medium text-right">Base</th>
@@ -1184,99 +1241,236 @@ export default function Reports() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                {projectRows.length === 0 ? (
+                                {portfolioProjectsByCompany.length === 0 ? (
                                     <tr>
                                         <td colSpan={10} className="px-4 py-10 text-center text-slate-400 italic">
                                             No projects found.
                                         </td>
                                     </tr>
                                 ) : (
-                                    projectRows.map((p) => {
-                                        const expanded = expandedProjectIds.has(p.id);
-                                        const canExpand = p.hasQuota;
-                                        return (
-                                            <Fragment key={p.id}>
-                                                <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                                                    <td className="px-2 py-3 text-center">
-                                                        {canExpand ? (
+                                    <>
+                                        {portfolioProjectsByCompany.map((company) => {
+                                            const companyExpanded = expandedPortfolioCompanyKeys.has(company.companyKey);
+                                            return (
+                                                <Fragment key={company.companyKey}>
+                                                    <tr className="bg-slate-50/70 dark:bg-slate-800/30 hover:bg-slate-100/80 dark:hover:bg-slate-800/45">
+                                                        <td className="px-2 py-3 text-center">
                                                             <button
                                                                 type="button"
                                                                 className="inline-flex items-center justify-center rounded-md p-1 text-slate-500 hover:bg-slate-200/60 dark:hover:bg-slate-700"
-                                                                onClick={() => toggleProjectExpand(p.id)}
-                                                                aria-expanded={expanded}
-                                                                aria-label={expanded ? 'Tutup breakdown MH' : 'Buka breakdown MH'}
+                                                                onClick={() => togglePortfolioCompanyExpand(company.companyKey)}
+                                                                aria-expanded={companyExpanded}
+                                                                aria-label={
+                                                                    companyExpanded
+                                                                        ? 'Tutup daftar project'
+                                                                        : 'Buka daftar project'
+                                                                }
                                                             >
-                                                                {expanded ? (
+                                                                {companyExpanded ? (
                                                                     <ChevronDown className="size-4" />
                                                                 ) : (
                                                                     <ChevronRight className="size-4" />
                                                                 )}
                                                             </button>
-                                                        ) : null}
-                                                    </td>
-                                                    <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">
-                                                        {p.name}
-                                                        {p.has_topup && (
-                                                            <span className="block text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
-                                                                {p.manhour_buckets?.filter((b) => b.kind === 'topup').length || 0} top-up
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.methodology || '—'}</td>
-                                                    <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">
-                                                        {p.hasQuota ? `${formatHours(p.quota)}h` : '—'}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">
-                                                        {p.hasQuota ? `${formatHours(p.base_quota_hours)}h` : '—'}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">
-                                                        {p.has_topup ? `+${formatHours(p.topup_total_hours)}h` : '—'}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right font-medium">{formatHours(p.allocated)}h</td>
-                                                    <td className="px-4 py-3 text-right">
-                                                        {p.hasQuota ? (
-                                                            <span
-                                                                className={
-                                                                    p.burn > 100
-                                                                        ? 'font-semibold text-rose-600 dark:text-rose-400'
-                                                                        : p.burn > 85
-                                                                          ? 'font-semibold text-amber-600 dark:text-amber-400'
-                                                                          : 'font-medium text-slate-700 dark:text-slate-300'
-                                                                }
-                                                            >
-                                                                {formatPercent(p.burn)}
-                                                            </span>
-                                                        ) : (
-                                                            '—'
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">
-                                                        {p.hasQuota
-                                                            ? `${p.variance >= 0 ? '+' : ''}${formatHours(p.variance)}h`
-                                                            : `${formatHours(p.actual - p.allocated)}h`}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-center">
-                                                        <Badge variant="outline" className={healthBadgeClass[p.health.tone]}>
-                                                            {p.health.label}
-                                                        </Badge>
-                                                    </td>
-                                                </tr>
-                                                {expanded && canExpand && (
-                                                    <tr>
-                                                        <td colSpan={11} className="p-0">
-                                                            <div className="px-4 py-3 bg-slate-50/80 dark:bg-slate-900/40 border-t border-slate-200 dark:border-slate-800">
-                                                                <ManhourBucketBreakdown
-                                                                    buckets={p.manhour_buckets}
-                                                                    overflowHours={p.mh_overflow_hours}
-                                                                    hasTopup={p.has_topup}
-                                                                />
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <Building2 className="size-4 shrink-0 text-slate-400" />
+                                                                <div className="min-w-0">
+                                                                    <p className="font-semibold text-slate-900 dark:text-white truncate">
+                                                                        {company.company_name}
+                                                                    </p>
+                                                                    <p className="text-[10px] text-slate-500 mt-0.5">
+                                                                        {company.project_count} project
+                                                                        {company.onTrack > 0 || company.atRisk > 0 ? (
+                                                                            <>
+                                                                                <span className="mx-1">·</span>
+                                                                                <span className="text-emerald-600 dark:text-emerald-400">
+                                                                                    {company.onTrack} on track
+                                                                                </span>
+                                                                                {company.atRisk > 0 && (
+                                                                                    <>
+                                                                                        <span className="mx-1">·</span>
+                                                                                        <span className="text-amber-600 dark:text-amber-400">
+                                                                                            {company.atRisk} at risk
+                                                                                        </span>
+                                                                                    </>
+                                                                                )}
+                                                                            </>
+                                                                        ) : null}
+                                                                    </p>
+                                                                </div>
                                                             </div>
                                                         </td>
+                                                        <td className="px-4 py-3 text-slate-500 text-xs">—</td>
+                                                        <td className="px-4 py-3 text-right font-semibold text-slate-800 dark:text-slate-200">
+                                                            {company.hasQuota ? `${formatHours(company.quota)}h` : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">
+                                                            {company.hasQuota ? `${formatHours(company.base_quota_hours)}h` : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right font-medium text-emerald-600 dark:text-emerald-400">
+                                                            {company.topup_total_hours > 0
+                                                                ? `+${formatHours(company.topup_total_hours)}h`
+                                                                : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right font-semibold">
+                                                            {formatHours(company.allocated)}h
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            {company.hasQuota ? (
+                                                                <span
+                                                                    className={
+                                                                        company.burn > 100
+                                                                            ? 'font-semibold text-rose-600 dark:text-rose-400'
+                                                                            : company.burn > 85
+                                                                              ? 'font-semibold text-amber-600 dark:text-amber-400'
+                                                                              : 'font-medium text-slate-700 dark:text-slate-300'
+                                                                    }
+                                                                >
+                                                                    {formatPercent(company.burn)}
+                                                                </span>
+                                                            ) : (
+                                                                '—'
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">
+                                                            {company.hasQuota
+                                                                ? `${company.allocated - company.quota >= 0 ? '+' : ''}${formatHours(company.allocated - company.quota)}h`
+                                                                : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <Badge variant="outline" className={healthBadgeClass[company.health.tone]}>
+                                                                {company.health.label}
+                                                            </Badge>
+                                                        </td>
                                                     </tr>
-                                                )}
-                                            </Fragment>
-                                        );
-                                    })
+                                                    {companyExpanded &&
+                                                        company.projects.map((p) => {
+                                                            const expanded = expandedProjectIds.has(p.id);
+                                                            const canExpand = p.hasQuota;
+                                                            return (
+                                                                <Fragment key={p.id}>
+                                                                    <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 bg-white/50 dark:bg-transparent">
+                                                                        <td className="px-2 py-3 text-center">
+                                                                            {canExpand ? (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="inline-flex items-center justify-center rounded-md p-1 text-slate-500 hover:bg-slate-200/60 dark:hover:bg-slate-700"
+                                                                                    onClick={() => toggleProjectExpand(p.id)}
+                                                                                    aria-expanded={expanded}
+                                                                                    aria-label={
+                                                                                        expanded
+                                                                                            ? 'Tutup breakdown MH'
+                                                                                            : 'Buka breakdown MH'
+                                                                                    }
+                                                                                >
+                                                                                    {expanded ? (
+                                                                                        <ChevronDown className="size-4" />
+                                                                                    ) : (
+                                                                                        <ChevronRight className="size-4" />
+                                                                                    )}
+                                                                                </button>
+                                                                            ) : null}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 pl-10 font-medium text-slate-900 dark:text-white">
+                                                                            {p.name}
+                                                                            {p.has_topup && (
+                                                                                <span className="block text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
+                                                                                    {p.manhour_buckets?.filter((b) => b.kind === 'topup').length || 0}{' '}
+                                                                                    top-up
+                                                                                </span>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                                                                            {p.methodology || '—'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">
+                                                                            {p.hasQuota ? `${formatHours(p.quota)}h` : '—'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">
+                                                                            {p.hasQuota ? `${formatHours(p.base_quota_hours)}h` : '—'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">
+                                                                            {p.has_topup ? `+${formatHours(p.topup_total_hours)}h` : '—'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-right font-medium">
+                                                                            {formatHours(p.allocated)}h
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-right">
+                                                                            {p.hasQuota ? (
+                                                                                <span
+                                                                                    className={
+                                                                                        p.burn > 100
+                                                                                            ? 'font-semibold text-rose-600 dark:text-rose-400'
+                                                                                            : p.burn > 85
+                                                                                              ? 'font-semibold text-amber-600 dark:text-amber-400'
+                                                                                              : 'font-medium text-slate-700 dark:text-slate-300'
+                                                                                    }
+                                                                                >
+                                                                                    {formatPercent(p.burn)}
+                                                                                </span>
+                                                                            ) : (
+                                                                                '—'
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">
+                                                                            {p.hasQuota
+                                                                                ? `${p.variance >= 0 ? '+' : ''}${formatHours(p.variance)}h`
+                                                                                : `${formatHours(p.actual - p.allocated)}h`}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-center">
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                className={healthBadgeClass[p.health.tone]}
+                                                                            >
+                                                                                {p.health.label}
+                                                                            </Badge>
+                                                                        </td>
+                                                                    </tr>
+                                                                    {expanded && canExpand && (
+                                                                        <tr>
+                                                                            <td colSpan={10} className="p-0">
+                                                                                <div className="px-4 py-3 pl-10 bg-slate-50/80 dark:bg-slate-900/40 border-t border-slate-200 dark:border-slate-800">
+                                                                                    <ManhourBucketBreakdown
+                                                                                        buckets={p.manhour_buckets}
+                                                                                        overflowHours={p.mh_overflow_hours}
+                                                                                        hasTopup={p.has_topup}
+                                                                                    />
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    )}
+                                                                </Fragment>
+                                                            );
+                                                        })}
+                                                </Fragment>
+                                            );
+                                        })}
+                                        <tr className="bg-slate-50/80 dark:bg-slate-800/40 font-semibold border-t border-slate-200 dark:border-slate-700">
+                                            <td className="px-2 py-3" />
+                                            <td className="px-4 py-3 text-slate-900 dark:text-white">Total portfolio</td>
+                                            <td className="px-4 py-3" />
+                                            <td className="px-4 py-3 text-right">
+                                                {portfolioSummary.totalQuota > 0
+                                                    ? `${formatHours(portfolioSummary.totalQuota)}h`
+                                                    : '—'}
+                                            </td>
+                                            <td className="px-4 py-3" colSpan={2} />
+                                            <td className="px-4 py-3 text-right">
+                                                {formatHours(portfolioSummary.totalAllocated)}h
+                                            </td>
+                                            <td className="px-4 py-3 text-right text-slate-600 font-normal">
+                                                {portfolioSummary.totalQuota > 0
+                                                    ? formatPercent(
+                                                          (portfolioSummary.totalAllocated / portfolioSummary.totalQuota) *
+                                                              100,
+                                                      )
+                                                    : '—'}
+                                            </td>
+                                            <td className="px-4 py-3" colSpan={2} />
+                                        </tr>
+                                    </>
                                 )}
                             </tbody>
                         </SectionTable>

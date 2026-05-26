@@ -494,7 +494,6 @@ class TaskController extends Controller
                     $this->applyRushHourToEstimatedHours($data);
                 } else {
                     if (!($data['is_billable'] ?? true)) {
-                        $data['estimated_hours'] = 0;
                         $data['rush_hour'] = false;
                     } else {
                         $this->applyRushHourToEstimatedHours($data);
@@ -639,7 +638,7 @@ class TaskController extends Controller
 
         $this->normalizeBillableFlag($validated);
         $validated['rush_hour'] = (bool) ($validated['rush_hour'] ?? false);
-        if (!UserAccess::isFreelance($user)) {
+        if (!UserAccess::isFreelance($user) && ($validated['is_billable'] ?? true)) {
             $this->applyRushHourToEstimatedHours($validated);
         }
         $this->normalizeEstimatedHoursForDb($validated);
@@ -724,7 +723,11 @@ class TaskController extends Controller
 
         $this->normalizeBillableFlag($validated);
         $validated['rush_hour'] = (bool) ($validated['rush_hour'] ?? false);
-        if ($validated['rush_hour'] && !UserAccess::isFreelance($user)) {
+        if (
+            $validated['rush_hour']
+            && !UserAccess::isFreelance($user)
+            && ($validated['is_billable'] ?? true)
+        ) {
             $this->applyRushHourToEstimatedHours($validated);
         }
         $this->normalizeEstimatedHoursForDb($validated);

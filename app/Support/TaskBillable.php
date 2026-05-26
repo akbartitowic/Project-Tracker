@@ -4,6 +4,7 @@ namespace App\Support;
 
 /**
  * Billable tasks consume Scrum/WF manhour quota; non-billable tasks do not.
+ * Non-billable tasks may still store estimated_hours for Team Load (optional).
  */
 final class TaskBillable
 {
@@ -24,7 +25,6 @@ final class TaskBillable
     public static function applyNonBillable(array &$data): void
     {
         if (!($data['is_billable'] ?? true)) {
-            $data['estimated_hours'] = 0;
             $data['rush_hour'] = false;
         }
     }

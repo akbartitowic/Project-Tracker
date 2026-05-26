@@ -1,15 +1,44 @@
 import { useState, useEffect } from 'react';
 import { fetchAPI } from '../services/api';
-import { Rocket, Users, AlertCircle, Clock } from 'lucide-react';
-import { Card, CardContent } from "@/components/ui/card";
+import { Rocket, Users, AlertCircle, Clock, LayoutGrid, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isAdminUser } from '../utils/permissions';
+import { cn } from '@/lib/utils';
 
 const getMethodologyLabel = (value) => {
     const normalized = String(value || '').toLowerCase();
     return normalized.includes('waterfall') ? 'Waterfall' : 'Scrum';
 };
+
+const STATUS_COLORS = {
+    'To Do': 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300',
+    'In Progress': 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800/50 dark:bg-blue-950/30 dark:text-blue-300',
+    Review: 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-800/50 dark:bg-violet-950/30 dark:text-violet-300',
+    Reopen: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300',
+    Done: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300',
+};
+
+function KpiCard({ label, value, hint, icon: Icon, iconClass }) {
+    return (
+        <Card className="border-slate-200/90 shadow-none dark:border-slate-800">
+            <CardContent className="flex items-start gap-3 p-4 sm:p-5">
+                {Icon && (
+                    <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-lg', iconClass)}>
+                        <Icon className="size-5" />
+                    </div>
+                )}
+                <div className="min-w-0">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
+                    <p className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{value}</p>
+                    {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -22,8 +51,8 @@ export default function Dashboard() {
         waterfallProjects: 0,
         totalHours: 0,
         activeTasks: 0,
+        taskStatusCounts: {},
     });
-
     const [efficiencyData, setEfficiencyData] = useState([]);
     const [dashboardMode, setDashboardMode] = useState('admin');
     const [memberStats, setMemberStats] = useState({
@@ -51,172 +80,190 @@ export default function Dashboard() {
                 if (res.stats) setStats(res.stats);
                 if (res.efficiency) setEfficiencyData(res.efficiency.slice(0, 5));
             } catch (err) {
-                console.error("Failed to load dashboard data", err);
+                console.error('Failed to load dashboard data', err);
             }
         };
         loadStats();
     }, []);
 
     const shouldShowMemberDashboard = dashboardMode === 'member' && !isAdminUser(user);
-    const commonSummary = shouldShowMemberDashboard
-        ? memberStats
-        : {
-            totalProjectsHandled: stats.totalProjects || 0,
-            activeTasks: stats.activeTasks || 0,
-            taskStatusCounts: stats.taskStatusCounts || {
-                'To Do': 0,
-                'In Progress': 0,
-                Review: 0,
-                Reopen: 0,
-                Done: 0,
-            },
-        };
+    const taskCounts = shouldShowMemberDashboard
+        ? memberStats.taskStatusCounts
+        : stats.taskStatusCounts || {};
 
-    const taskStatusSection = (
-        <section>
-            <h4 className="font-bold text-lg text-slate-900 dark:text-white mb-4">Total Task per Status</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                {['To Do', 'In Progress', 'Review', 'Reopen', 'Done'].map((status) => (
-                    <Card key={status} className="border-slate-200 dark:border-slate-800 shadow-sm">
-                        <CardContent className="p-5">
-                            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{status}</p>
-                            <p className="text-2xl mt-2 font-bold tabular-nums text-slate-900 dark:text-white">
-                                {commonSummary.taskStatusCounts?.[status] || 0}
-                            </p>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
-        </section>
-    );
-
-    const summarySection = shouldShowMemberDashboard ? (
-        <>
-            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-                    <CardContent className="p-6">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total Project yang Di-handle</p>
-                        <h3 className="text-3xl font-bold mt-1 tabular-nums text-slate-900 dark:text-white">{commonSummary.totalProjectsHandled}</h3>
-                    </CardContent>
-                </Card>
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-                    <CardContent className="p-6">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total Task yang Masih Aktif</p>
-                        <h3 className="text-3xl font-bold mt-1 tabular-nums text-slate-900 dark:text-white">{commonSummary.activeTasks}</h3>
-                    </CardContent>
-                </Card>
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm sm:col-span-2 lg:col-span-1">
-                    <CardContent className="p-6">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total Task Selesai</p>
-                        <h3 className="text-3xl font-bold mt-1 tabular-nums text-slate-900 dark:text-white">{commonSummary.taskStatusCounts?.Done || 0}</h3>
-                    </CardContent>
-                </Card>
-            </section>
-            {taskStatusSection}
-        </>
-    ) : (
-        taskStatusSection
-    );
-
-    if (shouldShowMemberDashboard) {
-        return <div className="space-y-6 p-4 sm:space-y-8 sm:p-6 lg:p-8">{summarySection}</div>;
-    }
+    const criticalProjects = efficiencyData.filter((p) => p.burn_percentage > 85);
 
     return (
-        <div className="space-y-6 p-4 sm:space-y-8 sm:p-6 lg:p-8">
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex justify-between items-start gap-3 mb-4">
-                            <Rocket className="text-orange-500 bg-orange-500/10 p-2 rounded-lg size-10 shrink-0" />
-                            <span className="text-xs font-bold text-orange-600 bg-orange-50 dark:bg-orange-500/10 px-2 py-1 rounded shrink-0">Active</span>
-                        </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Active Projects</p>
-                        <h3 className="text-3xl font-bold mt-1 tabular-nums text-slate-900 dark:text-white">{stats.activeProjects}</h3>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                            Done: {stats.doneProjects} · Total: {stats.totalProjects}
+        <div className="min-h-full bg-slate-50/80 dark:bg-background-dark">
+            <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
+                <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                            {shouldShowMemberDashboard ? 'Ringkasan kerja saya' : 'Dashboard'}
+                        </h1>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            {shouldShowMemberDashboard
+                                ? 'Project dan task yang Anda tangani.'
+                                : 'Gambaran singkat project, task, dan kesehatan kuota manhour.'}
                         </p>
-                    </CardContent>
-                </Card>
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex justify-between items-start gap-3 mb-4">
-                            <Users className="text-purple-500 bg-purple-500/10 p-2 rounded-lg size-10 shrink-0" />
-                            <span className="text-xs font-medium text-purple-600 bg-purple-50 dark:bg-purple-500/10 px-2 py-1 rounded shrink-0">In Progress</span>
+                    </div>
+                    {!shouldShowMemberDashboard && (
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate('/board')}>
+                                <LayoutGrid className="size-4" />
+                                Project Board
+                            </Button>
+                            <Button size="sm" className="gap-1.5" onClick={() => navigate('/reports')}>
+                                Laporan
+                                <ArrowRight className="size-3.5" />
+                            </Button>
                         </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Active Tasks</p>
-                        <h3 className="text-3xl font-bold mt-1 tabular-nums text-slate-900 dark:text-white">{stats.activeTasks}</h3>
-                    </CardContent>
-                </Card>
-            </section>
+                    )}
+                </header>
 
-            {summarySection}
+                <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {shouldShowMemberDashboard ? (
+                        <>
+                            <KpiCard
+                                label="Project di-handle"
+                                value={memberStats.totalProjectsHandled}
+                                icon={Rocket}
+                                iconClass="bg-primary/10 text-primary"
+                            />
+                            <KpiCard
+                                label="Task aktif"
+                                value={memberStats.activeTasks}
+                                icon={Users}
+                                iconClass="bg-orange-500/10 text-orange-600"
+                            />
+                            <KpiCard
+                                label="Task selesai"
+                                value={taskCounts?.Done || 0}
+                                icon={CheckCircle2}
+                                iconClass="bg-emerald-500/10 text-emerald-600"
+                            />
+                        </>
+                    ) : (
+                        <>
+                            <KpiCard
+                                label="Project aktif"
+                                value={stats.activeProjects}
+                                hint={`Total ${stats.totalProjects} · Done ${stats.doneProjects}`}
+                                icon={Rocket}
+                                iconClass="bg-primary/10 text-primary"
+                            />
+                            <KpiCard
+                                label="Task aktif"
+                                value={stats.activeTasks}
+                                icon={Users}
+                                iconClass="bg-violet-500/10 text-violet-600"
+                            />
+                            <KpiCard
+                                label="Scrum"
+                                value={stats.scrumProjects}
+                                hint="Metodologi Agile"
+                                icon={LayoutGrid}
+                                iconClass="bg-blue-500/10 text-blue-600"
+                            />
+                            <KpiCard
+                                label="Waterfall"
+                                value={stats.waterfallProjects}
+                                hint="Metodologi fixed scope"
+                                icon={LayoutGrid}
+                                iconClass="bg-slate-500/10 text-slate-600"
+                            />
+                        </>
+                    )}
+                </section>
 
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="border-blue-100 dark:border-blue-900/30 bg-blue-50/40 dark:bg-blue-900/10">
-                    <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">Scrum Projects</h4>
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-bold">Agile</span>
-                        </div>
-                        <p className="text-3xl mt-2 font-bold text-slate-900 dark:text-white">{stats.scrumProjects}</p>
-                        <p className="text-xs text-slate-500 mt-1">Projects with Scrum / Agile methodology.</p>
-                    </CardContent>
-                </Card>
-                <Card className="border-violet-100 dark:border-violet-900/30 bg-violet-50/40 dark:bg-violet-900/10">
-                    <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-bold text-violet-700 dark:text-violet-300 uppercase tracking-wide">Waterfall Projects</h4>
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 font-bold">Fixed Scope</span>
-                        </div>
-                        <p className="text-3xl mt-2 font-bold text-slate-900 dark:text-white">{stats.waterfallProjects}</p>
-                        <p className="text-xs text-slate-500 mt-1">Projects with Waterfall methodology.</p>
-                    </CardContent>
-                </Card>
-            </section>
+                <section>
+                    <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Task per status</h2>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                        {['To Do', 'In Progress', 'Review', 'Reopen', 'Done'].map((status) => (
+                            <div
+                                key={status}
+                                className={cn(
+                                    'rounded-lg border px-3 py-3 text-center',
+                                    STATUS_COLORS[status] || STATUS_COLORS['To Do'],
+                                )}
+                            >
+                                <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{status}</p>
+                                <p className="mt-1 text-xl font-bold tabular-nums">{taskCounts?.[status] || 0}</p>
+                            </div>
+                        ))}
+                    </div>
+                </section>
 
-            <section>
-                <Card className="flex flex-col max-w-3xl">
-                    <CardContent className="p-6 flex-1 flex flex-col">
-                        <div className="mb-6">
-                            <h4 className="font-bold text-lg text-rose-600 flex items-center gap-2">
-                                <AlertCircle className="size-5" /> Critical Projects
-                            </h4>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">Low manhour balance (&lt; 15%)</p>
-                        </div>
-                        <div className="space-y-4 flex-1">
-                            {efficiencyData.filter(p => p.burn_percentage > 85).length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-sm italic">
-                                    <p>No critical projects.</p>
-                                    <p>All projects healthy.</p>
-                                </div>
-                            ) : (
-                                efficiencyData.filter(p => p.burn_percentage > 85).map((proj, idx) => (
-                                    <div key={idx} className="p-4 rounded-lg bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/20">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="font-bold text-sm text-slate-900 dark:text-rose-100 truncate pr-2">{proj.name}</span>
-                                            <div className="flex items-center gap-1">
-                                                <span className={`text-[10px] font-bold ${proj.burn_percentage > 100 ? 'text-white bg-rose-600' : 'text-rose-700 bg-rose-100 dark:bg-rose-900/40'} px-2 py-0.5 rounded shadow-sm`}>
-                                                    {Math.round(proj.burn_percentage)}% Used
-                                                </span>
-                                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase">
-                                                    {getMethodologyLabel(proj.methodology)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 uppercase font-bold tracking-tight">
-                                            <Clock className="size-3.5" /> {Math.max(0, proj.estimated_hours - proj.allocated_hours).toFixed(1)}h remaining
-                                        </div>
+                {!shouldShowMemberDashboard && (
+                    <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        <Card className="border-slate-200/90 shadow-none dark:border-slate-800 lg:col-span-2">
+                            <CardContent className="p-4 sm:p-5">
+                                <div className="mb-4 flex items-center justify-between gap-2">
+                                    <div>
+                                        <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                                            <AlertCircle className="size-4 text-rose-500" />
+                                            Project perlu perhatian
+                                        </h2>
+                                        <p className="text-xs text-slate-500 mt-0.5">Kuota manhour &gt; 85% terpakai</p>
                                     </div>
-                                ))
-                            )}
-                        </div>
-                        <button onClick={() => navigate('/reports')} className="w-full mt-6 py-2.5 text-sm font-semibold border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-700 dark:text-slate-300">
-                            View Reports (financial & efficiency)
-                        </button>
-                    </CardContent>
-                </Card>
-            </section>
+                                </div>
+                                {criticalProjects.length === 0 ? (
+                                    <p className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500 dark:border-slate-700">
+                                        Semua project dalam batas aman.
+                                    </p>
+                                ) : (
+                                    <ul className="space-y-2">
+                                        {criticalProjects.map((proj) => (
+                                            <li
+                                                key={proj.id || proj.name}
+                                                className="flex items-center justify-between gap-3 rounded-lg border border-rose-100 bg-rose-50/50 px-3 py-2.5 dark:border-rose-900/30 dark:bg-rose-950/20"
+                                            >
+                                                <div className="min-w-0">
+                                                    <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
+                                                        {proj.name}
+                                                    </p>
+                                                    <p className="flex items-center gap-1 text-xs text-slate-500">
+                                                        <Clock className="size-3" />
+                                                        {Math.max(0, (proj.estimated_hours || 0) - (proj.allocated_hours || 0)).toFixed(1)}h tersisa
+                                                        · {getMethodologyLabel(proj.methodology)}
+                                                    </p>
+                                                </div>
+                                                <span
+                                                    className={cn(
+                                                        'shrink-0 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums',
+                                                        proj.burn_percentage > 100
+                                                            ? 'bg-rose-600 text-white'
+                                                            : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+                                                    )}
+                                                >
+                                                    {Math.round(proj.burn_percentage)}%
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </CardContent>
+                        </Card>
+                        <Card className="border-slate-200/90 shadow-none dark:border-slate-800">
+                            <CardContent className="flex h-full flex-col p-4 sm:p-5">
+                                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Aksi cepat</h2>
+                                <p className="mt-1 text-xs text-slate-500">Navigasi ke area yang sering dipakai.</p>
+                                <div className="mt-4 flex flex-1 flex-col gap-2">
+                                    <Button variant="outline" className="justify-start h-10" onClick={() => navigate('/board')}>
+                                        Buka Project Board
+                                    </Button>
+                                    <Button variant="outline" className="justify-start h-10" onClick={() => navigate('/reports')}>
+                                        Laporan &amp; portfolio
+                                    </Button>
+                                    <Button variant="outline" className="justify-start h-10" onClick={() => navigate('/team-load')}>
+                                        Team Load
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </section>
+                )}
+            </div>
         </div>
     );
 }
