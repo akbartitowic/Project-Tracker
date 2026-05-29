@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { fetchAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useAppBranding } from '../context/AppBrandingContext';
 import { hasPermission } from '../utils/permissions';
+import BrandingAssetUpload from '../components/settings/BrandingAssetUpload';
 import {
     Settings,
     Database,
@@ -13,6 +15,7 @@ import {
     Save,
     Loader2,
     Send,
+    Image,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -40,6 +43,19 @@ const SMTP_FIELDS = [
 export default function SystemSettings() {
     const { user } = useAuth();
     const canResetData = hasPermission(user, 'settings.reset');
+    const {
+        logo_url: logoUrl,
+        favicon_url: faviconUrl,
+        has_custom_logo: hasCustomLogo,
+        has_custom_favicon: hasCustomFavicon,
+        refreshBranding,
+    } = useAppBranding();
+
+    const handleBrandingUpdated = async (data) => {
+        if (data) {
+            await refreshBranding();
+        }
+    };
 
     const [isResetModalOpen, setIsResetModalOpen] = useState(false);
     const [resetStep, setResetStep] = useState(1);
@@ -140,10 +156,40 @@ export default function SystemSettings() {
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Settings</h1>
                         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                            Konfigurasi email dan pemeliharaan data sistem.
+                            Logo aplikasi, favicon browser, email, dan pemeliharaan data.
                         </p>
                     </div>
                 </header>
+
+                <Card className="border-slate-200/90 shadow-none dark:border-slate-800">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <Image className="size-4 text-primary" />
+                            Branding
+                        </CardTitle>
+                        <CardDescription>Logo sidebar/login dan ikon tab browser.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <BrandingAssetUpload
+                            kind="logo"
+                            label="Logo aplikasi"
+                            description="Dipakai di sidebar, halaman login, dan default quotation PDF."
+                            previewUrl={logoUrl}
+                            hasCustom={hasCustomLogo}
+                            onUpdated={handleBrandingUpdated}
+                            onError={(msg) => alert(msg)}
+                        />
+                        <BrandingAssetUpload
+                            kind="favicon"
+                            label="Favicon (tab browser)"
+                            description="Ikon di tab browser. Disarankan PNG persegi, min. 32×32 px."
+                            previewUrl={faviconUrl}
+                            hasCustom={hasCustomFavicon}
+                            onUpdated={handleBrandingUpdated}
+                            onError={(msg) => alert(msg)}
+                        />
+                    </CardContent>
+                </Card>
 
                 <Card className="border-slate-200/90 shadow-none dark:border-slate-800">
                     <CardHeader className="pb-3">

@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\ProjectMember;
 use App\Models\Task;
 use App\Models\Project;
+use App\Mail\TaskAssignedMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Throwable;
 use App\Services\TaskAggregationService;
 use App\Support\ProjectAccess;
 use App\Support\TaskBillable;
@@ -23,6 +26,39 @@ class TaskController extends Controller
     use LogActivity;
 
     private const RUSH_HOUR_FACTOR = 1.3;
+
+    private function sendTaskAssignedEmail(Task $task): void
+    {
+        $task->loadMissing(['assignee', 'project']);
+        $assignee = $task->assignee;
+        if (!$assignee || !$assignee->email) {
+            return;
+        }
+        if (!$assignee->task_email_notifications_enabled) {
+            $this->log(
+                'Project',
+                'Task Assignment Email Skipped',
+                "Email skipped for task '{$task->title}' because assignee '{$assignee->email}' disabled notifications."
+            );
+            return;
+        }
+
+        $boardUrl = $task->project_id ? url('/board/' . $task->project_id) : null;
+        try {
+            Mail::to($assignee->email)->send(new TaskAssignedMail($task, $boardUrl));
+            $this->log(
+                'Project',
+                'Task Assignment Email Sent',
+                "Assignment email sent to '{$assignee->email}' for task '{$task->title}' (project ID: {$task->project_id})."
+            );
+        } catch (Throwable $e) {
+            $this->log(
+                'Project',
+                'Task Assignment Email Failed',
+                "Failed sending assignment email to '{$assignee->email}' for task '{$task->title}': {$e->getMessage()}"
+            );
+        }
+    }
 
     private const CSV_COLUMN_ALIASES = [
         'title' => ['title'],
@@ -665,6 +701,9 @@ class TaskController extends Controller
             $task->assignee_id ? (int) $task->assignee_id : null,
             $task->project_role_id ? (int) $task->project_role_id : null
         );
+        if (!empty($task->assignee_id)) {
+            $this->sendTaskAssignedEmail($task);
+        }
 
         if ($task->parent_task_id) {
             TaskAggregationService::syncParentEstimatedHours((int) $task->parent_task_id);
@@ -698,6 +737,7 @@ class TaskController extends Controller
     {
         $user = $request->user();
         $task = Task::findOrFail($id);
+        $previousAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
         if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
@@ -749,6 +789,10 @@ class TaskController extends Controller
                 (int) $validated['assignee_id'],
                 !empty($validated['project_role_id']) ? (int) $validated['project_role_id'] : null
             );
+            if ((int) $validated['assignee_id'] !== (int) $previousAssigneeId) {
+                $task->refresh();
+                $this->sendTaskAssignedEmail($task);
+            }
         }
 
         if ($task->parent_task_id) {

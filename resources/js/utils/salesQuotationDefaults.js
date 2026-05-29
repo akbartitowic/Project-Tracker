@@ -30,6 +30,8 @@ export function emptyQuotation() {
     client_address: '',
     section_title: '',
     line_items: [emptyLineItem()],
+    discount_type: 'fixed',
+    discount_value: '',
     notes: '',
     payment_terms: '',
     cancellation_penalty: '',
@@ -46,6 +48,7 @@ function hasSavedQuotationData(data) {
   if (data.section_title) return true;
   if (data.client_address) return true;
   if (data.notes || data.payment_terms || data.cancellation_penalty) return true;
+  if (Number(data.discount_value || 0) > 0) return true;
   if (Array.isArray(data.line_items) && data.line_items.some((row) => {
     if (!row || typeof row !== 'object') return false;
     return Boolean(
@@ -80,6 +83,8 @@ export function buildQuotationFromPitch(pitch, defaults = {}) {
           unit: row.unit ?? 'Hours',
         }))
       : [emptyLineItem()],
+    discount_type: defaults.discount_type === 'percent' ? 'percent' : 'fixed',
+    discount_value: defaults.discount_value != null ? String(defaults.discount_value) : '',
     notes: defaults.notes ?? '',
     payment_terms: defaults.payment_terms ?? '',
     cancellation_penalty: defaults.cancellation_penalty ?? '',
@@ -95,6 +100,8 @@ export function quotationPayloadForApi(quotation, negotiationRegenerateQuote = n
     valid_until: quotation.valid_until,
     client_address: quotation.client_address,
     section_title: quotation.section_title,
+    discount_type: quotation.discount_type === 'percent' ? 'percent' : 'fixed',
+    discount_value: quotation.discount_value !== '' ? Number(quotation.discount_value) : 0,
     notes: quotation.notes,
     payment_terms: quotation.payment_terms,
     cancellation_penalty: quotation.cancellation_penalty,
@@ -121,7 +128,25 @@ export function lineItemAmount(row) {
 }
 
 export function quotationTotal(quotation) {
+  const subtotal = quotationSubtotal(quotation);
+  const discount = quotationDiscountAmount(quotation);
+  return Math.max(0, subtotal - discount);
+}
+
+export function quotationSubtotal(quotation) {
   return (quotation?.line_items || []).reduce((sum, row) => sum + lineItemAmount(row), 0);
+}
+
+export function quotationDiscountAmount(quotation) {
+  const subtotal = quotationSubtotal(quotation);
+  if (subtotal <= 0) return 0;
+  const raw = Number(quotation?.discount_value || 0);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  if (quotation?.discount_type === 'percent') {
+    const pct = Math.min(100, Math.max(0, raw));
+    return (subtotal * pct) / 100;
+  }
+  return Math.min(subtotal, Math.max(0, raw));
 }
 
 /** Nilai final deal (IDR) mengikuti total quotation terbaru. */

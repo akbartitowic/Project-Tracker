@@ -69,6 +69,7 @@
         .words-cell { font-size: 9px; font-style: italic; width: 62%; }
         .total-label { text-align: right; font-weight: bold; width: 18%; }
         .total-value { text-align: right; font-weight: bold; width: 20%; }
+        .sub-value { text-align: right; width: 20%; }
         .final-row td {
             background: #1e3a5f;
             color: #fff;
@@ -184,10 +185,21 @@
 
     <table class="summary-table">
         <tr>
-            <td class="words-cell" rowspan="2">{{ $amount_in_words }}</td>
-            <td class="total-label">Total</td>
-            <td class="total-value">{{ $total_formatted }}</td>
+            <td class="words-cell" rowspan="{{ $discount_amount > 0 ? 3 : 2 }}">{{ $amount_in_words }}</td>
+            <td class="total-label">Subtotal</td>
+            <td class="sub-value">{{ $subtotal_formatted }}</td>
         </tr>
+        @if($discount_amount > 0)
+            <tr>
+                <td class="total-label">
+                    Discount
+                    @if($discount_type === 'percent')
+                        ({{ rtrim(rtrim(number_format((float) $discount_value, 2, '.', ''), '0'), '.') }}%)
+                    @endif
+                </td>
+                <td class="sub-value">- {{ $discount_formatted }}</td>
+            </tr>
+        @endif
         <tr class="final-row">
             <td class="final-label">Final Amount</td>
             <td class="final-value">{{ $total_formatted }}</td>

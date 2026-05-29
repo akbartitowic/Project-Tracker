@@ -15,6 +15,7 @@ export default function SystemLogs() {
     });
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [quickEmailFilter, setQuickEmailFilter] = useState('all');
 
     const loadLogs = async (page = 1) => {
         setLoading(true);
@@ -59,11 +60,23 @@ export default function SystemLogs() {
         }
     };
 
-    const filteredLogs = logs.filter(log => 
-        log.activity.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (log.description && log.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (log.user?.name && log.user.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    const filteredLogs = logs.filter((log) => {
+        const activity = (log.activity || '').toLowerCase();
+        const description = (log.description || '').toLowerCase();
+        const userName = (log.user?.name || '').toLowerCase();
+        const q = searchTerm.toLowerCase();
+
+        const bySearch = activity.includes(q) || description.includes(q) || userName.includes(q);
+        if (!bySearch) return false;
+
+        if (quickEmailFilter === 'email_sent') {
+            return activity.includes('email sent');
+        }
+        if (quickEmailFilter === 'email_failed') {
+            return activity.includes('email failed');
+        }
+        return true;
+    });
 
     return (
         <div className="space-y-6 p-4 animate-fade sm:space-y-8 sm:p-6 lg:p-8">
@@ -83,6 +96,32 @@ export default function SystemLogs() {
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
+                    </div>
+                    <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={quickEmailFilter === 'all' ? 'bg-slate-100 dark:bg-slate-800' : ''}
+                            onClick={() => setQuickEmailFilter('all')}
+                        >
+                            All
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={quickEmailFilter === 'email_sent' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : ''}
+                            onClick={() => setQuickEmailFilter('email_sent')}
+                        >
+                            Email Sent
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={quickEmailFilter === 'email_failed' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : ''}
+                            onClick={() => setQuickEmailFilter('email_failed')}
+                        >
+                            Email Failed
+                        </Button>
                     </div>
                     <Button variant="outline" className="gap-2 border-rose-200 text-rose-600 hover:bg-rose-50" onClick={handleCleanup}>
                         <Trash2 className="size-4" /> Cleanup Now

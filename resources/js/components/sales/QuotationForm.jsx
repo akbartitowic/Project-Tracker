@@ -1,10 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Trash2 } from 'lucide-react';
 import {
   emptyLineItem,
   formatIdr,
+  quotationDiscountAmount,
+  quotationSubtotal,
   lineItemAmount,
   quotationTotal,
 } from '../../utils/salesQuotationDefaults';
@@ -34,6 +37,8 @@ export default function QuotationForm({ quotation, onChange, disabled }) {
     onChange({ ...quotation, line_items: items });
   };
 
+  const subtotal = quotationSubtotal(quotation);
+  const discountAmount = quotationDiscountAmount(quotation);
   const total = quotationTotal(quotation);
 
   return (
@@ -169,9 +174,54 @@ export default function QuotationForm({ quotation, onChange, disabled }) {
             </div>
           </div>
         ))}
-        <p className="text-sm font-semibold text-right text-slate-800 dark:text-slate-100">
-          Total: {formatIdr(total)}
-        </p>
+        <div className="ml-auto w-full max-w-xs space-y-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900/40">
+          <p className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+            <span>Subtotal</span>
+            <span className="font-medium">{formatIdr(subtotal)}</span>
+          </p>
+          <p className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+            <span>Diskon</span>
+            <span className="font-medium">- {formatIdr(discountAmount)}</span>
+          </p>
+          <p className="flex items-center justify-between border-t border-slate-200 pt-1 font-semibold text-slate-800 dark:border-slate-700 dark:text-slate-100">
+            <span>Total</span>
+            <span>{formatIdr(total)}</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-2 block">
+          <span className="text-sm font-medium">Tipe diskon</span>
+          <Select
+            value={quotation.discount_type === 'percent' ? 'percent' : 'fixed'}
+            onValueChange={(value) => setField('discount_type', value)}
+            disabled={disabled}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih tipe diskon" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fixed">Nominal (IDR)</SelectItem>
+              <SelectItem value="percent">Persentase (%)</SelectItem>
+            </SelectContent>
+          </Select>
+        </label>
+        <label className="space-y-2 block">
+          <span className="text-sm font-medium">
+            Nilai diskon {quotation.discount_type === 'percent' ? '(%)' : '(IDR)'}
+          </span>
+          <Input
+            type="number"
+            min="0"
+            max={quotation.discount_type === 'percent' ? '100' : undefined}
+            step={quotation.discount_type === 'percent' ? '0.01' : '1'}
+            value={quotation.discount_value ?? ''}
+            onChange={(e) => setField('discount_value', e.target.value)}
+            disabled={disabled}
+            placeholder={quotation.discount_type === 'percent' ? 'Contoh: 10' : 'Contoh: 500000'}
+          />
+        </label>
       </div>
 
       <label className="space-y-2 block">

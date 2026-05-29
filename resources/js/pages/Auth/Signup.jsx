@@ -5,6 +5,7 @@ import { UserPlus, Mail, Lock, User, AlertCircle, RefreshCcw } from 'lucide-reac
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import AppLogo from '../../components/AppLogo';
 
 export default function Signup() {
     const { signup } = useAuth();
@@ -47,7 +48,7 @@ export default function Signup() {
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
                     <div className="flex flex-col items-center mb-8">
                         <div className="size-14 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 border border-white/20 shadow-inner">
-                            <img src="/logo.png" alt="Noohtify Logo" className="size-9 object-contain" />
+                            <AppLogo alt="Application logo" className="size-9" />
                         </div>
                         <h2 className="text-3xl font-black text-white tracking-tight text-center">Join Noohtify</h2>
                         <p className="text-slate-400 font-medium mt-1">Create your project management account</p>

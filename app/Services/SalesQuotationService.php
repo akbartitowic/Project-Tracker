@@ -6,6 +6,7 @@ use App\Models\SalesPitch;
 use App\Support\AmountInWords;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use App\Support\AppBranding;
 use App\Support\PublicStorageUrl;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -42,6 +43,8 @@ class SalesQuotationService
                     'unit' => 'Hours',
                 ],
             ],
+            'discount_type' => 'fixed',
+            'discount_value' => 0,
             'notes' => self::DEFAULT_NOTES,
             'payment_terms' => self::DEFAULT_PAYMENT_TERMS,
             'cancellation_penalty' => self::DEFAULT_CANCELLATION,
@@ -83,6 +86,13 @@ class SalesQuotationService
         }
 
         $merged['line_items'] = $lineItems;
+        $discountType = ($raw['discount_type'] ?? $merged['discount_type'] ?? 'fixed') === 'percent' ? 'percent' : 'fixed';
+        $discountValue = max(0, (float) ($raw['discount_value'] ?? $merged['discount_value'] ?? 0));
+        if ($discountType === 'percent') {
+            $discountValue = min(100, $discountValue);
+        }
+        $merged['discount_type'] = $discountType;
+        $merged['discount_value'] = $discountValue;
         $merged['quote_no'] = trim((string) ($merged['quote_no'] ?? '')) ?: $defaults['quote_no'];
         $merged['quote_date'] = $this->normalizeDate($merged['quote_date'] ?? $defaults['quote_date']);
         $merged['valid_until'] = $this->normalizeDate($merged['valid_until'] ?? $defaults['valid_until']);
@@ -109,7 +119,11 @@ class SalesQuotationService
     public function buildViewData(SalesPitch $pitch, array $quotationData): array
     {
         $data = $this->normalizeQuotationData($quotationData, $pitch);
-        $total = collect($data['line_items'])->sum(fn ($row) => (float) ($row['amount'] ?? 0));
+        $subtotal = collect($data['line_items'])->sum(fn ($row) => (float) ($row['amount'] ?? 0));
+        $discount = $data['discount_type'] === 'percent'
+            ? round($subtotal * ((float) ($data['discount_value'] ?? 0) / 100), 2)
+            : min($subtotal, (float) ($data['discount_value'] ?? 0));
+        $total = max(0, $subtotal - $discount);
 
         $logoBase64 = $this->resolveLogoBase64($pitch);
 
@@ -124,6 +138,12 @@ class SalesQuotationService
             'client_address' => $data['client_address'],
             'section_title' => $data['section_title'],
             'line_items' => $data['line_items'],
+            'discount_type' => $data['discount_type'],
+            'discount_value' => (float) ($data['discount_value'] ?? 0),
+            'discount_amount' => $discount,
+            'subtotal' => $subtotal,
+            'subtotal_formatted' => $this->formatIdr($subtotal),
+            'discount_formatted' => $this->formatIdr($discount),
             'total' => $total,
             'total_formatted' => $this->formatIdr($total),
             'amount_in_words' => AmountInWords::idrToEnglish($total),
@@ -233,9 +253,9 @@ class SalesQuotationService
         if ($pitch->quotation_logo_path && Storage::disk('public')->exists($pitch->quotation_logo_path)) {
             $candidates[] = Storage::disk('public')->path($pitch->quotation_logo_path);
         }
-        $default = public_path('logo.png');
-        if (is_file($default)) {
-            $candidates[] = $default;
+        $brandingLogo = AppBranding::logoFilesystemPath();
+        if ($brandingLogo) {
+            $candidates[] = $brandingLogo;
         }
 
         foreach ($candidates as $fullPath) {

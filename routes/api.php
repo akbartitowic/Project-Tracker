@@ -32,6 +32,7 @@ use App\Http\Controllers\ProjectNoteController;
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/signup', [AuthController::class, 'signup'])
     ->middleware(['throttle:5,1', 'signup.enabled']);
+Route::get('/branding', [SettingController::class, 'branding']);
 
 Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
@@ -185,6 +186,14 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     // 10. System Management
     Route::get('/settings/all', [SettingController::class, 'getSettings'])->middleware('permission:settings.read');
     Route::post('/settings/update', [SettingController::class, 'updateSettings'])
+        ->middleware(['permission:settings.update', 'throttle:20,1']);
+    Route::post('/settings/branding/logo', [SettingController::class, 'uploadLogo'])
+        ->middleware(['permission:settings.update', 'throttle:20,1']);
+    Route::delete('/settings/branding/logo', [SettingController::class, 'removeLogo'])
+        ->middleware(['permission:settings.update', 'throttle:20,1']);
+    Route::post('/settings/branding/favicon', [SettingController::class, 'uploadFavicon'])
+        ->middleware(['permission:settings.update', 'throttle:20,1']);
+    Route::delete('/settings/branding/favicon', [SettingController::class, 'removeFavicon'])
         ->middleware(['permission:settings.update', 'throttle:20,1']);
     Route::post('/settings/test-smtp', [SettingController::class, 'testSmtp'])
         ->middleware(['permission:settings.update', 'throttle:10,1']);

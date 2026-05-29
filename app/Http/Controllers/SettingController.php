@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Setting;
+use App\Support\AppBranding;
 use App\Support\SettingKeys;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -11,6 +12,72 @@ use Illuminate\Support\Facades\Log;
 
 class SettingController extends Controller
 {
+    public function branding()
+    {
+        return response()->json([
+            'status' => 'success',
+            'data' => AppBranding::toArray(),
+        ]);
+    }
+
+    public function uploadLogo(Request $request)
+    {
+        $request->validate([
+            'logo' => 'required|image|max:4096',
+        ]);
+
+        AppBranding::deleteStoredFile(AppBranding::logoPath());
+        $path = $request->file('logo')->store('app-branding', 'public');
+        AppBranding::setLogoPath($path);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Logo updated successfully',
+            'data' => AppBranding::toArray(),
+        ]);
+    }
+
+    public function removeLogo()
+    {
+        AppBranding::deleteStoredFile(AppBranding::logoPath());
+        AppBranding::setLogoPath(null);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Logo reset to default',
+            'data' => AppBranding::toArray(),
+        ]);
+    }
+
+    public function uploadFavicon(Request $request)
+    {
+        $request->validate([
+            'favicon' => 'required|image|max:2048|mimes:png,jpg,jpeg,gif,webp,ico',
+        ]);
+
+        AppBranding::deleteStoredFile(AppBranding::faviconPath());
+        $path = $request->file('favicon')->store('app-branding', 'public');
+        AppBranding::setFaviconPath($path);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Favicon updated successfully',
+            'data' => AppBranding::toArray(),
+        ]);
+    }
+
+    public function removeFavicon()
+    {
+        AppBranding::deleteStoredFile(AppBranding::faviconPath());
+        AppBranding::setFaviconPath(null);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Favicon reset to default',
+            'data' => AppBranding::toArray(),
+        ]);
+    }
+
     public function getSettings(Request $request)
     {
         $keys = $request->query('keys');

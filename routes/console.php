@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('logs:cleanup')->daily();
+Schedule::command('tasks:send-due-reminders')->hourlyAt(0);

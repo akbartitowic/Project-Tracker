@@ -61,6 +61,7 @@ class AuthController extends Controller
             'role_id' => $defaultRole->id,
             'role' => $defaultRole->name,
             'status' => 'Active',
+            'timezone' => 'Asia/Jakarta',
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -130,11 +131,19 @@ class AuthController extends Controller
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'phone_number' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8|confirmed',
+            'task_email_notifications_enabled' => 'nullable|boolean',
+            'timezone' => 'nullable|timezone',
         ]);
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
         $user->phone_number = $validated['phone_number'] ?? $user->phone_number;
+        if (array_key_exists('task_email_notifications_enabled', $validated)) {
+            $user->task_email_notifications_enabled = (bool) $validated['task_email_notifications_enabled'];
+        }
+        if (array_key_exists('timezone', $validated)) {
+            $user->timezone = $validated['timezone'] ?: 'Asia/Jakarta';
+        }
 
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);

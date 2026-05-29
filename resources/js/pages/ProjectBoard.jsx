@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
-import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search } from 'lucide-react';
+import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star } from 'lucide-react';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../utils/taskDates';
 import { hasPermission } from '../utils/permissions';
 import { Card, CardContent } from "@/components/ui/card";
@@ -239,6 +239,16 @@ export default function ProjectBoard() {
     const [listViewMode, setListViewMode] = useState('grid');
     const [projectListTab, setProjectListTab] = useState('active');
     const [projectListSearch, setProjectListSearch] = useState('');
+    const [projectSortBy, setProjectSortBy] = useState('newest');
+    const [pinnedProjectIds, setPinnedProjectIds] = useState(() => {
+        try {
+            const raw = localStorage.getItem('projectBoardPinnedIds');
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed.map((id) => String(id)) : [];
+        } catch {
+            return [];
+        }
+    });
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -273,6 +283,10 @@ export default function ProjectBoard() {
     const [isProjectNotesOpen, setIsProjectNotesOpen] = useState(false);
     const isFreelance = isFreelanceUser(user);
     const canUpdateBoard = hasPermission(user, 'project_board.update');
+
+    useEffect(() => {
+        localStorage.setItem('projectBoardPinnedIds', JSON.stringify(pinnedProjectIds));
+    }, [pinnedProjectIds]);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -376,6 +390,15 @@ export default function ProjectBoard() {
     const updateAssignmentRow = (index, field, value) => {
         setAssignmentRows((prev) => prev.map((row, idx) => idx === index ? { ...row, [field]: value } : row));
     };
+    const isProjectPinned = useCallback((projectId) => (
+        pinnedProjectIds.includes(String(projectId))
+    ), [pinnedProjectIds]);
+    const togglePinnedProject = useCallback((projectId) => {
+        const key = String(projectId);
+        setPinnedProjectIds((prev) => (
+            prev.includes(key) ? prev.filter((id) => id !== key) : [...prev, key]
+        ));
+    }, []);
 
     const saveProjectAssignments = async () => {
         if (!assigningProject) return;
@@ -1039,6 +1062,18 @@ export default function ProjectBoard() {
         }
         return opts;
     }, [users, projectMembers]);
+    const assignmentUserOptions = useMemo(() => {
+        if (users.length > 0) {
+            return users.map((u) => ({
+                id: String(u.id),
+                label: u.email ? `${u.name} (${u.email})` : u.name,
+            }));
+        }
+        return assigneeSelectOptions.map((o) => ({
+            id: String(o.id),
+            label: o.label,
+        }));
+    }, [users, assigneeSelectOptions]);
 
     const activeProjects = useMemo(
         () => projects.filter((p) => p.status !== 'Done'),
@@ -1061,6 +1096,34 @@ export default function ProjectBoard() {
                 || (p.budget_status || '').toLowerCase().includes(q),
         );
     }, [displayedProjects, projectListSearch]);
+    const sortedDisplayedProjects = useMemo(() => {
+        const items = [...filteredDisplayedProjects];
+        const createdAtTime = (project) => {
+            const t = new Date(project?.created_at || '').getTime();
+            return Number.isFinite(t) ? t : 0;
+        };
+        const numericId = (project) => Number(project?.id) || 0;
+        const textName = (project) => String(project?.name || '').toLowerCase();
+        const totalMh = (project) => Number(project?.total_manhours) || 0;
+        const usage = (project) => Number(project?.usage_percentage) || 0;
+
+        items.sort((a, b) => {
+            const aPinned = pinnedProjectIds.includes(String(a?.id));
+            const bPinned = pinnedProjectIds.includes(String(b?.id));
+            if (aPinned !== bPinned) return aPinned ? -1 : 1;
+            if (projectSortBy === 'oldest') {
+                const dateDiff = createdAtTime(a) - createdAtTime(b);
+                return dateDiff !== 0 ? dateDiff : numericId(a) - numericId(b);
+            }
+            if (projectSortBy === 'name_asc') return textName(a).localeCompare(textName(b));
+            if (projectSortBy === 'name_desc') return textName(b).localeCompare(textName(a));
+            if (projectSortBy === 'quota_desc') return totalMh(b) - totalMh(a);
+            if (projectSortBy === 'usage_desc') return usage(b) - usage(a);
+            const dateDiff = createdAtTime(b) - createdAtTime(a);
+            return dateDiff !== 0 ? dateDiff : numericId(b) - numericId(a);
+        });
+        return items;
+    }, [filteredDisplayedProjects, pinnedProjectIds, projectSortBy]);
 
     const displayProjectStatus = useMemo(() => {
         if (!selectedProject) return 'Planning';
@@ -1108,9 +1171,9 @@ export default function ProjectBoard() {
                                     <List className="size-4" />
                                 </Button>
                             </div>
-                            {isEditMode && filteredDisplayedProjects.length > 0 && (
-                                <Button variant="outline" size="sm" onClick={() => toggleAllProjects(filteredDisplayedProjects)}>
-                                    {selectedProjectIds.length === filteredDisplayedProjects.length ? 'Batal semua' : 'Pilih semua'}
+                            {isEditMode && sortedDisplayedProjects.length > 0 && (
+                                <Button variant="outline" size="sm" onClick={() => toggleAllProjects(sortedDisplayedProjects)}>
+                                    {selectedProjectIds.length === sortedDisplayedProjects.length ? 'Batal semua' : 'Pilih semua'}
                                 </Button>
                             )}
                             {isEditMode && selectedProjectIds.length > 0 && (
@@ -1160,18 +1223,36 @@ export default function ProjectBoard() {
                                 <span className="text-xs opacity-80">({doneProjects.length})</span>
                             </Button>
                         </div>
-                        <div className="relative w-full sm:max-w-xs">
-                            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
-                            <Input
-                                value={projectListSearch}
-                                onChange={(e) => setProjectListSearch(e.target.value)}
-                                placeholder="Cari project..."
-                                className="h-9 pl-8 bg-white dark:bg-slate-900"
-                            />
+                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                            <div className="relative w-full sm:w-56">
+                                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+                                <Input
+                                    value={projectListSearch}
+                                    onChange={(e) => setProjectListSearch(e.target.value)}
+                                    placeholder="Cari project..."
+                                    className="h-9 pl-8 bg-white dark:bg-slate-900"
+                                />
+                            </div>
+                            <div className="w-full sm:w-52">
+                                <Select value={projectSortBy} onValueChange={setProjectSortBy}>
+                                    <SelectTrigger className="h-9 bg-white dark:bg-slate-900">
+                                        <ArrowUpDown className="mr-2 size-3.5 text-slate-500" />
+                                        <SelectValue placeholder="Sort by" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="newest">Terbaru</SelectItem>
+                                        <SelectItem value="oldest">Terlama</SelectItem>
+                                        <SelectItem value="name_asc">Nama A-Z</SelectItem>
+                                        <SelectItem value="name_desc">Nama Z-A</SelectItem>
+                                        <SelectItem value="quota_desc">Kuota MH terbesar</SelectItem>
+                                        <SelectItem value="usage_desc">Usage tertinggi</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                     </div>
 
-                    {filteredDisplayedProjects.length === 0 ? (
+                    {sortedDisplayedProjects.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-sm text-slate-500 dark:border-slate-700">
                             {displayedProjects.length === 0
                                 ? projectListTab === 'done'
@@ -1181,14 +1262,15 @@ export default function ProjectBoard() {
                         </div>
                     ) : listViewMode === 'grid' ? (
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            {filteredDisplayedProjects.map((project) => (
+                            {sortedDisplayedProjects.map((project) => (
                                 <Card
                                     key={project.id}
                                     className={cn(
                                         'group relative cursor-pointer border-slate-200/90 bg-white shadow-none transition-colors hover:border-primary/40 dark:border-slate-800 dark:bg-[#151b28]',
                                         isEditMode && selectedProjectIds.includes(project.id) && 'border-rose-400 ring-1 ring-rose-200',
                                     )}
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                        if (e.target.closest('[data-card-action="true"]')) return;
                                         if (isEditMode) {
                                             toggleProjectSelection(project.id);
                                         } else {
@@ -1204,9 +1286,13 @@ export default function ProjectBoard() {
                                             />
                                         </div>
                                     ) : (
-                                        <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                        <div
+                                            data-card-action="true"
+                                            className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+                                        >
                                             {canUpdateBoard && project.status !== 'Done' && (
                                                 <Button
+                                                    data-card-action="true"
                                                     variant="ghost"
                                                     size="icon"
                                                     className="text-slate-500 hover:text-emerald-600"
@@ -1222,6 +1308,7 @@ export default function ProjectBoard() {
                                             )}
                                             {canUpdateBoard && project.status === 'Done' && (
                                                 <Button
+                                                    data-card-action="true"
                                                     variant="ghost"
                                                     size="icon"
                                                     className="text-slate-500 hover:text-blue-600"
@@ -1236,6 +1323,23 @@ export default function ProjectBoard() {
                                                 </Button>
                                             )}
                                             <Button
+                                                data-card-action="true"
+                                                variant="ghost"
+                                                size="icon"
+                                                className={cn(
+                                                    'text-slate-500',
+                                                    isProjectPinned(project.id) ? 'text-amber-500 hover:text-amber-600' : 'hover:text-amber-500',
+                                                )}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    togglePinnedProject(project.id);
+                                                }}
+                                                title={isProjectPinned(project.id) ? 'Unpin project' : 'Pin project'}
+                                            >
+                                                <Star className={cn('size-4', isProjectPinned(project.id) && 'fill-current')} />
+                                            </Button>
+                                            <Button
+                                                data-card-action="true"
                                                 variant="ghost"
                                                 size="icon"
                                                 className="text-slate-500 hover:text-blue-600"
@@ -1248,6 +1352,7 @@ export default function ProjectBoard() {
                                                 <UserPlus className="size-4" />
                                             </Button>
                                             <Button
+                                                data-card-action="true"
                                                 variant="ghost"
                                                 size="icon"
                                                 className="text-slate-500 hover:text-red-500"
@@ -1266,7 +1371,10 @@ export default function ProjectBoard() {
                                             <ProjectCompanyIcon logoUrl={project.company_logo_url} projectName={project.name} size="lg" />
                                             <div className="min-w-0 flex-1 pr-8">
                                                 <div className="flex items-start justify-between gap-2">
-                                                    <h3 className="truncate font-semibold text-slate-900 dark:text-white">{project.name}</h3>
+                                                    <h3 className="truncate font-semibold text-slate-900 dark:text-white">
+                                                        {isProjectPinned(project.id) && <Star className="mr-1 inline size-3.5 fill-amber-400 text-amber-500" />}
+                                                        {project.name}
+                                                    </h3>
                                                     <Badge variant="outline" className={cn('shrink-0 text-[10px]', projectStatusBadgeClass(project.status))}>
                                                         {project.status}
                                                     </Badge>
@@ -1302,7 +1410,7 @@ export default function ProjectBoard() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                                    {filteredDisplayedProjects.map((project) => (
+                                    {sortedDisplayedProjects.map((project) => (
                                         <tr
                                             key={project.id}
                                             className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedProjectIds.includes(project.id) ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
@@ -1322,7 +1430,10 @@ export default function ProjectBoard() {
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <ProjectCompanyIcon logoUrl={project.company_logo_url} projectName={project.name} size="sm" />
-                                                    <span className="font-bold text-slate-900 dark:text-white">{project.name}</span>
+                                                    <span className="font-bold text-slate-900 dark:text-white">
+                                                        {isProjectPinned(project.id) && <Star className="mr-1 inline size-3.5 fill-amber-400 text-amber-500" />}
+                                                        {project.name}
+                                                    </span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
@@ -1386,6 +1497,21 @@ export default function ProjectBoard() {
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
+                                                            className={cn(
+                                                                'text-slate-400',
+                                                                isProjectPinned(project.id) ? 'text-amber-500 hover:text-amber-600' : 'hover:text-amber-500',
+                                                            )}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                togglePinnedProject(project.id);
+                                                            }}
+                                                            title={isProjectPinned(project.id) ? 'Unpin project' : 'Pin project'}
+                                                        >
+                                                            <Star className={cn('size-4', isProjectPinned(project.id) && 'fill-current')} />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
                                                             className="text-slate-400 hover:text-blue-600"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -1416,6 +1542,71 @@ export default function ProjectBoard() {
                             </table>
                         </div>
                     )}
+
+                    {/* Assign Members Modal (available from project list) */}
+                    <Dialog open={isAssignMembersModalOpen} onOpenChange={setIsAssignMembersModalOpen}>
+                        <DialogContent className="sm:max-w-[640px]">
+                            <DialogHeader>
+                                <DialogTitle>Assign Project Members</DialogTitle>
+                                <DialogDescription>
+                                    {assigningProject ? `Set anggota project untuk "${assigningProject.name}".` : 'Set anggota project.'}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="max-h-[60vh] space-y-3 overflow-y-auto py-2">
+                                {assignmentRows.map((row, index) => (
+                                    <div key={`${index}-${row.user_id}-${row.project_role_id}`} className="grid grid-cols-12 items-end gap-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                                        <div className="col-span-5">
+                                            <label className="text-xs font-medium text-slate-500">User</label>
+                                            <AssigneeSearchSelect
+                                                value={row.user_id || 'Unassigned'}
+                                                onChange={(next) => updateAssignmentRow(index, 'user_id', next === 'Unassigned' ? '' : String(next))}
+                                                options={assignmentUserOptions}
+                                                placeholder="Cari user (min. 2 karakter)..."
+                                                className="mt-1"
+                                                inputClassName="bg-white dark:bg-slate-900"
+                                            />
+                                        </div>
+                                        <div className="col-span-5">
+                                            <label className="text-xs font-medium text-slate-500">Project Role</label>
+                                            <select
+                                                className="mt-1 w-full rounded-md border border-slate-200 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                                                value={row.project_role_id}
+                                                onChange={(e) => updateAssignmentRow(index, 'project_role_id', e.target.value)}
+                                            >
+                                                <option value="">Select role</option>
+                                                {projectRolesMaster.map((role) => (
+                                                    <option key={role.id} value={role.id}>{role.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="col-span-2 flex justify-end">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="text-slate-400 hover:text-red-500"
+                                                onClick={() => removeAssignmentRow(index)}
+                                                disabled={assignmentRows.length === 1 || String(row.user_id) === String(user?.id)}
+                                            >
+                                                <Trash2 className="size-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                                <Button type="button" variant="outline" className="w-full border-dashed" onClick={addAssignmentRow}>
+                                    <Plus className="mr-2 size-4" />
+                                    Add Member Row
+                                </Button>
+                            </div>
+                            <DialogFooter>
+                                <Button type="button" variant="outline" onClick={() => setIsAssignMembersModalOpen(false)}>Cancel</Button>
+                                <Button type="button" onClick={saveProjectAssignments} disabled={isSavingAssignment}>
+                                    {isSavingAssignment && <Loader2 className="mr-2 size-4 animate-spin" />}
+                                    Save Members
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
             </div>
         );
@@ -2190,16 +2381,14 @@ export default function ProjectBoard() {
                             <div key={`${index}-${row.user_id}-${row.project_role_id}`} className="grid grid-cols-12 gap-2 items-end border border-slate-200 dark:border-slate-800 rounded-lg p-3">
                                 <div className="col-span-5">
                                     <label className="text-xs font-medium text-slate-500">User</label>
-                                    <select
-                                        className="mt-1 w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-md p-2 text-sm"
-                                        value={row.user_id}
-                                        onChange={(e) => updateAssignmentRow(index, 'user_id', e.target.value)}
-                                    >
-                                        <option value="">Select user</option>
-                                        {users.map((user) => (
-                                            <option key={user.id} value={user.id}>{user.name}</option>
-                                        ))}
-                                    </select>
+                                    <AssigneeSearchSelect
+                                        value={row.user_id || 'Unassigned'}
+                                        onChange={(next) => updateAssignmentRow(index, 'user_id', next === 'Unassigned' ? '' : String(next))}
+                                        options={assignmentUserOptions}
+                                        placeholder="Cari user (min. 2 karakter)..."
+                                        className="mt-1"
+                                        inputClassName="bg-white dark:bg-slate-900"
+                                    />
                                 </div>
                                 <div className="col-span-5">
                                     <label className="text-xs font-medium text-slate-500">Project Role</label>

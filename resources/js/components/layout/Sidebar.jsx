@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
 import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, PieChart, ClipboardCheck, Building2, Handshake, Layers, Plug, Gauge } from "lucide-react";
+import AppLogo from '../AppLogo';
 import { hasPermission } from '../../utils/permissions';
 import { cn } from '@/lib/utils';
 import { MENU_NEW_PROJECT } from '../../constants/menuLabels';
@@ -36,7 +37,7 @@ export default function Sidebar({ mobileOpen = false }) {
         >
             <div className="p-6 flex items-center gap-3">
                 <div className="size-11 rounded-xl flex items-center justify-center p-1.5 bg-slate-50 dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-800">
-                    <img src="/logo.png" alt="Noohtify Logo" className="size-full object-contain" />
+                    <AppLogo alt="Application logo" className="size-full" />
                 </div>
                 <div>
                     <h1 className="font-extrabold text-xl leading-tight tracking-tight text-primary dark:text-white">Noohtify</h1>

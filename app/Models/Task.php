@@ -35,6 +35,7 @@ class Task extends Model
         'rush_hour' => 'boolean',
         'due_date' => 'date',
         'start_date' => 'date',
+        'last_due_reminder_sent_at' => 'datetime',
         'sort_order' => 'integer',
     ];
 
@@ -46,6 +47,11 @@ class Task extends Model
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Task::class, 'parent_task_id');
+    }
+
+    public function assignee(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assignee_id');
     }
 
     public function subtasks(): HasMany

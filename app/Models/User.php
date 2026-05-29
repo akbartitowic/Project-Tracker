@@ -26,7 +26,9 @@ class User extends Authenticatable
         'role_id',
         'role',
         'phone_number',
-        'status'
+        'status',
+        'task_email_notifications_enabled',
+        'timezone',
     ];
 
     /**
@@ -49,6 +51,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'task_email_notifications_enabled' => 'boolean',
         ];
     }
 

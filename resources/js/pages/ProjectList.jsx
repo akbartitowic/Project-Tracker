@@ -6,7 +6,8 @@ import { isFreelanceUser } from '../utils/permissions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, KanbanSquare, Clock3, RefreshCcw, CheckCircle2, ListTodo, Activity } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, KanbanSquare, Clock3, RefreshCcw, CheckCircle2, ListTodo, Activity, ArrowUpDown } from 'lucide-react';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
@@ -35,6 +36,9 @@ export default function ProjectList() {
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [projectTab, setProjectTab] = useState('active');
+    const [sortBy, setSortBy] = useState('newest');
+    const [methodologyTab, setMethodologyTab] = useState('all');
 
     useEffect(() => {
         const loadProjects = async () => {
@@ -60,6 +64,53 @@ export default function ProjectList() {
                 return (p.name || '').toLowerCase().includes(keyword);
             });
     }, [projects, searchTerm]);
+    const activeProjects = useMemo(() => filteredProjects.filter((p) => p.status !== 'Done'), [filteredProjects]);
+    const doneProjects = useMemo(() => filteredProjects.filter((p) => p.status === 'Done'), [filteredProjects]);
+    const visibleProjects = useMemo(() => {
+        const base = projectTab === 'done' ? doneProjects : activeProjects;
+        const withMethodology = base.filter((project) => {
+            const methodology = normalizeMethodology(project.methodology);
+            if (methodologyTab === 'waterfall') return methodology.includes('waterfall');
+            if (methodologyTab === 'scrum') return methodology.includes('scrum') || methodology.includes('agile');
+            return true;
+        });
+        const items = [...withMethodology];
+        const createdAtTime = (project) => {
+            const t = new Date(project?.created_at || '').getTime();
+            return Number.isFinite(t) ? t : 0;
+        };
+        const numericId = (project) => Number(project?.id) || 0;
+        const textName = (project) => String(project?.name || '').toLowerCase();
+        const totalTask = (project) => Number(project?.total_tasks || 0);
+        const reopen = (project) => Number(project?.reopen_tasks || 0);
+
+        items.sort((a, b) => {
+            if (sortBy === 'oldest') {
+                const dateDiff = createdAtTime(a) - createdAtTime(b);
+                return dateDiff !== 0 ? dateDiff : numericId(a) - numericId(b);
+            }
+            if (sortBy === 'name_asc') return textName(a).localeCompare(textName(b));
+            if (sortBy === 'name_desc') return textName(b).localeCompare(textName(a));
+            if (sortBy === 'tasks_desc') return totalTask(b) - totalTask(a);
+            if (sortBy === 'reopen_desc') return reopen(b) - reopen(a);
+            const dateDiff = createdAtTime(b) - createdAtTime(a);
+            return dateDiff !== 0 ? dateDiff : numericId(b) - numericId(a);
+        });
+        return items;
+    }, [projectTab, activeProjects, doneProjects, methodologyTab, sortBy]);
+    const methodologyCounts = useMemo(() => {
+        const base = projectTab === 'done' ? doneProjects : activeProjects;
+        const waterfall = base.filter((project) => normalizeMethodology(project.methodology).includes('waterfall')).length;
+        const scrum = base.filter((project) => {
+            const methodology = normalizeMethodology(project.methodology);
+            return methodology.includes('scrum') || methodology.includes('agile');
+        }).length;
+        return {
+            all: base.length,
+            waterfall,
+            scrum,
+        };
+    }, [projectTab, activeProjects, doneProjects]);
 
     const summary = useMemo(() => {
         const total = filteredProjects.length;
@@ -90,19 +141,93 @@ export default function ProjectList() {
 
             <Card>
                 <CardHeader className="pb-4">
-                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-col gap-4">
                         <div>
                             <CardTitle className="flex items-center gap-2"><KanbanSquare className="size-5 text-primary" /> Project Overview</CardTitle>
                             <CardDescription>Ringkasan per project sesuai metodologi Scrum/Waterfall.</CardDescription>
                         </div>
-                        <div className="relative w-full md:max-w-xs">
-                            <Search className="absolute left-3 top-3 size-4 text-slate-400" />
-                            <Input
-                                className="pl-10"
-                                placeholder="Cari project..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className={projectTab === 'active' ? 'h-8 bg-primary px-3 text-white hover:bg-primary hover:text-white' : 'h-8 px-3'}
+                                    onClick={() => setProjectTab('active')}
+                                >
+                                    Active
+                                    <span className="ml-1 text-xs opacity-80">({activeProjects.length})</span>
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className={projectTab === 'done' ? 'h-8 bg-primary px-3 text-white hover:bg-primary hover:text-white' : 'h-8 px-3'}
+                                    onClick={() => setProjectTab('done')}
+                                >
+                                    Done
+                                    <span className="ml-1 text-xs opacity-80">({doneProjects.length})</span>
+                                </Button>
+                            </div>
+                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className={methodologyTab === 'all' ? 'h-8 bg-slate-100 px-3 dark:bg-slate-800' : 'h-8 px-3'}
+                                    onClick={() => setMethodologyTab('all')}
+                                >
+                                    All
+                                    <span className="ml-1 text-xs opacity-80">({methodologyCounts.all})</span>
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className={methodologyTab === 'waterfall' ? 'h-8 bg-slate-100 px-3 dark:bg-slate-800' : 'h-8 px-3'}
+                                    onClick={() => setMethodologyTab('waterfall')}
+                                >
+                                    Waterfall
+                                    <span className="ml-1 text-xs opacity-80">({methodologyCounts.waterfall})</span>
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className={methodologyTab === 'scrum' ? 'h-8 bg-slate-100 px-3 dark:bg-slate-800' : 'h-8 px-3'}
+                                    onClick={() => setMethodologyTab('scrum')}
+                                >
+                                    Scrum
+                                    <span className="ml-1 text-xs opacity-80">({methodologyCounts.scrum})</span>
+                                </Button>
+                            </div>
+                            <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
+                                <div className="relative w-full md:w-64">
+                                    <Search className="absolute left-3 top-3 size-4 text-slate-400" />
+                                    <Input
+                                        className="pl-10"
+                                        placeholder="Cari project..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                                <div className="w-full md:w-52">
+                                    <Select value={sortBy} onValueChange={setSortBy}>
+                                        <SelectTrigger>
+                                            <ArrowUpDown className="mr-2 size-3.5 text-slate-500" />
+                                            <SelectValue placeholder="Sort by" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="newest">Terbaru</SelectItem>
+                                            <SelectItem value="oldest">Terlama</SelectItem>
+                                            <SelectItem value="name_asc">Nama A-Z</SelectItem>
+                                            <SelectItem value="name_desc">Nama Z-A</SelectItem>
+                                            <SelectItem value="tasks_desc">Total task terbanyak</SelectItem>
+                                            <SelectItem value="reopen_desc">Re-open tertinggi</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </CardHeader>
@@ -124,10 +249,10 @@ export default function ProjectList() {
                             <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                                 {loading ? (
                                     <tr><td colSpan={isFreelance ? "7" : "8"} className="py-10 text-center text-slate-400">Loading projects...</td></tr>
-                                ) : filteredProjects.length === 0 ? (
-                                    <tr><td colSpan={isFreelance ? "7" : "8"} className="py-10 text-center text-slate-400">Tidak ada project aktif/done.</td></tr>
+                                ) : visibleProjects.length === 0 ? (
+                                    <tr><td colSpan={isFreelance ? "7" : "8"} className="py-10 text-center text-slate-400">{projectTab === 'done' ? 'Belum ada project Done.' : 'Belum ada project Active.'}</td></tr>
                                 ) : (
-                                    filteredProjects.map((project) => {
+                                    visibleProjects.map((project) => {
                                         const methodology = normalizeMethodology(project.methodology);
                                         const isScrum = methodology.includes('scrum') || methodology.includes('agile');
                                         const isWaterfall = methodology.includes('waterfall');

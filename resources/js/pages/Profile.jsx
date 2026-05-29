@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Profile() {
     const { user, updateProfile } = useAuth();
@@ -12,6 +14,8 @@ export default function Profile() {
         name: user?.name || '',
         email: user?.email || '',
         phone_number: user?.phone_number || '',
+        task_email_notifications_enabled: user?.task_email_notifications_enabled ?? true,
+        timezone: user?.timezone || 'Asia/Jakarta',
         password: '',
         password_confirmation: ''
     });
@@ -118,6 +122,50 @@ export default function Profile() {
                                     />
                                 </div>
                             </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Timezone</label>
+                                <Select
+                                    value={data.timezone || 'Asia/Jakarta'}
+                                    onValueChange={(value) => setData({ ...data, timezone: value })}
+                                >
+                                    <SelectTrigger className="h-11 rounded-xl">
+                                        <SelectValue placeholder="Select timezone" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Asia/Jakarta">Asia/Jakarta (WIB)</SelectItem>
+                                        <SelectItem value="Asia/Makassar">Asia/Makassar (WITA)</SelectItem>
+                                        <SelectItem value="Asia/Jayapura">Asia/Jayapura (WIT)</SelectItem>
+                                        <SelectItem value="Asia/Singapore">Asia/Singapore</SelectItem>
+                                        <SelectItem value="UTC">UTC</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="shadow-sm border-slate-200 dark:border-slate-800">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Notification Preferences</CardTitle>
+                            <CardDescription>Control task assignment and reminder emails.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <label className="flex items-start gap-3 rounded-xl border border-slate-200 px-3 py-3 dark:border-slate-700">
+                                <Checkbox
+                                    checked={data.task_email_notifications_enabled === true}
+                                    onCheckedChange={(checked) => setData({
+                                        ...data,
+                                        task_email_notifications_enabled: checked === true,
+                                    })}
+                                />
+                                <div className="space-y-0.5">
+                                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                        Task email notifications
+                                    </p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Kirim email saat task di-assign dan reminder harian saat due task belum Done/Hold.
+                                    </p>
+                                </div>
+                            </label>
                         </CardContent>
                     </Card>
 

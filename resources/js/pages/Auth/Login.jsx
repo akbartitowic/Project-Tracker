@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getDefaultLandingPath } from '../../utils/permissions';
+import AppLogo from '../../components/AppLogo';
 
 export default function Login() {
     const { login } = useAuth();
@@ -43,7 +44,7 @@ export default function Login() {
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
                     <div className="flex flex-col items-center mb-10">
                         <div className="size-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 border border-white/20 shadow-inner">
-                            <img src="/logo.png" alt="Noohtify Logo" className="size-10 object-contain" />
+                            <AppLogo alt="Application logo" className="size-10" />
                         </div>
                         <h2 className="text-3xl font-black text-white tracking-tight">Welcome Back</h2>
                         <p className="text-slate-400 font-medium mt-1">Login to Noohtify Software Management</p>
