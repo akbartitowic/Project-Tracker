@@ -164,11 +164,14 @@ function UserSearchInput({ value, onChange, options = [], placeholder = 'Cari us
         [options, value]
     );
 
+    const trimmed = query.trim();
+    const ready = trimmed.length >= 2;
+
     const filtered = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        if (!q) return options.slice(0, 60);
+        if (!ready) return [];
+        const q = trimmed.toLowerCase();
         return options.filter(o => o.user_name.toLowerCase().includes(q)).slice(0, 60);
-    }, [options, query]);
+    }, [options, trimmed, ready]);
 
     useEffect(() => {
         if (!open) return;
@@ -204,7 +207,12 @@ function UserSearchInput({ value, onChange, options = [], placeholder = 'Cari us
                     </button>
                 )}
             </div>
-            {open && (
+            {open && !ready && trimmed.length > 0 && (
+                <p className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-400 shadow-lg">
+                    Ketik minimal 2 karakter untuk mencari user
+                </p>
+            )}
+            {open && ready && (
                 <ul className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-1 shadow-lg">
                     <li>
                         <button type="button" onClick={() => pick('')}
