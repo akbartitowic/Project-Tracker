@@ -4,18 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Trash2 } from 'lucide-react';
-
-const VALID_PRESETS = [
-  { label: '7 hari',  days: 7 },
-  { label: '14 hari', days: 14 },
-  { label: '30 hari', days: 30 },
-];
-
-function addDays(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 import {
   emptyLineItem,
   formatIdr,
@@ -24,6 +12,19 @@ import {
   lineItemAmount,
   quotationTotal,
 } from '../../utils/salesQuotationDefaults';
+
+const VALID_PRESETS = [
+  { label: '7 hari',  days: 7 },
+  { label: '14 hari', days: 14 },
+  { label: '30 hari', days: 30 },
+];
+
+/** Add N days to baseDate string (YYYY-MM-DD). Falls back to today if not provided. */
+function addDays(days, baseDate) {
+  const d = baseDate ? new Date(baseDate) : new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 export default function QuotationForm({ quotation, onChange, disabled }) {
   const [showCustomDate, setShowCustomDate] = useState(false);
@@ -34,11 +35,11 @@ export default function QuotationForm({ quotation, onChange, disabled }) {
 
   const applyPreset = (days) => {
     setShowCustomDate(false);
-    setField('valid_until', addDays(days));
+    setField('valid_until', addDays(days, quotation.quote_date));
   };
 
   const activePreset = VALID_PRESETS.find(
-    (p) => quotation.valid_until === addDays(p.days)
+    (p) => quotation.valid_until === addDays(p.days, quotation.quote_date)
   );
 
   const setLineItem = (index, key, value) => {

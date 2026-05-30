@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,7 @@ import {
   Plus,
   Search,
   Users,
+  X,
 } from 'lucide-react';
 import { MENU_NEW_PROJECT } from '../constants/menuLabels';
 
@@ -55,6 +56,114 @@ function StepPill({ label, done, active, locked }) {
       {done ? <CheckCircle2 className="size-3.5" /> : <span className="size-1.5 rounded-full bg-current opacity-50" />}
       {label}
     </span>
+  );
+}
+
+/** Multi-select user search. selected = array of user ids (numbers). */
+function UserMultiSearch({ selected = [], options = [], onChange, disabled = false }) {
+  const [query, setQuery]   = useState('');
+  const [open, setOpen]     = useState(false);
+  const rootRef             = useRef(null);
+
+  const trimmed = query.trim();
+  const ready   = trimmed.length >= 2;
+
+  const filtered = useMemo(() => {
+    if (!ready) return [];
+    const q = trimmed.toLowerCase();
+    return options
+      .filter(u => !selected.includes(u.id) && u.name.toLowerCase().includes(q))
+      .slice(0, 50);
+  }, [options, selected, trimmed, ready]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const add = (userId) => {
+    onChange([...selected, userId]);
+    setQuery('');
+    setOpen(false);
+  };
+
+  const remove = (userId) => {
+    onChange(selected.filter(id => id !== userId));
+  };
+
+  const selectedUsers = options.filter(u => selected.includes(u.id));
+
+  return (
+    <div className="space-y-2">
+      {/* Selected chips */}
+      {selectedUsers.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedUsers.map(u => (
+            <span key={u.id}
+              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary border border-primary/20">
+              {u.name}
+              {!disabled && (
+                <button type="button" onClick={() => remove(u.id)}
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-primary/20 transition-colors">
+                  <X className="size-3" />
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Search input */}
+      {!disabled && (
+        <div ref={rootRef} className="relative">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={query}
+              placeholder="Cari dan tambah user..."
+              onChange={e => { setQuery(e.target.value); setOpen(true); }}
+              onFocus={() => setOpen(true)}
+              autoComplete="off"
+              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-slate-700 dark:bg-slate-900"
+            />
+          </div>
+
+          {open && trimmed.length > 0 && !ready && (
+            <p className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-400 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+              Ketik minimal 2 karakter untuk mencari
+            </p>
+          )}
+
+          {open && ready && (
+            <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+              {filtered.length === 0 ? (
+                <li className="px-3 py-2 text-sm text-slate-400">Tidak ada hasil</li>
+              ) : filtered.map(u => (
+                <li key={u.id}>
+                  <button type="button" onClick={() => add(u.id)}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{u.name}</span>
+                    <span className="ml-2 text-xs text-slate-400">{u.role?.name || u.role || ''}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {selected.length === 0 && disabled && (
+        <p className="text-sm text-slate-400 italic">Belum ada user yang di-assign.</p>
+      )}
+    </div>
   );
 }
 
@@ -909,35 +1018,14 @@ export default function Presales() {
                               <CardDescription>Assign anggota tim untuk role ini.</CardDescription>
                             </CardHeader>
                             <CardContent>
-                              <div className="grid gap-2 sm:grid-cols-2">
-                                {users.map((user) => {
-                                  const checked = (operationAssignments[roleId] || []).includes(user.id);
-                                  return (
-                                    <label
-                                      key={user.id}
-                                      className={cn(
-                                        'flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2',
-                                        checked
-                                          ? 'border-primary/40 bg-primary/5'
-                                          : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700',
-                                        isProceeded && 'cursor-not-allowed opacity-60',
-                                      )}
-                                    >
-                                      <Checkbox
-                                        checked={checked}
-                                        disabled={isProceeded}
-                                        onCheckedChange={(c) => setAssignmentUsers(roleId, user.id, c === true)}
-                                      />
-                                      <span className="min-w-0 text-sm">
-                                        <span className="font-medium text-slate-800 dark:text-slate-200">{user.name}</span>
-                                        <span className="block truncate text-[11px] text-slate-500">
-                                          {user.role?.name || user.role}
-                                        </span>
-                                      </span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
+                              <UserMultiSearch
+                                selected={operationAssignments[roleId] || []}
+                                options={users}
+                                disabled={isProceeded}
+                                onChange={(newIds) =>
+                                  setOperationAssignments((prev) => ({ ...prev, [roleId]: newIds }))
+                                }
+                              />
                             </CardContent>
                           </Card>
                         );
