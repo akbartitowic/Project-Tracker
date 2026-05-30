@@ -43,20 +43,8 @@ class ProjectAllocationController extends Controller
         ]);
     }
 
-    private function allocationUserOptions(int $projectId): array
+    private function allocationUserOptions(): array
     {
-        $fromMembers = DB::table('project_members as pm')
-            ->join('users as u', 'pm.user_id', '=', 'u.id')
-            ->where('pm.project_id', $projectId)
-            ->select('u.id as user_id', 'u.name as user_name')
-            ->distinct()
-            ->orderBy('u.name')
-            ->get();
-
-        if ($fromMembers->isNotEmpty()) {
-            return $fromMembers->values()->all();
-        }
-
         return DB::table('users')
             ->select('id as user_id', 'name as user_name')
             ->orderBy('name')
@@ -436,7 +424,7 @@ class ProjectAllocationController extends Controller
                 'change_request_total_value' => $changeRequestTotalValue,
                 'change_requests' => $changeRequests,
                 'expense_by_user' => $expenseByUser,
-                'allocation_user_options' => $this->allocationUserOptions((int) $id),
+                'allocation_user_options' => $this->allocationUserOptions(),
                 'allocations' => $allocations,
             ],
         ]);

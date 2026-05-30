@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import {
@@ -19,6 +19,7 @@ import {
     ArrowRightLeft,
     Ban,
     CircleDollarSign,
+    X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import ManhourBucketBreakdown from '@/components/ManhourBucketBreakdown';
@@ -150,6 +151,80 @@ function FinanceProjectTable({ projects, onSelectProject }) {
                 ))}
             </tbody>
         </SectionTable>
+    );
+}
+
+function UserSearchInput({ value, onChange, options = [], placeholder = 'Cari user...' }) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const rootRef = useRef(null);
+
+    const selected = useMemo(
+        () => options.find(o => String(o.user_id) === String(value)) ?? null,
+        [options, value]
+    );
+
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        if (!q) return options.slice(0, 60);
+        return options.filter(o => o.user_name.toLowerCase().includes(q)).slice(0, 60);
+    }, [options, query]);
+
+    useEffect(() => {
+        if (!open) return;
+        const handler = (e) => {
+            if (rootRef.current && !rootRef.current.contains(e.target)) {
+                setOpen(false);
+                setQuery('');
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [open]);
+
+    const pick = (id) => { onChange(id); setOpen(false); setQuery(''); };
+
+    return (
+        <div ref={rootRef} className="relative">
+            <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                    type="text"
+                    value={open ? query : (selected?.user_name ?? '')}
+                    placeholder={placeholder}
+                    onChange={e => { setQuery(e.target.value); if (!open) setOpen(true); }}
+                    onFocus={() => { setOpen(true); setQuery(''); }}
+                    autoComplete="off"
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg pl-8 pr-7 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                {value && (
+                    <button type="button" onClick={() => pick('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                        <X className="size-3.5" />
+                    </button>
+                )}
+            </div>
+            {open && (
+                <ul className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-1 shadow-lg">
+                    <li>
+                        <button type="button" onClick={() => pick('')}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 ${!value ? 'bg-primary/5 font-medium text-primary' : ''}`}>
+                            — Tidak dipilih —
+                        </button>
+                    </li>
+                    {filtered.length === 0 ? (
+                        <li className="px-3 py-2 text-sm text-slate-400">Tidak ada hasil</li>
+                    ) : filtered.map(o => (
+                        <li key={o.user_id}>
+                            <button type="button" onClick={() => pick(String(o.user_id))}
+                                className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800 ${String(value) === String(o.user_id) ? 'bg-primary/10 font-medium text-primary' : ''}`}>
+                                {o.user_name}
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
     );
 }
 
@@ -1208,18 +1283,12 @@ export default function FinanceMonitoring() {
                                                 </div>
                                                 <div className="flex flex-col gap-2">
                                                     <span className="text-xs font-bold text-slate-400 uppercase">User (opsional)</span>
-                                                    <select
+                                                    <UserSearchInput
                                                         value={newAllocation.user_id}
-                                                        onChange={(e) => setNewAllocation({ ...newAllocation, user_id: e.target.value })}
-                                                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm"
-                                                    >
-                                                        <option value="">— Tidak dipilih —</option>
-                                                        {projectMemberOptions.map((m) => (
-                                                            <option key={m.user_id} value={m.user_id}>
-                                                                {m.user_name || `User #${m.user_id}`}
-                                                            </option>
-                                                        ))}
-                                                    </select>
+                                                        onChange={(v) => setNewAllocation({ ...newAllocation, user_id: v })}
+                                                        options={projectMemberOptions}
+                                                        placeholder="Cari user..."
+                                                    />
                                                 </div>
                                                 <div className="flex flex-col gap-2">
                                                     <span className="text-xs font-bold text-slate-400 uppercase">Amount</span>
@@ -1730,18 +1799,12 @@ export default function FinanceMonitoring() {
                         </div>
                         <div className="space-y-2">
                             <span className="text-sm font-medium">User (opsional)</span>
-                            <select
+                            <UserSearchInput
                                 value={editAllocationForm.user_id}
-                                onChange={(e) => setEditAllocationForm({ ...editAllocationForm, user_id: e.target.value })}
-                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm"
-                            >
-                                <option value="">— Tidak dipilih —</option>
-                                {editUserOptions.map((m) => (
-                                    <option key={m.user_id} value={m.user_id}>
-                                        {m.user_name || `User #${m.user_id}`}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(v) => setEditAllocationForm({ ...editAllocationForm, user_id: v })}
+                                options={projectMemberOptions}
+                                placeholder="Cari user..."
+                            />
                         </div>
                         <div className="space-y-2">
                             <span className="text-sm font-medium">Nominal plan (IDR)</span>
