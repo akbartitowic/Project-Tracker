@@ -34,6 +34,17 @@ class TeamLoadService
             ->whereNotNull('start_date')
             ->whereNotNull('due_date')
             ->where('estimated_hours', '>', 0)
+            ->where(function ($q) {
+                // Always include subtasks that have their own dates
+                $q->whereNotNull('parent_task_id')
+                  // Include parent tasks only when none of their subtasks have dates yet
+                  ->orWhere(function ($q2) {
+                      $q2->whereNull('parent_task_id')
+                         ->whereDoesntHave('subtasks', fn ($sub) =>
+                             $sub->whereNotNull('start_date')->whereNotNull('due_date')
+                         );
+                  });
+            })
             ->with(['project:id,name'])
             ->get(['id', 'title', 'feature_title', 'assignee_id', 'estimated_hours', 'start_date', 'due_date', 'project_id', 'parent_task_id']);
 
