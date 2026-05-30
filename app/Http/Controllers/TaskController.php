@@ -872,6 +872,18 @@ class TaskController extends Controller
 
         $changes = Task::whereIn('id', $validated['task_ids'])->update($updateData);
 
+        // Re-sync parent estimated_hours for any subtask that was bulk-edited
+        if (array_key_exists('estimated_hours', $updateData)) {
+            $parentIds = Task::whereIn('id', $validated['task_ids'])
+                ->whereNotNull('parent_task_id')
+                ->pluck('parent_task_id')
+                ->unique();
+
+            foreach ($parentIds as $parentId) {
+                TaskAggregationService::syncParentEstimatedHours((int) $parentId);
+            }
+        }
+
         $this->log('Project', 'Bulk Edit Tasks', "Bulk edited $changes tasks.");
 
         return response()->json(['message' => "Successfully updated $changes tasks.", 'changes' => $changes]);
