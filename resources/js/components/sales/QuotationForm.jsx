@@ -1,8 +1,21 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Trash2 } from 'lucide-react';
+
+const VALID_PRESETS = [
+  { label: '7 hari',  days: 7 },
+  { label: '14 hari', days: 14 },
+  { label: '30 hari', days: 30 },
+];
+
+function addDays(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 import {
   emptyLineItem,
   formatIdr,
@@ -13,9 +26,20 @@ import {
 } from '../../utils/salesQuotationDefaults';
 
 export default function QuotationForm({ quotation, onChange, disabled }) {
+  const [showCustomDate, setShowCustomDate] = useState(false);
+
   const setField = (key, value) => {
     onChange({ ...quotation, [key]: value });
   };
+
+  const applyPreset = (days) => {
+    setShowCustomDate(false);
+    setField('valid_until', addDays(days));
+  };
+
+  const activePreset = VALID_PRESETS.find(
+    (p) => quotation.valid_until === addDays(p.days)
+  );
 
   const setLineItem = (index, key, value) => {
     const items = [...(quotation.line_items || [])];
@@ -61,15 +85,55 @@ export default function QuotationForm({ quotation, onChange, disabled }) {
             disabled={disabled}
           />
         </label>
-        <label className="space-y-2 block">
-          <span className="text-sm font-medium">Valid until</span>
-          <Input
-            type="date"
-            value={quotation.valid_until || ''}
-            onChange={(e) => setField('valid_until', e.target.value)}
-            disabled={disabled}
-          />
-        </label>
+        <div className="space-y-2">
+          <span className="text-sm font-medium block">Valid until</span>
+          {/* Preset buttons */}
+          <div className="flex flex-wrap gap-1.5">
+            {VALID_PRESETS.map((p) => (
+              <button
+                key={p.days}
+                type="button"
+                disabled={disabled}
+                onClick={() => applyPreset(p.days)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                  !showCustomDate && activePreset?.days === p.days
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-primary hover:text-primary'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {p.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => setShowCustomDate(true)}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                showCustomDate || (!activePreset && quotation.valid_until)
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-primary hover:text-primary'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              Custom
+            </button>
+          </div>
+          {/* Custom date picker — shown when Custom is active or a saved date doesn't match presets */}
+          {(showCustomDate || (!activePreset && quotation.valid_until) || (!activePreset && !quotation.valid_until && showCustomDate)) && (
+            <Input
+              type="date"
+              value={quotation.valid_until || ''}
+              onChange={(e) => setField('valid_until', e.target.value)}
+              disabled={disabled}
+              className="mt-1"
+            />
+          )}
+          {/* Display selected date as text when a preset is active */}
+          {!showCustomDate && quotation.valid_until && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Berlaku hingga: <span className="font-medium text-slate-700 dark:text-slate-200">{quotation.valid_until}</span>
+            </p>
+          )}
+        </div>
       </div>
 
       <label className="space-y-2 block">
