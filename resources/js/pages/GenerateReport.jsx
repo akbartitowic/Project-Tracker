@@ -31,17 +31,24 @@ const DAYS = [
 const FREQ_LABELS = {
     weekly:   'Weekly',
     biweekly: 'Bi-weekly',
+    monthly:  'Monthly',
     custom:   'One-time',
 };
 
+const DAY_OF_MONTH_OPTIONS = Array.from({ length: 28 }, (_, i) => ({
+    value: String(i + 1),
+    label: `${i + 1}${[,'st','nd','rd'][((i+1)%100>>3^1)&&(i+1)%10]||'th'} of every month`,
+}));
+
 const BLANK_SCHEDULE = {
-    project_id:  '',
-    frequency:   'weekly',
-    day_of_week: '1',
-    custom_date: '',
-    emails:      '',
-    subject:     '',
-    body:        '',
+    project_id:   '',
+    frequency:    'weekly',
+    day_of_week:  '1',
+    day_of_month: '1',
+    custom_date:  '',
+    emails:       '',
+    subject:      '',
+    body:         '',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -206,13 +213,14 @@ export default function GenerateReport() {
     const openEdit = (s) => {
         setEditingSchedule(s);
         setScheduleForm({
-            project_id:  String(s.project_id),
-            frequency:   s.frequency,
-            day_of_week: s.day_of_week != null ? String(s.day_of_week) : '1',
-            custom_date: s.custom_date ? String(s.custom_date).slice(0, 10) : '',
-            emails:      Array.isArray(s.emails) ? s.emails.join(', ') : (s.emails ?? ''),
-            subject:     s.subject,
-            body:        s.body,
+            project_id:   String(s.project_id),
+            frequency:    s.frequency,
+            day_of_week:  s.day_of_week  != null ? String(s.day_of_week)  : '1',
+            day_of_month: s.day_of_month != null ? String(s.day_of_month) : '1',
+            custom_date:  s.custom_date ? String(s.custom_date).slice(0, 10) : '',
+            emails:       Array.isArray(s.emails) ? s.emails.join(', ') : (s.emails ?? ''),
+            subject:      s.subject,
+            body:         s.body,
         });
         setScheduleError('');
         setIsScheduleOpen(true);
@@ -220,8 +228,9 @@ export default function GenerateReport() {
 
     const handleSave = async () => {
         setScheduleError('');
-        const needsDay  = ['weekly', 'biweekly'].includes(scheduleForm.frequency);
-        const needsDate = scheduleForm.frequency === 'custom';
+        const needsDay   = ['weekly', 'biweekly'].includes(scheduleForm.frequency);
+        const needsMonth = scheduleForm.frequency === 'monthly';
+        const needsDate  = scheduleForm.frequency === 'custom';
 
         if (!scheduleForm.project_id) { setScheduleError('Project is required.'); return; }
         if (!scheduleForm.emails.trim()) { setScheduleError('Recipients are required.'); return; }
@@ -230,10 +239,11 @@ export default function GenerateReport() {
         setIsSavingSchedule(true);
         try {
             const payload = {
-                project_id:  Number(scheduleForm.project_id),
-                frequency:   scheduleForm.frequency,
-                day_of_week: needsDay ? Number(scheduleForm.day_of_week) : null,
-                custom_date: needsDate ? scheduleForm.custom_date : null,
+                project_id:   Number(scheduleForm.project_id),
+                frequency:    scheduleForm.frequency,
+                day_of_week:  needsDay   ? Number(scheduleForm.day_of_week)  : null,
+                day_of_month: needsMonth ? Number(scheduleForm.day_of_month) : null,
+                custom_date:  needsDate  ? scheduleForm.custom_date : null,
                 emails:      scheduleForm.emails,
                 subject:     scheduleForm.subject,
                 body:        scheduleForm.body,
@@ -558,12 +568,33 @@ export default function GenerateReport() {
                                 <SelectContent>
                                     <SelectItem value="weekly">Weekly — every week on selected day</SelectItem>
                                     <SelectItem value="biweekly">Bi-weekly — every 2 weeks on selected day</SelectItem>
+                                    <SelectItem value="monthly">Monthly — on selected date each month</SelectItem>
                                     <SelectItem value="custom">One-time — on a specific date</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
-                        {/* Day selector (weekly / biweekly) */}
+                        {/* Day of month selector (monthly) */}
+                        {scheduleForm.frequency === 'monthly' && (
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    Send on date
+                                </label>
+                                <Select value={scheduleForm.day_of_month}
+                                    onValueChange={v => setScheduleForm(p => ({ ...p, day_of_month: v }))}>
+                                    <SelectTrigger className="bg-slate-50 dark:bg-slate-900/50">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {DAY_OF_MONTH_OPTIONS.map(d => (
+                                            <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {/* Day of week selector (weekly / biweekly) */}
                         {(scheduleForm.frequency === 'weekly' || scheduleForm.frequency === 'biweekly') && (
                             <div className="space-y-1.5">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -646,7 +677,9 @@ function ScheduleRow({ schedule, toggling, deleting, confirmingDelete, onEdit, o
 
     const description = isCustom
         ? `One-time · ${schedule.custom_date ? new Date(schedule.custom_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}`
-        : `${FREQ_LABELS[schedule.frequency]} · Every ${dayLabel(schedule.day_of_week)} at 08:00`;
+        : schedule.frequency === 'monthly'
+            ? `Monthly · Every ${schedule.day_of_month}${[,'st','nd','rd'][((schedule.day_of_month%100>>3)^1)&&schedule.day_of_month%10]||'th'} at 08:00`
+            : `${FREQ_LABELS[schedule.frequency]} · Every ${dayLabel(schedule.day_of_week)} at 08:00`;
 
     return (
         <div className={`rounded-lg border p-3 text-xs transition-colors ${

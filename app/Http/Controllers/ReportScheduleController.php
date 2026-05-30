@@ -23,9 +23,10 @@ class ReportScheduleController extends Controller
     {
         $validated = $request->validate([
             'project_id'  => 'required|exists:projects,id',
-            'frequency'   => 'required|in:weekly,biweekly,custom',
-            'day_of_week' => 'nullable|integer|min:0|max:6|required_if:frequency,weekly|required_if:frequency,biweekly',
-            'custom_date' => 'nullable|date|after_or_equal:today|required_if:frequency,custom',
+            'frequency'    => 'required|in:weekly,biweekly,monthly,custom',
+            'day_of_week'  => 'nullable|integer|min:0|max:6|required_if:frequency,weekly|required_if:frequency,biweekly',
+            'day_of_month' => 'nullable|integer|min:1|max:28|required_if:frequency,monthly',
+            'custom_date'  => 'nullable|date|after_or_equal:today|required_if:frequency,custom',
             'emails'      => 'required|string',
             'subject'     => 'required|string|max:255',
             'body'        => 'required|string',
@@ -38,11 +39,12 @@ class ReportScheduleController extends Controller
         $tz     = $validated['timezone'] ?? ($request->user()->timezone ?? 'Asia/Jakarta');
 
         $schedule = ReportSchedule::create([
-            'project_id'  => $validated['project_id'],
-            'created_by'  => $request->user()->id,
-            'frequency'   => $validated['frequency'],
-            'day_of_week' => $validated['day_of_week'] ?? null,
-            'custom_date' => $validated['custom_date'] ?? null,
+            'project_id'   => $validated['project_id'],
+            'created_by'   => $request->user()->id,
+            'frequency'    => $validated['frequency'],
+            'day_of_week'  => $validated['day_of_week'] ?? null,
+            'day_of_month' => $validated['day_of_month'] ?? null,
+            'custom_date'  => $validated['custom_date'] ?? null,
             'send_time'   => '08:00',
             'timezone'    => $tz,
             'emails'      => $emails,
@@ -56,6 +58,8 @@ class ReportScheduleController extends Controller
             $schedule->day_of_week,
             $schedule->timezone,
             $schedule->custom_date?->toDateString(),
+            null,
+            $schedule->day_of_month,
         );
         $schedule->save();
 
@@ -70,9 +74,10 @@ class ReportScheduleController extends Controller
 
         $validated = $request->validate([
             'project_id'  => 'sometimes|exists:projects,id',
-            'frequency'   => 'sometimes|in:weekly,biweekly,custom',
-            'day_of_week' => 'nullable|integer|min:0|max:6',
-            'custom_date' => 'nullable|date',
+            'frequency'    => 'sometimes|in:weekly,biweekly,monthly,custom',
+            'day_of_week'  => 'nullable|integer|min:0|max:6',
+            'day_of_month' => 'nullable|integer|min:1|max:28',
+            'custom_date'  => 'nullable|date',
             'emails'      => 'sometimes|string',
             'subject'     => 'sometimes|string|max:255',
             'body'        => 'sometimes|string',
@@ -96,6 +101,8 @@ class ReportScheduleController extends Controller
             $schedule->day_of_week,
             $schedule->timezone,
             $schedule->custom_date?->toDateString(),
+            null,
+            $schedule->day_of_month,
         );
 
         // Re-activate in case it was deactivated after a custom send

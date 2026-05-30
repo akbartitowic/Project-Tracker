@@ -10,18 +10,19 @@ class ReportSchedule extends Model
 {
     protected $fillable = [
         'project_id', 'created_by', 'frequency', 'day_of_week',
-        'custom_date', 'send_time', 'timezone',
+        'day_of_month', 'custom_date', 'send_time', 'timezone',
         'emails', 'subject', 'body',
         'is_active', 'last_run_at', 'next_run_at',
     ];
 
     protected $casts = [
-        'emails'      => 'array',
-        'is_active'   => 'boolean',
-        'day_of_week' => 'integer',
-        'custom_date' => 'date',
-        'last_run_at' => 'datetime',
-        'next_run_at' => 'datetime',
+        'emails'       => 'array',
+        'is_active'    => 'boolean',
+        'day_of_week'  => 'integer',
+        'day_of_month' => 'integer',
+        'custom_date'  => 'date',
+        'last_run_at'  => 'datetime',
+        'next_run_at'  => 'datetime',
     ];
 
     public function project(): BelongsTo
@@ -47,6 +48,7 @@ class ReportSchedule extends Model
             'biweekly' => $today->dayOfWeek === (int) $this->day_of_week
                 && ($this->last_run_at === null
                     || Carbon::instance($this->last_run_at)->diffInDays($today) >= 13),
+            'monthly'  => $today->day === (int) $this->day_of_month,
             'custom'   => $this->custom_date !== null
                 && $today->toDateString() === $this->custom_date->toDateString(),
             default    => false,
@@ -61,7 +63,8 @@ class ReportSchedule extends Model
         ?int $dayOfWeek,
         string $timezone,
         ?string $customDate = null,
-        ?Carbon $lastRunAt = null
+        ?Carbon $lastRunAt = null,
+        ?int $dayOfMonth = null,
     ): ?Carbon {
         $tz  = $timezone ?: 'Asia/Jakarta';
         $now = Carbon::now($tz)->setTime(8, 0, 0);
@@ -73,12 +76,24 @@ class ReportSchedule extends Model
                 ? Carbon::instance($lastRunAt)->setTimezone($tz)->addWeeks(2)->setTime(8, 0, 0)->utc()
                 : self::nextWeekday($dayOfWeek, $now),
 
+            'monthly' => self::nextMonthDay($dayOfMonth ?? 1, $now),
+
             'custom' => $customDate
                 ? Carbon::parse($customDate, $tz)->setTime(8, 0, 0)->utc()
                 : null,
 
             default => null,
         };
+    }
+
+    private static function nextMonthDay(int $dayOfMonth, Carbon $from): Carbon
+    {
+        $candidate = $from->copy()->setDay(min($dayOfMonth, $from->daysInMonth));
+        if ($candidate->lte($from)) {
+            $next = $from->copy()->addMonth();
+            $candidate = $next->setDay(min($dayOfMonth, $next->daysInMonth));
+        }
+        return $candidate->setTime(8, 0, 0)->utc();
     }
 
     private static function nextWeekday(int $dayOfWeek, Carbon $from): Carbon
