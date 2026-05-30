@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { fetchAPI, getApiUrl } from '../services/api';
 import {
-    FileText, Download, Eye, Loader2, Calendar, Briefcase, Filter,
-    ChevronLeft, Mail, Send, CheckCircle2, Clock, Plus, Pencil,
-    Trash2, Play, Pause, AlertCircle,
+    FileText, Download, Eye, Loader2, Calendar, Briefcase,
+    Filter, ChevronLeft, Mail, Send, CheckCircle2,
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,51 +15,9 @@ import {
 } from "@/components/ui/dialog";
 import { useNavigate } from 'react-router-dom';
 
-// ── Constants ──────────────────────────────────────────────────────────────
-
-const DAYS = [
-    { value: '0', label: 'Sunday' },
-    { value: '1', label: 'Monday' },
-    { value: '2', label: 'Tuesday' },
-    { value: '3', label: 'Wednesday' },
-    { value: '4', label: 'Thursday' },
-    { value: '5', label: 'Friday' },
-    { value: '6', label: 'Saturday' },
-];
-
-const FREQ_LABELS = { weekly: 'Weekly', biweekly: 'Bi-weekly', monthly: 'Monthly' };
-
-const BLANK_SCHEDULE = {
-    project_id: '',
-    frequency: 'weekly',
-    day_of_week: '1',
-    send_time: '08:00',
-    end_date: '',
-    emails: '',
-    subject: '',
-    body: '',
-};
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatNextRun(iso) {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleString('id-ID', {
-        weekday: 'short', day: 'numeric', month: 'short',
-        year: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-}
-
-function dayLabel(n) {
-    return DAYS.find(d => d.value === String(n))?.label ?? '—';
-}
-
-// ── Main Component ──────────────────────────────────────────────────────────
-
 export default function GenerateReport() {
     const navigate = useNavigate();
 
-    // ── Manual report state ────────────────────────────────────────────────
     const [projects, setProjects]               = useState([]);
     const [selectedProject, setSelectedProject] = useState('');
     const [range, setRange]                     = useState('weekly');
@@ -69,66 +26,32 @@ export default function GenerateReport() {
     const [projectsLoading, setProjectsLoading] = useState(true);
     const [previewUrl, setPreviewUrl]           = useState(null);
 
-    // Email modal
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
     const [emailData, setEmailData]               = useState({ emails: '', subject: '', body: '' });
     const [isSendingEmail, setIsSendingEmail]     = useState(false);
     const [emailSuccess, setEmailSuccess]         = useState(false);
 
-    // ── Schedule state ─────────────────────────────────────────────────────
-    const [schedules, setSchedules]             = useState([]);
-    const [schedulesLoading, setSchedulesLoading] = useState(true);
-    const [isScheduleOpen, setIsScheduleOpen]   = useState(false);
-    const [editingSchedule, setEditingSchedule] = useState(null);
-    const [scheduleForm, setScheduleForm]       = useState(BLANK_SCHEDULE);
-    const [isSavingSchedule, setIsSavingSchedule] = useState(false);
-    const [deletingId, setDeletingId]           = useState(null);
-    const [togglingId, setTogglingId]           = useState(null);
-    const [scheduleError, setScheduleError]     = useState('');
-    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-
-    // ── Load initial data ──────────────────────────────────────────────────
     useEffect(() => {
         fetchAPI('/reports/projects')
             .then(res => { if (res.data) setProjects(res.data); })
             .finally(() => setProjectsLoading(false));
-
-        fetchAPI('/report-schedules')
-            .then(res => { if (res.data) setSchedules(res.data); })
-            .finally(() => setSchedulesLoading(false));
     }, []);
 
-    // Auto-fill email subject/body when project+range changes (manual report)
     useEffect(() => {
-        if (selectedProject) {
-            const project = projects.find(p => p.id.toString() === selectedProject);
-            const rangeLabel = range === 'manual'
-                ? (manualRange.start_date && manualRange.end_date
-                    ? `manual (${manualRange.start_date} – ${manualRange.end_date})`
-                    : 'manual range')
-                : range;
-            setEmailData(prev => ({
-                ...prev,
-                subject: `Project Report: ${project?.name} (${rangeLabel})`,
-                body: `Hello,\n\nPlease find attached the ${rangeLabel} project report for "${project?.name}".\n\nBest regards,\nProject Tracker System`,
-            }));
-        }
+        if (!selectedProject) return;
+        const project  = projects.find(p => p.id.toString() === selectedProject);
+        const rangeLabel = range === 'manual'
+            ? (manualRange.start_date && manualRange.end_date
+                ? `manual (${manualRange.start_date} – ${manualRange.end_date})`
+                : 'manual range')
+            : range;
+        setEmailData(prev => ({
+            ...prev,
+            subject: `Project Report: ${project?.name} (${rangeLabel})`,
+            body: `Hello,\n\nPlease find attached the ${rangeLabel} project report for "${project?.name}".\n\nBest regards,\nProject Tracker System`,
+        }));
     }, [selectedProject, range, manualRange.start_date, manualRange.end_date, projects]);
 
-    // Auto-fill schedule subject/body when project+frequency changes (only on create)
-    useEffect(() => {
-        if (editingSchedule) return;
-        const project = projects.find(p => p.id.toString() === scheduleForm.project_id);
-        if (!project) return;
-        setScheduleForm(prev => ({
-            ...prev,
-            subject: `[Auto Report] ${project.name} — ${FREQ_LABELS[prev.frequency] ?? prev.frequency}`,
-            body: `Hello,\n\nAttached is the ${(FREQ_LABELS[prev.frequency] ?? prev.frequency).toLowerCase()} project report for "${project.name}".\n\nBest regards,\nProject Tracker System`,
-        }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [scheduleForm.project_id, scheduleForm.frequency, editingSchedule]);
-
-    // ── Manual report handlers ─────────────────────────────────────────────
     const canRunReport = selectedProject && !loading &&
         (range !== 'manual' || (manualRange.start_date && manualRange.end_date));
 
@@ -176,9 +99,9 @@ export default function GenerateReport() {
                 }),
             });
             if (!response.ok) throw new Error('Failed to download report');
-            const a = document.createElement('a');
-            a.href     = window.URL.createObjectURL(await response.blob());
-            a.download = `Report-${projects.find(p => p.id.toString() === selectedProject)?.name}-${range}.pdf`;
+            const a      = document.createElement('a');
+            a.href       = window.URL.createObjectURL(await response.blob());
+            a.download   = `Report-${projects.find(p => p.id.toString() === selectedProject)?.name}-${range}.pdf`;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -213,104 +136,9 @@ export default function GenerateReport() {
         }
     };
 
-    // ── Schedule handlers ──────────────────────────────────────────────────
-    const openCreateSchedule = () => {
-        setEditingSchedule(null);
-        setScheduleForm({
-            ...BLANK_SCHEDULE,
-            project_id: selectedProject || '',
-        });
-        setScheduleError('');
-        setIsScheduleOpen(true);
-    };
-
-    const openEditSchedule = (s) => {
-        setEditingSchedule(s);
-        setScheduleForm({
-            project_id:  String(s.project_id),
-            frequency:   s.frequency,
-            day_of_week: String(s.day_of_week),
-            send_time:   s.send_time,
-            end_date:    s.end_date ? String(s.end_date).slice(0, 10) : '',
-            emails:      Array.isArray(s.emails) ? s.emails.join(', ') : (s.emails ?? ''),
-            subject:     s.subject,
-            body:        s.body,
-        });
-        setScheduleError('');
-        setIsScheduleOpen(true);
-    };
-
-    const handleSaveSchedule = async () => {
-        setScheduleError('');
-        if (!scheduleForm.project_id || !scheduleForm.emails.trim()) {
-            setScheduleError('Project and recipients are required.');
-            return;
-        }
-        setIsSavingSchedule(true);
-        try {
-            const payload = {
-                project_id:  Number(scheduleForm.project_id),
-                frequency:   scheduleForm.frequency,
-                day_of_week: Number(scheduleForm.day_of_week),
-                send_time:   scheduleForm.send_time,
-                end_date:    scheduleForm.end_date || null,
-                emails:      scheduleForm.emails,
-                subject:     scheduleForm.subject,
-                body:        scheduleForm.body,
-                timezone:    Intl.DateTimeFormat().resolvedOptions().timeZone,
-            };
-            let res;
-            if (editingSchedule) {
-                res = await fetchAPI(`/report-schedules/${editingSchedule.id}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(payload),
-                });
-                setSchedules(prev => prev.map(s => s.id === editingSchedule.id ? res.data : s));
-            } else {
-                res = await fetchAPI('/report-schedules', {
-                    method: 'POST',
-                    body: JSON.stringify(payload),
-                });
-                setSchedules(prev => [res.data, ...prev]);
-            }
-            setIsScheduleOpen(false);
-        } catch (err) {
-            setScheduleError(err.message || 'Failed to save schedule.');
-        } finally {
-            setIsSavingSchedule(false);
-        }
-    };
-
-    const handleToggleSchedule = async (id) => {
-        setTogglingId(id);
-        try {
-            const res = await fetchAPI(`/report-schedules/${id}/toggle`, { method: 'PATCH' });
-            setSchedules(prev => prev.map(s => s.id === id ? res.data : s));
-        } catch (err) {
-            alert('Failed to toggle: ' + err.message);
-        } finally {
-            setTogglingId(null);
-        }
-    };
-
-    const handleDeleteSchedule = async (id) => {
-        setDeletingId(id);
-        try {
-            await fetchAPI(`/report-schedules/${id}`, { method: 'DELETE' });
-            setSchedules(prev => prev.filter(s => s.id !== id));
-            setConfirmDeleteId(null);
-        } catch (err) {
-            alert('Failed to delete: ' + err.message);
-        } finally {
-            setDeletingId(null);
-        }
-    };
-
-    // ── Render ─────────────────────────────────────────────────────────────
     return (
         <div className="flex h-full min-h-0 flex-1 flex-col bg-slate-50/50 pb-8 dark:bg-background-dark sm:pb-10">
 
-            {/* Header */}
             <header className="flex items-start gap-3 border-b border-slate-200 bg-white p-4 sm:items-center sm:p-6 dark:border-slate-800 dark:bg-[#151b28]">
                 <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
                     <Button variant="ghost" size="icon" onClick={() => navigate('/reports')} className="mt-0.5 shrink-0 rounded-full sm:mt-0">
@@ -318,17 +146,16 @@ export default function GenerateReport() {
                     </Button>
                     <div className="min-w-0">
                         <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">Generate Project Report</h1>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">Configure, export, email, or schedule automated project reports.</p>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">Configure, export, and email detailed project performance reports.</p>
                     </div>
                 </div>
             </header>
 
             <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 sm:p-6 lg:flex-row lg:overflow-hidden">
 
-                {/* ── Left sidebar ── */}
-                <div className="w-full lg:w-80 flex flex-col gap-6 shrink-0 lg:overflow-y-auto lg:pb-4">
+                {/* Left sidebar */}
+                <div className="w-full lg:w-80 flex flex-col gap-6 shrink-0">
 
-                    {/* Report Filter */}
                     <Card className="border-none shadow-xl shadow-slate-200/50 dark:shadow-none dark:bg-[#1e2532]">
                         <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">
@@ -389,72 +216,25 @@ export default function GenerateReport() {
                                 </div>
                             )}
 
-                            <div className="pt-2 flex flex-col gap-3">
+                            <div className="pt-4 flex flex-col gap-3">
                                 <Button onClick={handlePreview} className="w-full gap-2 shadow-lg shadow-primary/20 h-10" disabled={!canRunReport}>
                                     {loading ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
                                     Preview PDF
                                 </Button>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <Button variant="outline" onClick={handleDownload} className="gap-2 border-slate-200 dark:border-slate-700 h-10" disabled={!canRunReport}>
+                                    <Button variant="outline" onClick={handleDownload}
+                                        className="gap-2 border-slate-200 dark:border-slate-700 h-10" disabled={!canRunReport}>
                                         <Download className="size-4" /> Download
                                     </Button>
                                     <Button variant="outline" onClick={() => setIsEmailModalOpen(true)}
                                         className="gap-2 border-primary/20 hover:bg-primary/5 text-primary h-10" disabled={!canRunReport}>
-                                        <Mail className="size-4" /> Email
+                                        <Mail className="size-4" /> Send Email
                                     </Button>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* ── Scheduled Reports ── */}
-                    <Card className="border-none shadow-xl shadow-slate-200/50 dark:shadow-none dark:bg-[#1e2532]">
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <Clock className="size-4 text-primary" />
-                                    Auto Schedule
-                                </CardTitle>
-                                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/5"
-                                    onClick={openCreateSchedule}>
-                                    <Plus className="size-3" /> New
-                                </Button>
-                            </div>
-                            <CardDescription className="text-xs">Send reports automatically on a recurring schedule.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                            {schedulesLoading ? (
-                                <div className="flex items-center justify-center py-6">
-                                    <Loader2 className="size-5 animate-spin text-slate-400" />
-                                </div>
-                            ) : schedules.length === 0 ? (
-                                <div className="text-center py-6 text-slate-400 dark:text-slate-600">
-                                    <Clock className="size-8 mx-auto mb-2 opacity-40" />
-                                    <p className="text-xs">No schedules yet.</p>
-                                    <p className="text-xs mt-0.5">Click <strong>New</strong> to set one up.</p>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col gap-2">
-                                    {schedules.map(s => (
-                                        <ScheduleRow
-                                            key={s.id}
-                                            schedule={s}
-                                            toggling={togglingId === s.id}
-                                            deleting={deletingId === s.id}
-                                            confirmingDelete={confirmDeleteId === s.id}
-                                            onEdit={() => openEditSchedule(s)}
-                                            onToggle={() => handleToggleSchedule(s.id)}
-                                            onDelete={() => setConfirmDeleteId(s.id)}
-                                            onConfirmDelete={() => handleDeleteSchedule(s.id)}
-                                            onCancelDelete={() => setConfirmDeleteId(null)}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Report Insights */}
                     <Card className="border-none shadow-lg shadow-primary/5 bg-primary/5 border-primary/10">
                         <CardContent className="p-4 flex gap-3">
                             <FileText className="size-5 text-primary shrink-0 mt-0.5" />
@@ -468,7 +248,7 @@ export default function GenerateReport() {
                     </Card>
                 </div>
 
-                {/* ── Preview Area ── */}
+                {/* Preview area */}
                 <div className="flex-1 h-full min-h-[500px] lg:min-h-0 bg-white dark:bg-[#151b28] rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col shadow-2xl shadow-slate-200/50 dark:shadow-none relative overflow-hidden">
                     {previewUrl ? (
                         <iframe src={previewUrl} className="w-full h-full border-none rounded-xl" title="Report Preview" />
@@ -492,7 +272,7 @@ export default function GenerateReport() {
                 </div>
             </div>
 
-            {/* ── Email Dialog ── */}
+            {/* Email Dialog */}
             <Dialog open={isEmailModalOpen} onOpenChange={setIsEmailModalOpen}>
                 <DialogContent className="sm:max-w-[500px] border-none shadow-2xl dark:bg-[#1e2532]">
                     {emailSuccess ? (
@@ -509,7 +289,7 @@ export default function GenerateReport() {
                                 <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
                                     <Mail className="size-6 text-primary" />
                                 </div>
-                                <DialogTitle className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Email Report</DialogTitle>
+                                <DialogTitle className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Send Report</DialogTitle>
                                 <DialogDescription>Send the generated PDF report directly to stakeholders.</DialogDescription>
                             </DialogHeader>
                             <div className="space-y-4 py-4">
@@ -546,232 +326,6 @@ export default function GenerateReport() {
                     )}
                 </DialogContent>
             </Dialog>
-
-            {/* ── Schedule Create / Edit Dialog ── */}
-            <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-                <DialogContent className="sm:max-w-[520px] border-none shadow-2xl dark:bg-[#1e2532]">
-                    <DialogHeader>
-                        <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                            <Clock className="size-6 text-primary" />
-                        </div>
-                        <DialogTitle className="text-xl font-black text-slate-900 dark:text-white">
-                            {editingSchedule ? 'Edit Schedule' : 'New Auto Schedule'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {editingSchedule
-                                ? 'Update schedule settings. Next run will be recalculated.'
-                                : 'Configure when and to whom the report will be sent automatically.'}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4 py-2">
-                        {/* Project */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Project</label>
-                            <Select value={scheduleForm.project_id}
-                                onValueChange={v => setScheduleForm(p => ({ ...p, project_id: v }))}>
-                                <SelectTrigger className="bg-slate-50 dark:bg-slate-900/50">
-                                    <SelectValue placeholder="Select project" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {projects.map(p => (
-                                        <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Frequency + Day + Time */}
-                        <div className="grid grid-cols-3 gap-3">
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Frequency</label>
-                                <Select value={scheduleForm.frequency}
-                                    onValueChange={v => setScheduleForm(p => ({ ...p, frequency: v }))}>
-                                    <SelectTrigger className="bg-slate-50 dark:bg-slate-900/50">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="weekly">Weekly</SelectItem>
-                                        <SelectItem value="biweekly">Bi-weekly</SelectItem>
-                                        <SelectItem value="monthly">Monthly</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Send on</label>
-                                <Select value={scheduleForm.day_of_week}
-                                    onValueChange={v => setScheduleForm(p => ({ ...p, day_of_week: v }))}>
-                                    <SelectTrigger className="bg-slate-50 dark:bg-slate-900/50">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {DAYS.map(d => (
-                                            <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">At time</label>
-                                <Input type="time" value={scheduleForm.send_time}
-                                    onChange={e => setScheduleForm(p => ({ ...p, send_time: e.target.value }))}
-                                    className="bg-slate-50 dark:bg-slate-900/50" />
-                            </div>
-                        </div>
-
-                        {/* End date */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                End Date <span className="font-normal normal-case text-slate-400">(optional — schedule stops after this date)</span>
-                            </label>
-                            <Input type="date" value={scheduleForm.end_date}
-                                onChange={e => setScheduleForm(p => ({ ...p, end_date: e.target.value }))}
-                                className="bg-slate-50 dark:bg-slate-900/50" />
-                        </div>
-
-                        {/* Recipients */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Recipients</label>
-                            <Input placeholder="email@company.com, another@company.com"
-                                value={scheduleForm.emails}
-                                onChange={e => setScheduleForm(p => ({ ...p, emails: e.target.value }))}
-                                className="bg-slate-50 dark:bg-slate-900/50" />
-                        </div>
-
-                        {/* Subject */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Email Subject</label>
-                            <Input placeholder="[Auto Report] Project Name — Weekly"
-                                value={scheduleForm.subject}
-                                onChange={e => setScheduleForm(p => ({ ...p, subject: e.target.value }))}
-                                className="bg-slate-50 dark:bg-slate-900/50" />
-                        </div>
-
-                        {/* Body */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Message Body</label>
-                            <Textarea rows={3} placeholder="Write a message…"
-                                value={scheduleForm.body}
-                                onChange={e => setScheduleForm(p => ({ ...p, body: e.target.value }))}
-                                className="bg-slate-50 dark:bg-slate-900/50 resize-none" />
-                        </div>
-
-                        {scheduleError && (
-                            <div className="flex items-center gap-2 text-red-500 text-sm bg-red-50 dark:bg-red-900/10 rounded-lg px-3 py-2">
-                                <AlertCircle className="size-4 shrink-0" />
-                                {scheduleError}
-                            </div>
-                        )}
-                    </div>
-
-                    <DialogFooter className="gap-3 pt-2">
-                        <DialogClose asChild>
-                            <Button variant="ghost" className="flex-1">Cancel</Button>
-                        </DialogClose>
-                        <Button onClick={handleSaveSchedule} disabled={isSavingSchedule}
-                            className="flex-1 gap-2 shadow-lg shadow-primary/20">
-                            {isSavingSchedule ? <Loader2 className="size-4 animate-spin" /> : <Clock className="size-4" />}
-                            {editingSchedule ? 'Save Changes' : 'Create Schedule'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </div>
-    );
-}
-
-// ── ScheduleRow sub-component ───────────────────────────────────────────────
-
-function ScheduleRow({
-    schedule, toggling, deleting, confirmingDelete,
-    onEdit, onToggle, onDelete, onConfirmDelete, onCancelDelete,
-}) {
-    return (
-        <div className={`rounded-lg border p-3 text-xs transition-colors ${
-            schedule.is_active
-                ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40'
-                : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/20 opacity-60'
-        }`}>
-            {/* Top row: project + freq + controls */}
-            <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                    <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">
-                        {schedule.project?.name ?? '—'}
-                    </p>
-                    <p className="text-slate-500 dark:text-slate-400 mt-0.5">
-                        {FREQ_LABELS[schedule.frequency]} · Every {dayLabel(schedule.day_of_week)} at {schedule.send_time}
-                    </p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                    <button
-                        onClick={onToggle}
-                        disabled={toggling}
-                        title={schedule.is_active ? 'Pause' : 'Resume'}
-                        className={`p-1.5 rounded-md transition-colors ${
-                            schedule.is_active
-                                ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                                : 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
-                        }`}
-                    >
-                        {toggling
-                            ? <Loader2 className="size-3.5 animate-spin" />
-                            : schedule.is_active ? <Pause className="size-3.5" /> : <Play className="size-3.5" />
-                        }
-                    </button>
-                    <button onClick={onEdit} title="Edit"
-                        className="p-1.5 rounded-md text-slate-400 hover:text-primary hover:bg-primary/5 transition-colors">
-                        <Pencil className="size-3.5" />
-                    </button>
-                    <button onClick={onDelete} title="Delete"
-                        className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                        <Trash2 className="size-3.5" />
-                    </button>
-                </div>
-            </div>
-
-            {/* Status badge + next run */}
-            <div className="mt-2 flex items-center justify-between gap-2">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                    schedule.is_active
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-                }`}>
-                    <span className={`size-1.5 rounded-full ${schedule.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                    {schedule.is_active ? 'Active' : 'Paused'}
-                </span>
-                {schedule.end_date && (
-                    <span className="text-slate-400 dark:text-slate-500">
-                        Ends {new Date(schedule.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </span>
-                )}
-            </div>
-
-            {schedule.is_active && schedule.next_run_at && (
-                <p className="mt-1.5 text-slate-400 dark:text-slate-500">
-                    Next: {formatNextRun(schedule.next_run_at)}
-                </p>
-            )}
-
-            {schedule.last_run_at && (
-                <p className="mt-0.5 text-slate-400 dark:text-slate-500">
-                    Last sent: {formatNextRun(schedule.last_run_at)}
-                </p>
-            )}
-
-            {/* Inline delete confirm */}
-            {confirmingDelete && (
-                <div className="mt-2 pt-2 border-t border-red-100 dark:border-red-900/30 flex items-center gap-2">
-                    <p className="flex-1 text-red-500 text-[11px]">Delete this schedule?</p>
-                    <button onClick={onCancelDelete}
-                        className="px-2 py-1 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px]">
-                        Cancel
-                    </button>
-                    <button onClick={onConfirmDelete} disabled={deleting}
-                        className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 text-[11px] disabled:opacity-50">
-                        {deleting ? '…' : 'Delete'}
-                    </button>
-                </div>
-            )}
         </div>
     );
 }

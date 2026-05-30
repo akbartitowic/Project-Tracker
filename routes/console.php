@@ -11,4 +11,4 @@ use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('logs:cleanup')->daily();
 Schedule::command('tasks:send-due-reminders')->hourlyAt(0);
-Schedule::command('reports:send-scheduled')->everyMinute();
+Schedule::command('reports:send-scheduled')->dailyAt('08:00');
