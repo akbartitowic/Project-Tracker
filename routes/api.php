@@ -28,6 +28,7 @@ use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\SalesCategoryProjectController;
 use App\Http\Controllers\TeamLoadController;
 use App\Http\Controllers\ProjectNoteController;
+use App\Http\Controllers\ReportScheduleController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/signup', [AuthController::class, 'signup'])
@@ -179,6 +180,13 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/reports/projects', [ReportController::class, 'getProjects'])->middleware('permission:generate_report.read');
     Route::post('/reports/generate', [ReportController::class, 'generate'])->middleware('permission:generate_report.create');
     Route::post('/reports/send-email', [ReportController::class, 'sendEmail'])->middleware('permission:generate_report.create');
+
+    // Report Schedules
+    Route::get('/report-schedules', [ReportScheduleController::class, 'index'])->middleware('permission:generate_report.read');
+    Route::post('/report-schedules', [ReportScheduleController::class, 'store'])->middleware('permission:generate_report.create');
+    Route::put('/report-schedules/{id}', [ReportScheduleController::class, 'update'])->middleware('permission:generate_report.create');
+    Route::patch('/report-schedules/{id}/toggle', [ReportScheduleController::class, 'toggle'])->middleware('permission:generate_report.create');
+    Route::delete('/report-schedules/{id}', [ReportScheduleController::class, 'destroy'])->middleware('permission:generate_report.create');
 
     // 9. Roles & Permissions (Deprecated duplication, keeping for safety if referenced)
     Route::get('/permissions', [PermissionController::class, 'index'])->middleware('permission:access_control.read');

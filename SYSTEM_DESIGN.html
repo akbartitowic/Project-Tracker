@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System Design — Project Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3248;
+      --accent: #6366f1;
+      --accent2: #818cf8;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --blue: #3b82f6;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --code-bg: #12141f;
+      --sidebar-w: 280px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      width: var(--sidebar-w);
+      height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 24px 0;
+      z-index: 100;
+    }
+
+    #sidebar .logo {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    #sidebar .logo span {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+    #sidebar .logo h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    #sidebar nav a {
+      display: block;
+      padding: 6px 20px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      border-left: 3px solid transparent;
+      transition: all .15s;
+    }
+    #sidebar nav a:hover,
+    #sidebar nav a.active {
+      color: var(--accent2);
+      border-left-color: var(--accent);
+      background: rgba(99,102,241,.07);
+    }
+    #sidebar nav .nav-section {
+      padding: 14px 20px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: #4a5168;
+    }
+    #sidebar nav a.sub { padding-left: 32px; font-size: 12px; }
+
+    /* ── Main ── */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      max-width: 960px;
+      padding: 48px 48px 100px;
+    }
+
+    /* ── Typography ── */
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 40px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      margin: 48px 0 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h2 .num {
+      background: var(--accent);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      width: 26px; height: 26px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent2);
+      margin: 28px 0 12px;
+    }
+
+    h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 20px 0 8px;
+    }
+
+    p { margin-bottom: 14px; color: var(--text); }
+
+    strong { color: #fff; font-weight: 600; }
+
+    ul, ol { padding-left: 20px; margin-bottom: 14px; }
+    li { margin-bottom: 4px; color: var(--text); }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; margin-bottom: 24px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+    thead tr { background: var(--surface2); }
+    th {
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,.025); }
+
+    code {
+      background: var(--code-bg);
+      color: #a5b4fc;
+      font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+      font-size: 12.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .flow-code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      font-family: 'Fira Code', Consolas, monospace;
+      font-size: 14px;
+      color: #a5b4fc;
+      margin-bottom: 20px;
+      text-align: center;
+      letter-spacing: .5px;
+    }
+
+    /* ── Mermaid diagrams ── */
+    .mermaid-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      margin: 16px 0 28px;
+      overflow-x: auto;
+    }
+    .mermaid-wrap .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* ── Badge / tag ── */
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 99px;
+      margin-right: 4px;
+    }
+    .badge-indigo { background: rgba(99,102,241,.15); color: #818cf8; }
+    .badge-green  { background: rgba(34,197,94,.15);  color: #4ade80; }
+    .badge-red    { background: rgba(239,68,68,.15);   color: #f87171; }
+    .badge-yellow { background: rgba(245,158,11,.15);  color: #fbbf24; }
+    .badge-blue   { background: rgba(59,130,246,.15);  color: #60a5fa; }
+
+    /* ── Section cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card h4 { margin-top: 0; }
+
+    /* ── Role cards ── */
+    .roles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .role-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .role-card .role-name {
+      font-weight: 700;
+      font-size: 15px;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .role-card .role-desc {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .role-card .role-perms {
+      font-size: 12px;
+      color: var(--accent2);
+      font-family: monospace;
+    }
+
+    /* ── Divider ── */
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 36px 0;
+    }
+
+    /* ── API endpoint rows ── */
+    .method {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: monospace;
+      letter-spacing: .3px;
+    }
+    .method-get    { background: rgba(34,197,94,.15);  color: #4ade80; }
+    .method-post   { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .method-put    { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .method-patch  { background: rgba(168,85,247,.15); color: #c084fc; }
+    .method-delete { background: rgba(239,68,68,.15);  color: #f87171; }
+
+    /* ── TOC in page ── */
+    .toc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+    .toc-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 13px;
+      transition: all .15s;
+    }
+    .toc-item:hover {
+      border-color: var(--accent);
+      color: var(--accent2);
+      background: rgba(99,102,241,.06);
+    }
+    .toc-item .toc-num {
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 22px; height: 22px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3e4460; }
+
+    @media (max-width: 900px) {
+      #sidebar { display: none; }
+      #main { margin-left: 0; padding: 24px 20px 60px; }
+      .toc-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<aside id="sidebar">
+  <div class="logo">
+    <span>Docs</span>
+    <h2>Project Tracker</h2>
+  </div>
+  <nav>
+    <div class="nav-section">Ikhtisar</div>
+    <a href="#sec1">1. Ringkasan Sistem</a>
+    <a href="#sec2">2. Arsitektur Sistem</a>
+    <a href="#sec3">3. Tech Stack</a>
+
+    <div class="nav-section">Database</div>
+    <a href="#sec4">4. ERD</a>
+    <a href="#erd-auth" class="sub">Auth &amp; RBAC</a>
+    <a href="#erd-project" class="sub">Project Core</a>
+    <a href="#erd-finance" class="sub">Finance</a>
+    <a href="#erd-sales" class="sub">Sales &amp; Presales</a>
+    <a href="#erd-system" class="sub">System</a>
+    <a href="#sec5">5. Skema Database</a>
+
+    <div class="nav-section">Bisnis</div>
+    <a href="#sec6">6. Alur Bisnis</a>
+    <a href="#flow-sales" class="sub">Sales Pipeline</a>
+    <a href="#flow-presales" class="sub">Presales Pipeline</a>
+    <a href="#flow-project" class="sub">Project Lifecycle</a>
+    <a href="#flow-finance" class="sub">Finance Monitoring</a>
+    <a href="#flow-load" class="sub">Team Load</a>
+
+    <div class="nav-section">Sistem</div>
+    <a href="#sec7">7. Modul &amp; Fitur</a>
+    <a href="#sec8">8. RBAC</a>
+    <a href="#sec9">9. API Reference</a>
+    <a href="#sec10">10. Email &amp; Jobs</a>
+  </nav>
+</aside>
+
+<!-- ═══════════════════════════════ MAIN ════════════════════════════════ -->
+<main id="main">
+
+  <h1>System Design</h1>
+  <p class="subtitle">
+    Project Tracker &nbsp;·&nbsp; Digenerate dari kode sumber &nbsp;·&nbsp;
+    <strong>2026-05-30</strong> &nbsp;·&nbsp;
+    Gunakan sebagai referensi onboarding, integrasi, dan pengembangan fitur baru.
+  </p>
+
+  <!-- TOC -->
+  <div class="toc-grid">
+    <a class="toc-item" href="#sec1"><span class="toc-num">1</span> Ringkasan Sistem</a>
+    <a class="toc-item" href="#sec2"><span class="toc-num">2</span> Arsitektur Sistem</a>
+    <a class="toc-item" href="#sec3"><span class="toc-num">3</span> Tech Stack</a>
+    <a class="toc-item" href="#sec4"><span class="toc-num">4</span> ERD</a>
+    <a class="toc-item" href="#sec5"><span class="toc-num">5</span> Skema Database</a>
+    <a class="toc-item" href="#sec6"><span class="toc-num">6</span> Alur Bisnis</a>
+    <a class="toc-item" href="#sec7"><span class="toc-num">7</span> Modul &amp; Fitur</a>
+    <a class="toc-item" href="#sec8"><span class="toc-num">8</span> RBAC</a>
+    <a class="toc-item" href="#sec9"><span class="toc-num">9</span> API Reference</a>
+    <a class="toc-item" href="#sec10"><span class="toc-num">10</span> Email &amp; Jobs</a>
+  </div>
+
+  <hr />
+
+  <!-- ══ 1 ══ -->
+  <h2 id="sec1"><span class="num">1</span> Ringkasan Sistem</h2>
+  <p>
+    <strong>Project Tracker</strong> adalah aplikasi manajemen internal untuk software house / tim IT
+    yang mengcover siklus penuh dari:
+  </p>
+  <div class="flow-code">Prospek → Sales Pitch → Presales → Project Execution → Finance Monitoring → Laporan</div>
+  <div class="roles-grid">
+    <div class="role-card">
+      <div class="role-name">🔑 Admin / Project Manager</div>
+      <div class="role-desc">Akses penuh ke semua modul termasuk keuangan, pengaturan sistem, dan laporan.</div>
+      <div class="role-perms">Semua permissions</div>
+    </div>
+    <div class="role-card">
+      <div class="role-name">💻 Board Member</div>
+      <div class="role-desc">Developer, QA, Designer — akses ke project board dan log manhour.</div>
+      <div class="role-perms">project_board.* · profile.*</div>
+    </div>
+    <div class="role-card">
+      <div class="role-name">🔧 Freelance</div>
+      <div class="role-desc">Kontraktor eksternal — hanya bisa melihat board dan update status task.</div>
+      <div class="role-perms">project_board.read · project_board.update · profile.*</div>
+    </div>
+  </div>
+
+  <hr />
+
+  <!-- ══ 2 ══ -->
+  <h2 id="sec2"><span class="num">2</span> Arsitektur Sistem</h2>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+graph TB
+    subgraph Browser["🖥️  Browser (Client)"]
+        SPA["React SPA\n(react-router-dom v7)"]
+    end
+
+    subgraph Laravel["⚙️  Laravel 12 Server"]
+        direction TB
+        Blade["Blade Template\n(single entry point)"]
+        API["REST API\n(routes/api.php)"]
+        MW["Middleware Stack\n• auth:sanctum\n• token.lifetime\n• permission\n• throttle"]
+        CTRL["Controllers\n(27 controllers)"]
+        SVC["Services\n• TeamLoadService\n• TaskAggregationService\n• SalesQuotationService"]
+        SUPP["Support / Helpers\n• PermissionCatalog\n• ProjectAccess\n• ManhourBucketCalculator\n• WeekdaySchedule"]
+        MOD["Eloquent Models\n(23 models)"]
+        QUEUE["Queue Worker\n(jobs & mail)"]
+    end
+
+    subgraph Storage["💾  Storage Layer"]
+        DB[("Database\nSQLite dev / MySQL prod")]
+        FS["File Storage\n• logo perusahaan\n• quotation PDF\n• app branding"]
+        MAIL["Mail Server\n(SMTP — configurable)"]
+    end
+
+    Browser -->|"HTTP JSON"| API
+    Browser -->|"First load"| Blade
+    Blade -->|"serves"| SPA
+    API --> MW --> CTRL
+    CTRL --> SVC
+    CTRL --> SUPP
+    CTRL --> MOD
+    MOD --> DB
+    CTRL --> FS
+    QUEUE -->|"async"| MAIL
+    CTRL -->|"dispatch"| QUEUE
+    </div>
+  </div>
+  <div class="card">
+    <h4>Pola komunikasi penting</h4>
+    <ul>
+      <li>Frontend React memanggil semua data via <code>/api/*</code> menggunakan <strong>Axios</strong>.</li>
+      <li>Autentikasi menggunakan <strong>Laravel Sanctum</strong> (Bearer token, expiry configurable, default <strong>720 menit</strong>).</li>
+      <li>Semua route API dilindungi <code>auth:sanctum</code> + <code>permission:{slug}</code> middleware.</li>
+      <li>PDF quotation di-generate server-side via <strong>dompdf</strong> dan disimpan di storage.</li>
+      <li>Email dikirim asinkron via <strong>Laravel Queue</strong> (database driver).</li>
+    </ul>
+  </div>
+
+  <hr />
+
+  <!-- ══ 3 ══ -->
+  <h2 id="sec3"><span class="num">3</span> Tech Stack</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Layer</th><th>Teknologi</th><th>Versi</th></tr></thead>
+      <tbody>
+        <tr><td>Backend Framework</td><td><strong>Laravel</strong></td><td>12.x</td></tr>
+        <tr><td>Language (BE)</td><td>PHP</td><td>8.2+</td></tr>
+        <tr><td>Frontend Framework</td><td><strong>React</strong></td><td>19.x</td></tr>
+        <tr><td>Build Tool</td><td>Vite</td><td>7.x</td></tr>
+        <tr><td>Router (FE)</td><td>React Router DOM</td><td>7.x</td></tr>
+        <tr><td>UI Components</td><td>shadcn/ui + Radix UI</td><td>latest</td></tr>
+        <tr><td>Styling</td><td>TailwindCSS</td><td>4.x</td></tr>
+        <tr><td>Drag &amp; Drop</td><td>@dnd-kit</td><td>6.x / 10.x</td></tr>
+        <tr><td>PDF Generation</td><td>barryvdh/laravel-dompdf</td><td>3.x</td></tr>
+        <tr><td>Auth</td><td>Laravel Sanctum</td><td>4.x</td></tr>
+        <tr><td>Database (dev)</td><td>SQLite</td><td>—</td></tr>
+        <tr><td>Database (prod)</td><td>MySQL / PostgreSQL</td><td>—</td></tr>
+        <tr><td>Queue</td><td>Laravel Queue (database driver)</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr />
+
+  <!-- ══ 4 ══ -->
+  <h2 id="sec4"><span class="num">4</span> Entity Relationship Diagram (ERD)</h2>
+  <p>ERD dibagi per domain untuk keterbacaan. Setiap domain menunjukkan relasi antar tabel yang saling berkaitan.</p>
+
+  <h3 id="erd-auth">4.1 Domain Auth &amp; RBAC</h3>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+erDiagram
+    users {
+        bigint id PK
+        string name
+        string email UK
+        string phone_number
+        string status
+        boolean task_email_notifications_enabled
+        string timezone
+        bigint role_id FK
+        string password
+    }
+    roles {
+        bigint id PK
+        string name UK
+    }
+    permissions {
+        bigint id PK
+        string name
+        string slug UK
+        string module
+    }
+    permission_role {
+        bigint role_id FK
+        bigint permission_id FK
+    }
+    personal_access_tokens {
+        bigint id PK
+        string tokenable_type
+        bigint tokenable_id
+        string token UK
+        timestamp expires_at
+    }
+
+    users }o--|| roles : "belongs to"
+    roles ||--o{ permission_role : "has"
+    permissions ||--o{ permission_role : "granted to"
+    personal_access_tokens }o--|| users : "tokenable"
+    </div>
+  </div>
+
+  <h3 id="erd-project">4.2 Domain Project Core</h3>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+erDiagram
+    projects {
+        bigint id PK
+        string name
+        string status
+        string budget_status
+        integer completion
+        string methodology
+        json jobs
+        date start_date
+        date end_date
+        decimal hourly_rate
+        decimal quotation_value
+    }
+    project_roles {
+        bigint id PK
+        string name UK
+    }
+    project_members {
+        bigint id PK
+        bigint project_id FK
+        bigint user_id FK
+        bigint project_role_id FK
+    }
+    project_role_quotas {
+        bigint id PK
+        bigint project_id FK
+        bigint project_role_id FK
+        decimal quota_hours
+        boolean is_active
+    }
+    tasks {
+        bigint id PK
+        bigint project_id FK
+        bigint parent_task_id FK
+        smallint sort_order
+        string title
+        string feature_title
+        string category
+        string status
+        string priority
+        boolean is_billable
+        boolean rush_hour
+        bigint assignee_id FK
+        decimal estimated_hours
+        bigint project_role_id FK
+        date due_date
+        date start_date
+    }
+    task_notes {
+        bigint id PK
+        bigint task_id FK
+        bigint user_id FK
+        text body
+    }
+    manhours {
+        bigint id PK
+        bigint user_id FK
+        bigint project_id FK
+        bigint project_role_id FK
+        date date
+        decimal hours
+        decimal amount_idr
+    }
+    project_notes {
+        bigint id PK
+        bigint project_id FK
+        bigint user_id FK
+        string category
+        string title
+        text body
+        string url
+    }
+
+    projects ||--o{ project_members : "has members"
+    projects ||--o{ project_role_quotas : "has quotas"
+    projects ||--o{ tasks : "has tasks"
+    projects ||--o{ manhours : "has manhours"
+    projects ||--o{ project_notes : "has notes"
+    project_roles ||--o{ project_members : "used in"
+    project_roles ||--o{ project_role_quotas : "quota for"
+    project_roles ||--o{ tasks : "assigned role"
+    project_roles ||--o{ manhours : "logged as"
+    users ||--o{ project_members : "member of"
+    users ||--o{ tasks : "assignee"
+    users ||--o{ manhours : "logs"
+    users ||--o{ task_notes : "writes"
+    users ||--o{ project_notes : "writes"
+    tasks ||--o{ tasks : "has subtasks"
+    tasks ||--o{ task_notes : "has notes"
+    </div>
+  </div>
+
+  <h3 id="erd-finance">4.3 Domain Finance</h3>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+erDiagram
+    finance_categories {
+        bigint id PK
+        string name UK
+    }
+    project_allocations {
+        bigint id PK
+        bigint project_id FK
+        bigint category_id FK
+        bigint project_role_id FK
+        bigint user_id FK
+        decimal amount
+        decimal realized_amount
+        timestamp realized_at
+        timestamp paid_at
+        decimal paid_amount
+        boolean is_topup
+        decimal topup_hours
+        boolean is_change_request
+        date cr_date
+        string cr_feature
+    }
+    financial_records {
+        bigint id PK
+        string type
+        decimal amount
+        date date
+        text description
+    }
+    projects {
+        bigint id PK
+        string name
+    }
+
+    finance_categories ||--o{ project_allocations : "categorizes"
+    projects ||--o{ project_allocations : "has allocations"
+    </div>
+  </div>
+
+  <h3 id="erd-sales">4.4 Domain Sales &amp; Presales</h3>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+erDiagram
+    companies {
+        bigint id PK
+        string name UK
+        string logo_path
+    }
+    project_categories {
+        bigint id PK
+        string name UK
+    }
+    sales_category_projects {
+        bigint id PK
+        string name UK
+    }
+    sales_pitches {
+        bigint id PK
+        bigint user_id FK
+        bigint company_id FK
+        bigint project_category_id FK
+        string title
+        string prospect_name
+        decimal estimated_value
+        decimal final_deal_value
+        string current_step
+        string outcome
+        json quotation_data
+        timestamp lead_started_at
+        timestamp closed_at
+    }
+    sp_scp_pivot {
+        bigint sales_pitch_id FK
+        bigint sales_category_project_id FK
+    }
+    presales {
+        bigint id PK
+        bigint company_id FK
+        bigint project_category_id FK
+        bigint sales_pitch_id FK
+        string project_name
+        string status
+        string methodology
+        decimal estimated_budget
+        decimal total_manhours
+        timestamp business_acknowledged_at
+        timestamp development_acknowledged_at
+        timestamp operation_acknowledged_at
+        bigint converted_project_id FK
+    }
+    presale_role_requirements {
+        bigint id PK
+        bigint presale_id FK
+        bigint project_role_id FK
+        decimal business_mh
+        decimal development_mh
+    }
+    presale_operation_assignments {
+        bigint id PK
+        bigint presale_id FK
+        bigint project_role_id FK
+        bigint user_id FK
+    }
+
+    companies ||--o{ sales_pitches : "prospect"
+    companies ||--o{ presales : "client"
+    project_categories ||--o{ sales_pitches : "category"
+    project_categories ||--o{ presales : "category"
+    sales_pitches ||--o{ sp_scp_pivot : "has categories"
+    sales_category_projects ||--o{ sp_scp_pivot : "used in"
+    sales_pitches ||--o| presales : "converted to"
+    presales ||--o{ presale_role_requirements : "needs roles"
+    presales ||--o{ presale_operation_assignments : "assigns team"
+    presales ||--o| projects : "converted to project"
+    </div>
+  </div>
+
+  <h3 id="erd-system">4.5 Domain System</h3>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+erDiagram
+    activity_logs {
+        bigint id PK
+        bigint user_id FK
+        string type
+        string activity
+        text description
+        timestamp created_at
+    }
+    settings {
+        bigint id PK
+        string key UK
+        text value
+    }
+    team_load_excluded_dates {
+        bigint id PK
+        date excluded_date UK
+        string label
+    }
+    users {
+        bigint id PK
+        string name
+    }
+
+    users ||--o{ activity_logs : "performed by"
+    </div>
+  </div>
+
+  <hr />
+
+  <!-- ══ 5 ══ -->
+  <h2 id="sec5"><span class="num">5</span> Skema Database Lengkap</h2>
+
+  <h3>Tabel: <code>users</code></h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kolom</th><th>Tipe</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>bigint PK</td><td>Auto increment</td></tr>
+      <tr><td><code>name</code></td><td>string</td><td>Nama lengkap</td></tr>
+      <tr><td><code>email</code></td><td>string UK</td><td>Unique, digunakan login</td></tr>
+      <tr><td><code>phone_number</code></td><td>string nullable</td><td>Opsional</td></tr>
+      <tr><td><code>status</code></td><td>string</td><td><code>active</code> / <code>inactive</code></td></tr>
+      <tr><td><code>task_email_notifications_enabled</code></td><td>boolean</td><td>Default <code>true</code></td></tr>
+      <tr><td><code>timezone</code></td><td>string</td><td>Default <code>Asia/Jakarta</code></td></tr>
+      <tr><td><code>role_id</code></td><td>bigint FK</td><td>→ <code>roles</code></td></tr>
+      <tr><td><code>password</code></td><td>string nullable</td><td>Bcrypt hashed</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Tabel: <code>projects</code></h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kolom</th><th>Tipe</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>bigint PK</td><td></td></tr>
+      <tr><td><code>name</code></td><td>string</td><td>Nama project</td></tr>
+      <tr><td><code>status</code></td><td>string</td><td><code>Planning</code> / <code>In Progress</code> / <code>Done</code></td></tr>
+      <tr><td><code>budget_status</code></td><td>string</td><td><code>On Budget</code> / <code>Over Budget</code></td></tr>
+      <tr><td><code>completion</code></td><td>integer</td><td>% completion</td></tr>
+      <tr><td><code>methodology</code></td><td>string nullable</td><td><code>Agile Scrum</code> / <code>Waterfall</code></td></tr>
+      <tr><td><code>jobs</code></td><td>json nullable</td><td>Array job/posisi dalam project</td></tr>
+      <tr><td><code>start_date</code> / <code>end_date</code></td><td>date nullable</td><td></td></tr>
+      <tr><td><code>total_manhours</code></td><td>integer nullable</td><td>Total MH yang dialokasikan</td></tr>
+      <tr><td><code>hourly_rate</code></td><td>decimal(15,2) nullable</td><td>Rate per jam (IDR)</td></tr>
+      <tr><td><code>total_cost</code></td><td>decimal(15,2) nullable</td><td>Estimasi biaya total</td></tr>
+      <tr><td><code>quotation_value</code></td><td>decimal(15,2) nullable</td><td>Nilai kontrak</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Tabel: <code>tasks</code></h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kolom</th><th>Tipe</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>bigint PK</td><td></td></tr>
+      <tr><td><code>project_id</code></td><td>bigint FK</td><td>→ projects (cascade delete)</td></tr>
+      <tr><td><code>parent_task_id</code></td><td>bigint FK nullable</td><td>→ tasks (self-referential, subtask)</td></tr>
+      <tr><td><code>sort_order</code></td><td>smallint</td><td>Urutan drag &amp; drop</td></tr>
+      <tr><td><code>title</code></td><td>string</td><td>Judul task</td></tr>
+      <tr><td><code>feature_title</code></td><td>string nullable</td><td>Nama fitur/modul</td></tr>
+      <tr><td><code>category</code></td><td>string nullable</td><td>Kategori bebas</td></tr>
+      <tr><td><code>status</code></td><td>string</td><td><code>To Do</code> / <code>In Progress</code> / <code>Done</code> / <code>Reopen</code></td></tr>
+      <tr><td><code>priority</code></td><td>string</td><td><code>Low</code> / <code>Medium</code> / <code>High</code></td></tr>
+      <tr><td><code>is_billable</code></td><td>boolean</td><td>Default <code>true</code></td></tr>
+      <tr><td><code>rush_hour</code></td><td>boolean</td><td>Multiplier 1.3× bila <code>true</code></td></tr>
+      <tr><td><code>assignee_id</code></td><td>bigint FK nullable</td><td>→ users</td></tr>
+      <tr><td><code>estimated_hours</code></td><td>decimal(8,2)</td><td>Estimasi jam</td></tr>
+      <tr><td><code>project_role_id</code></td><td>bigint FK nullable</td><td>→ project_roles</td></tr>
+      <tr><td><code>due_date</code> / <code>start_date</code></td><td>date nullable</td><td></td></tr>
+      <tr><td><code>last_due_reminder_sent_at</code></td><td>timestamp nullable</td><td>Tracking pengiriman reminder</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Tabel: <code>project_allocations</code></h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kolom</th><th>Tipe</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>bigint PK</td><td></td></tr>
+      <tr><td><code>project_id</code></td><td>bigint FK</td><td>→ projects</td></tr>
+      <tr><td><code>category_id</code></td><td>bigint FK</td><td>→ finance_categories</td></tr>
+      <tr><td><code>project_role_id</code></td><td>bigint FK nullable</td><td>→ project_roles (untuk top-up)</td></tr>
+      <tr><td><code>user_id</code></td><td>bigint FK nullable</td><td>→ users (penerima alokasi)</td></tr>
+      <tr><td><code>amount</code></td><td>decimal(15,2)</td><td>Nilai alokasi (IDR)</td></tr>
+      <tr><td><code>realized_amount</code></td><td>decimal(15,2) nullable</td><td>Nilai realisasi</td></tr>
+      <tr><td><code>realized_at</code></td><td>timestamp nullable</td><td>Tanggal realisasi</td></tr>
+      <tr><td><code>paid_at</code></td><td>timestamp nullable</td><td>Tanggal pembayaran</td></tr>
+      <tr><td><code>paid_amount</code></td><td>decimal(15,2)</td><td>Jumlah yang dibayar (default 0)</td></tr>
+      <tr><td><code>is_topup</code></td><td>boolean</td><td>Flag top-up jam</td></tr>
+      <tr><td><code>topup_hours</code></td><td>decimal(10,2) nullable</td><td>Jumlah jam top-up</td></tr>
+      <tr><td><code>is_change_request</code></td><td>boolean</td><td>Flag change request</td></tr>
+      <tr><td><code>cr_date</code></td><td>date nullable</td><td>Tanggal CR</td></tr>
+      <tr><td><code>cr_feature</code></td><td>string nullable</td><td>Fitur yang di-CR</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Tabel: <code>sales_pitches</code></h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kolom</th><th>Tipe</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>bigint PK</td><td></td></tr>
+      <tr><td><code>user_id</code></td><td>bigint FK</td><td>→ users (PIC/sales)</td></tr>
+      <tr><td><code>company_id</code></td><td>bigint FK nullable</td><td>→ companies</td></tr>
+      <tr><td><code>project_category_id</code></td><td>bigint FK nullable</td><td>→ project_categories</td></tr>
+      <tr><td><code>title</code></td><td>string</td><td>Judul pitch</td></tr>
+      <tr><td><code>prospect_name</code></td><td>string</td><td>Nama prospect</td></tr>
+      <tr><td><code>estimated_value</code></td><td>decimal(15,2) nullable</td><td>Estimasi nilai deal</td></tr>
+      <tr><td><code>final_deal_value</code></td><td>decimal(15,2) nullable</td><td>Nilai final saat won</td></tr>
+      <tr><td><code>current_step</code></td><td>string</td><td>Step aktif pipeline</td></tr>
+      <tr><td><code>outcome</code></td><td>string nullable</td><td><code>win</code> / <code>lost</code></td></tr>
+      <tr><td><code>lead_started_at</code></td><td>timestamp</td><td>Kapan lead mulai</td></tr>
+      <tr><td><code>closed_at</code></td><td>timestamp nullable</td><td>Kapan deal ditutup</td></tr>
+      <tr><td><code>step_reached_at</code></td><td>json nullable</td><td>Timestamp tiap step dicapai</td></tr>
+      <tr><td><code>quotation_data</code></td><td>json nullable</td><td>Data quotation editor</td></tr>
+      <tr><td><code>quotation_logo_path</code></td><td>string nullable</td><td>Path logo pada quotation</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Tabel: <code>presales</code></h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kolom</th><th>Tipe</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>bigint PK</td><td></td></tr>
+      <tr><td><code>company_id</code></td><td>bigint FK nullable</td><td>→ companies</td></tr>
+      <tr><td><code>project_category_id</code></td><td>bigint FK nullable</td><td>→ project_categories</td></tr>
+      <tr><td><code>sales_pitch_id</code></td><td>bigint FK nullable UK</td><td>→ sales_pitches (1:1 bila dari won deal)</td></tr>
+      <tr><td><code>project_name</code></td><td>string</td><td>Nama project yang diusulkan</td></tr>
+      <tr><td><code>status</code></td><td>string</td><td><code>Lead</code> / <code>Identified</code> / <code>Proposal</code> / <code>Presentation</code> / <code>Negotiation</code> / <code>Won</code> / <code>Lost</code></td></tr>
+      <tr><td><code>methodology</code></td><td>string nullable</td><td><code>Agile Scrum</code> / <code>Waterfall</code></td></tr>
+      <tr><td><code>estimated_budget</code></td><td>decimal(15,2) nullable</td><td></td></tr>
+      <tr><td><code>total_manhours</code></td><td>decimal(10,2) nullable</td><td></td></tr>
+      <tr><td><code>business_acknowledged_by</code></td><td>bigint FK nullable</td><td>→ users</td></tr>
+      <tr><td><code>development_acknowledged_by</code></td><td>bigint FK nullable</td><td>→ users</td></tr>
+      <tr><td><code>operation_acknowledged_by</code></td><td>bigint FK nullable</td><td>→ users</td></tr>
+      <tr><td><code>converted_project_id</code></td><td>bigint FK nullable</td><td>→ projects (setelah Proceed to Project)</td></tr>
+    </tbody>
+  </table></div>
+
+  <hr />
+
+  <!-- ══ 6 ══ -->
+  <h2 id="sec6"><span class="num">6</span> Alur Bisnis</h2>
+
+  <h3 id="flow-sales">6.1 Sales Pipeline (Sales Pitch)</h3>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+flowchart LR
+    A([Buat Sales Pitch\nnew_prospect]) --> B[Kirim Compro\nsent_compro]
+    B --> C[Kirim Proposal\nproposal_sent]
+    C --> D[Presentasi\npresentation]
+    D --> E[Negosiasi\nnegotiation]
+    E --> F{Outcome?}
+    F -->|Win| G([Won\n+ Generate Quotation PDF])
+    F -->|Lost| H([Lost + Alasan])
+    G -->|Link ke Presales| I([Buat Presale\ndari Won Deal])
+
+    style G fill:#166534,color:#86efac
+    style H fill:#7f1d1d,color:#fca5a5
+    style I fill:#1e3a8a,color:#93c5fd
+    </div>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Step</th><th><code>current_step</code></th><th>Yang dilakukan</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>new_prospect</code></td><td>Data awal prospect</td></tr>
+      <tr><td>2</td><td><code>sent_compro</code></td><td>Kirim company profile</td></tr>
+      <tr><td>3</td><td><code>proposal_sent</code></td><td>Kirim proposal dokumen</td></tr>
+      <tr><td>4</td><td><code>presentation</code></td><td>Meeting / presentasi (online / offline)</td></tr>
+      <tr><td>5</td><td><code>negotiation</code></td><td>Negosiasi, generate quotation</td></tr>
+      <tr><td>—</td><td>outcome: <code>win</code></td><td>Deal menang → bisa buat Presale</td></tr>
+      <tr><td>—</td><td>outcome: <code>lost</code></td><td>Deal kalah + alasan</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="flow-presales">6.2 Presales Pipeline → Convert ke Project</h3>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+flowchart TD
+    START([Buat Presale]) --> STATUS
+
+    subgraph STATUS["Pipeline Status"]
+        L[Lead] --> I[Identified]
+        I --> P[Proposal]
+        P --> PR[Presentation]
+        PR --> N[Negotiation]
+        N --> W{Hasil?}
+        W -->|Won| WON[Won]
+        W -->|Lost| LOST[Lost]
+    end
+
+    WON --> STEP1
+
+    subgraph STEP1["Step 1 — Business"]
+        B1[Isi detail business\nDeck URL, Quotation URL\nDrive URL, Role MH] --> B2[Acknowledge Business]
+    end
+
+    B2 --> STEP2
+
+    subgraph STEP2["Step 2 — Development"]
+        D1[Isi detail development\nMethodology, Total MH\nRole development MH] --> D2[Acknowledge Development]
+    end
+
+    D2 --> STEP3
+
+    subgraph STEP3["Step 3 — Operation"]
+        O1[Assign tim ke roles] --> O2[Acknowledge Operation]
+    end
+
+    O2 --> CONVERT[Proceed to Project]
+    CONVERT --> PROJECT([Project baru dibuat\nstatus: Planning\nmembers dari operation assignments])
+
+    style WON fill:#166534,color:#86efac
+    style LOST fill:#7f1d1d,color:#fca5a5
+    style PROJECT fill:#1e3a8a,color:#93c5fd
+    style CONVERT fill:#78350f,color:#fcd34d
+    </div>
+  </div>
+
+  <h3 id="flow-project">6.3 Project Lifecycle</h3>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+flowchart TD
+    A([Project dibuat\nstatus: Planning]) --> B[Setup Project\nAdd Members, Role Quotas\nHourly Rate]
+    B --> C[Buat Tasks\nParent + Subtask\nAssignee, estimated_hours\ndue_date, start_date]
+    C --> D{Mulai kerja\nstatus: In Progress}
+    D --> E[Log Manhours\nPer tanggal per role]
+    D --> F[Update Task Status\nTo Do → In Progress → Done]
+    E --> G[Monitor Board\nKanban, Gantt, Dashboard]
+    F --> G
+    G --> H{Semua task Done?}
+    H -->|Ya| I([Project Done])
+    H -->|Tidak| D
+    I --> J[Generate Report\nEfficiency, Financial\nRealization]
+
+    style A fill:#312e81,color:#a5b4fc
+    style I fill:#166534,color:#86efac
+    style J fill:#1e3a8a,color:#93c5fd
+    </div>
+  </div>
+  <div class="card">
+    <h4>Aturan Subtask</h4>
+    <ul>
+      <li>Nesting maksimal <strong>1 level</strong> — subtask tidak bisa punya subtask.</li>
+      <li><code>estimated_hours</code> parent = sum <code>estimated_hours</code> subtask yang <code>is_billable = true</code>.</li>
+      <li>Quota Scrum dihitung dari: subtask ATAU parent yang tidak punya subtask.</li>
+      <li>Rush hour (<code>rush_hour = true</code>) menggunakan multiplier <strong>1.3×</strong>.</li>
+    </ul>
+  </div>
+
+  <h3 id="flow-finance">6.4 Finance Monitoring</h3>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+flowchart LR
+    A([Project baru]) --> B[Alokasi Initial\nproject_allocations]
+    B --> C{Tipe Alokasi}
+    C -->|Normal| D[Expense Biasa\ncategory + amount]
+    C -->|Top-up| E[Top-up Jam\ntopup_hours]
+    C -->|Change Request| F[CR\ncr_date, cr_feature]
+    D --> G[Realisasi\nrealized_amount]
+    E --> G
+    F --> G
+    G --> H[Pembayaran\npaid_at, paid_amount]
+    H --> I[Finance Report\nSummary, Realization\nRevenue Trend]
+
+    style A fill:#312e81,color:#a5b4fc
+    style I fill:#166534,color:#86efac
+    </div>
+  </div>
+
+  <h3 id="flow-load">6.5 Team Load</h3>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+flowchart LR
+    A[Tasks dengan\nassignee + start_date + due_date] --> B[TeamLoadService]
+    F[Excluded Dates\nHari libur] --> B
+    B --> C[Distribusi jam per hari\nWeekdaySchedule\nskip excluded_dates]
+    C --> D[Heatmap per user\ndaily_mh per tanggal]
+    D --> E[Calendar view\npeak_mh highlight]
+
+    style B fill:#312e81,color:#a5b4fc
+    style E fill:#166534,color:#86efac
+    </div>
+  </div>
+  <div class="card">
+    <strong>Formula:</strong> <code>estimated_hours ÷ jumlah_hari_kerja_dalam_range</code> = jam per hari per task
+  </div>
+
+  <hr />
+
+  <!-- ══ 7 ══ -->
+  <h2 id="sec7"><span class="num">7</span> Modul &amp; Fitur</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Modul</th><th>URL</th><th>Deskripsi</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Dashboard</strong></td><td><code>/</code></td><td>Overview stats: project aktif, task summary, aktivitas terbaru</td></tr>
+      <tr><td><strong>Sales</strong></td><td><code>/sales</code></td><td>Pipeline sales pitch, wizard per step, generate quotation PDF</td></tr>
+      <tr><td><strong>Presales</strong></td><td><code>/presales</code></td><td>Pipeline presales, workflow business→dev→op, convert ke project</td></tr>
+      <tr><td><strong>List Company</strong></td><td><code>/presales-companies</code></td><td>Master data perusahaan klien (logo support)</td></tr>
+      <tr><td><strong>Category Project</strong></td><td><code>/presales-project-categories</code></td><td>Master kategori project</td></tr>
+      <tr><td><strong>Sales Category</strong></td><td><code>/sales-category-projects</code></td><td>Master kategori sales (many-to-many dengan pitch)</td></tr>
+      <tr><td><strong>List Project</strong></td><td><code>/create-project</code></td><td>Daftar semua project, buat project baru</td></tr>
+      <tr><td><strong>Project Board</strong></td><td><code>/board/:projectId</code></td><td>Kanban board, log manhour, subtask, drag &amp; drop, project notes</td></tr>
+      <tr><td><strong>Board Dashboard</strong></td><td><code>/board/:projectId/dashboard</code></td><td>Metrik dan ringkasan per project</td></tr>
+      <tr><td><strong>Gantt Chart</strong></td><td><code>/board/:projectId/gantt</code></td><td>Timeline Gantt view per project</td></tr>
+      <tr><td><strong>Team Load</strong></td><td><code>/team-load</code></td><td>Kapasitas tim berdasarkan distribusi task per hari</td></tr>
+      <tr><td><strong>Finance Monitoring</strong></td><td><code>/finance-monitoring</code></td><td>Alokasi, top-up, CR, realisasi, pembayaran per project</td></tr>
+      <tr><td><strong>Finance Categories</strong></td><td><code>/finance-categories</code></td><td>Master kategori keuangan</td></tr>
+      <tr><td><strong>Finance Report</strong></td><td><code>/finance-report</code></td><td>Catatan OPEX/CAPEX perusahaan</td></tr>
+      <tr><td><strong>Realization Report</strong></td><td><code>/finance-realization-report</code></td><td>Realisasi vs plan per project</td></tr>
+      <tr><td><strong>Reports</strong></td><td><code>/reports</code></td><td>Efisiensi, revenue trend, financial analysis per perusahaan</td></tr>
+      <tr><td><strong>Generate Report</strong></td><td><code>/generate-report</code></td><td>Generate &amp; kirim laporan per email</td></tr>
+      <tr><td><strong>Integrasi</strong></td><td><code>/integrasi/projects</code></td><td>Sinkronisasi project dari sistem eksternal</td></tr>
+      <tr><td><strong>Teams &amp; Users</strong></td><td><code>/users</code></td><td>Manajemen user (CRUD, aktif/nonaktif)</td></tr>
+      <tr><td><strong>Access Control</strong></td><td><code>/roles</code></td><td>Manajemen role &amp; assignment permission granular</td></tr>
+      <tr><td><strong>Project Roles</strong></td><td><code>/project-roles</code></td><td>Master role dalam project (Developer, QA, UI/UX, dll)</td></tr>
+      <tr><td><strong>System Logs</strong></td><td><code>/system-logs</code></td><td>Audit trail aktivitas user dengan fitur cleanup</td></tr>
+      <tr><td><strong>Settings</strong></td><td><code>/settings</code></td><td>Branding (logo, favicon), SMTP, reset data sistem</td></tr>
+      <tr><td><strong>Profile</strong></td><td><code>/profile</code></td><td>Profil, password, timezone, setting email notifikasi</td></tr>
+    </tbody>
+  </table></div>
+
+  <hr />
+
+  <!-- ══ 8 ══ -->
+  <h2 id="sec8"><span class="num">8</span> Sistem RBAC (Hak Akses)</h2>
+  <div class="mermaid-wrap">
+    <div class="mermaid">
+flowchart LR
+    U[User] -->|memiliki 1| R[Role]
+    R -->|memiliki banyak| P[Permissions]
+    P -->|slug format| S["module.action\nContoh:\nproject_board.read\nfinance_monitoring.create"]
+    subgraph API["Setiap API Route"]
+        MW["middleware: permission:slug"]
+    end
+    U -->|request| MW
+    MW -->|cek slug| P
+    </div>
+  </div>
+
+  <h3>Default Roles</h3>
+  <div class="roles-grid">
+    <div class="role-card">
+      <div class="role-name">Admin</div>
+      <div class="role-desc">Akses penuh semua modul termasuk reset sistem.</div>
+      <div class="role-perms">Semua ~80+ permissions</div>
+    </div>
+    <div class="role-card">
+      <div class="role-name">Board Member</div>
+      <div class="role-desc">Anggota tim project (developer, QA, designer).</div>
+      <div class="role-perms">project_board.read<br>project_board.create<br>project_board.update<br>profile.read / update</div>
+    </div>
+    <div class="role-card">
+      <div class="role-name">Freelance</div>
+      <div class="role-desc">Kontraktor eksternal — view board &amp; update status saja.</div>
+      <div class="role-perms">project_board.read<br>project_board.update<br>profile.read / update</div>
+    </div>
+  </div>
+
+  <h3>Semua Permission Slug</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Modul</th><th>Slugs</th></tr></thead>
+    <tbody>
+      <tr><td>Dashboard</td><td><code>dashboard.read</code></td></tr>
+      <tr><td>Presales</td><td><code>presales.{create, read, update, delete}</code></td></tr>
+      <tr><td>Sales</td><td><code>sales.{create, read, update, delete}</code></td></tr>
+      <tr><td>List Company</td><td><code>list_company.{create, read, update, delete}</code></td></tr>
+      <tr><td>Category Project</td><td><code>category_project.{create, read, update, delete}</code></td></tr>
+      <tr><td>Sales Category Project</td><td><code>sales_category_project.{create, read, update, delete}</code></td></tr>
+      <tr><td>List Project</td><td><code>list_project.{create, read, update, delete}</code></td></tr>
+      <tr><td>Project Board</td><td><code>project_board.{create, read, update}</code></td></tr>
+      <tr><td>Team Load</td><td><code>load.read</code></td></tr>
+      <tr><td>Reports</td><td><code>reports.read</code></td></tr>
+      <tr><td>Generate Report</td><td><code>generate_report.{create, read}</code></td></tr>
+      <tr><td>Finance Monitoring</td><td><code>finance_monitoring.{create, read, update, delete}</code></td></tr>
+      <tr><td>Finance Categories</td><td><code>finance_categories.{create, read, update, delete}</code></td></tr>
+      <tr><td>Finance Report</td><td><code>finance_report.{create, read, delete}</code></td></tr>
+      <tr><td>Realization Report</td><td><code>realization_report.read</code></td></tr>
+      <tr><td>Integrasi</td><td><code>integrasi.read</code></td></tr>
+      <tr><td>Teams &amp; Users</td><td><code>teams_users.{create, read, update, delete}</code></td></tr>
+      <tr><td>Access Control</td><td><code>access_control.{create, read, update, delete}</code></td></tr>
+      <tr><td>Project Roles</td><td><code>project_roles.{create, read, update, delete}</code></td></tr>
+      <tr><td>System Log</td><td><code>system_log.{read, delete}</code></td></tr>
+      <tr><td>Settings</td><td><code>settings.{read, update, reset}</code></td></tr>
+      <tr><td>Profile</td><td><code>profile.{read, update}</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <hr />
+
+  <!-- ══ 9 ══ -->
+  <h2 id="sec9"><span class="num">9</span> API Reference</h2>
+  <p>Base URL: <code>/api</code> &nbsp;·&nbsp; Auth: <code>Authorization: Bearer {token}</code> &nbsp;·&nbsp; Format: JSON</p>
+
+  <h3>Auth</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Permission</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/login</code></td><td>—</td><td>Login, rate limit 10/menit</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/signup</code></td><td>—</td><td>Signup jika diaktifkan, rate limit 5/menit</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/me</code></td><td>auth</td><td>Data user yang login</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/logout</code></td><td>auth</td><td>Hapus token</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/profile</code></td><td><code>profile.update</code></td><td>Update profil &amp; password</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/branding</code></td><td>—</td><td>Data branding publik (logo, nama app)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Projects</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Permission</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/projects</code></td><td><code>project_board.read</code></td><td>Semua project</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/projects</code></td><td><code>list_project.create</code></td><td>Buat project baru</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/projects</code></td><td><code>list_project.delete</code></td><td>Hapus project</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/projects/{id}/quotas</code></td><td><code>project_board.read</code></td><td>Quota MH per role</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/projects/{id}/balance</code></td><td><code>project_board.read</code></td><td>Saldo jam project</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/projects/{id}/members</code></td><td><code>project_board.read</code></td><td>Anggota project</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/projects/{id}/notes</code></td><td><code>project_board.read</code></td><td>Catatan project</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/projects/{id}/notes</code></td><td><code>project_board.read</code></td><td>Tambah catatan</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/projects/{id}/notes/{noteId}</code></td><td><code>project_board.read</code></td><td>Edit catatan</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/projects/{id}/notes/{noteId}</code></td><td><code>project_board.read</code></td><td>Hapus catatan</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/projects/{id}/assignment-options</code></td><td><code>list_project.update</code></td><td>Opsi assign member</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/projects/{id}/members</code></td><td><code>list_project.update</code></td><td>Sync members project</td></tr>
+      <tr><td><span class="method method-patch">PATCH</span></td><td><code>/projects/{id}/status</code></td><td><code>project_board.update</code></td><td>Update status project</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/projects/{id}/finance-summary</code></td><td><code>finance_monitoring.read</code></td><td>Ringkasan keuangan</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Tasks</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Permission</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/tasks</code></td><td><code>project_board.read</code></td><td>Tasks (filter by project_id)</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/tasks</code></td><td><code>project_board.create</code></td><td>Buat task / subtask baru</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/tasks/{id}</code></td><td><code>project_board.update</code></td><td>Edit task</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/tasks/{id}</code></td><td><code>project_board.update</code></td><td>Hapus task</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/tasks/{id}/status</code></td><td><code>project_board.update</code></td><td>Update status task</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/tasks/bulk-edit</code></td><td><code>project_board.update</code></td><td>Bulk edit manhours</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/tasks/template</code></td><td><code>project_board.read</code></td><td>Download template CSV import</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/tasks/import</code></td><td><code>project_board.create</code></td><td>Import tasks dari CSV</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/tasks/{taskId}/notes</code></td><td><code>project_board.read</code></td><td>Catatan task</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/tasks/{taskId}/notes</code></td><td><code>project_board.read</code></td><td>Tambah catatan task</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/tasks/{taskId}/notes/{noteId}</code></td><td><code>project_board.read</code></td><td>Hapus catatan task</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Manhours</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Permission</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/manhours</code></td><td><code>project_board.read</code></td><td>Log manhour</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/manhours</code></td><td><code>project_board.create</code></td><td>Tambah log manhour</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Presales</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Permission</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/presales</code></td><td><code>presales.read</code></td><td>Semua presales</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/presales</code></td><td><code>presales.create</code></td><td>Buat presale baru</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/presales/{id}</code></td><td><code>presales.update</code></td><td>Edit presale</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/presales/{id}</code></td><td><code>presales.delete</code></td><td>Hapus presale</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/presales/{id}/business</code></td><td><code>presales.update</code></td><td>Update step business</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/presales/{id}/business/acknowledge</code></td><td><code>presales.update</code></td><td>Acknowledge business</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/presales/{id}/development</code></td><td><code>presales.update</code></td><td>Update step development</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/presales/{id}/development/acknowledge</code></td><td><code>presales.update</code></td><td>Acknowledge development</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/presales/{id}/operation</code></td><td><code>presales.update</code></td><td>Update step operation</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/presales/{id}/operation/acknowledge</code></td><td><code>presales.update</code></td><td>Acknowledge operation</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/presales/{id}/proceed-project</code></td><td><code>presales.update</code></td><td>Convert ke project</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Sales Pitches</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Permission</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/sales-pitches</code></td><td><code>sales.read</code></td><td>Semua pitch</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/sales-pitches/{id}</code></td><td><code>sales.read</code></td><td>Detail pitch</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/sales-pitches</code></td><td><code>sales.create</code></td><td>Buat pitch baru</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/sales-pitches/{id}</code></td><td><code>sales.update</code></td><td>Edit pitch</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/sales-pitches/{id}</code></td><td><code>sales.delete</code></td><td>Hapus pitch</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/sales-pitches/form-options</code></td><td><code>sales.read</code></td><td>Opsi form (companies, categories)</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/sales-pitches/link-won-presale/{presaleId}</code></td><td><code>sales.update</code></td><td>Link ke presale</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/sales-pitches/{id}/quotation/default</code></td><td><code>sales.read</code></td><td>Default data quotation</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/sales-pitches/{id}/quotation/preview</code></td><td><code>sales.update</code></td><td>Preview quotation PDF</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/sales-pitches/{id}/quotation/generate</code></td><td><code>sales.update</code></td><td>Generate &amp; simpan PDF</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/sales-pitches/{id}/quotation/logo</code></td><td><code>sales.update</code></td><td>Upload logo quotation</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/sales-pitches/{id}/quotation/logo</code></td><td><code>sales.update</code></td><td>Hapus logo quotation</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Finance Monitoring</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Permission</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/project-allocations</code></td><td><code>finance_monitoring.read</code></td><td>Semua alokasi</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/project-allocations</code></td><td><code>finance_monitoring.create</code></td><td>Tambah alokasi</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/project-allocations/{id}</code></td><td><code>finance_monitoring.update</code></td><td>Edit alokasi</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/project-allocations/{id}/realization</code></td><td><code>finance_monitoring.update</code></td><td>Realisasi alokasi</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/project-allocations/{id}/paid</code></td><td><code>finance_monitoring.update</code></td><td>Tandai sudah dibayar</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/project-allocations/{id}</code></td><td><code>finance_monitoring.delete</code></td><td>Hapus alokasi</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/projects/{id}/top-up</code></td><td><code>finance_monitoring.create</code></td><td>Top-up jam</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/projects/{id}/change-request</code></td><td><code>finance_monitoring.create</code></td><td>Change request</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/projects/{id}/quota-transfer</code></td><td><code>finance_monitoring.update</code></td><td>Transfer quota antar role</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/projects/{id}/role-quotas/{quotaId}/deactivate</code></td><td><code>finance_monitoring.update</code></td><td>Nonaktifkan quota</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Analytics &amp; Reports</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Permission</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/stats</code></td><td><code>reports.read</code></td><td>Statistik umum</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/dashboard/overview</code></td><td><code>dashboard.read</code></td><td>Data dashboard</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/stats/recent</code></td><td><code>dashboard.read</code></td><td>Log aktivitas terbaru</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/reports/efficiency</code></td><td><code>reports.read</code></td><td>Laporan efisiensi</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/reports/revenue-trend</code></td><td><code>reports.read</code></td><td>Tren revenue</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/reports/company-projects</code></td><td><code>reports.read</code></td><td>Project per perusahaan</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/reports/company-financials</code></td><td><code>reports.read</code></td><td>Keuangan per perusahaan</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/reports/expense-payment-breakdown</code></td><td><code>reports.read</code></td><td>Breakdown expense</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/reports/projects</code></td><td><code>generate_report.read</code></td><td>Data untuk generate report</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/reports/generate</code></td><td><code>generate_report.create</code></td><td>Generate laporan</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/reports/send-email</code></td><td><code>generate_report.create</code></td><td>Kirim laporan via email</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/financial-reports/summary</code></td><td><code>finance_report.read</code></td><td>Ringkasan keuangan</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/financial-reports/project-realization</code></td><td><code>realization_report.read</code></td><td>Realisasi project</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/financial-reports/records</code></td><td><code>finance_report.create</code></td><td>Tambah financial record</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/financial-reports/records/{id}</code></td><td><code>finance_report.delete</code></td><td>Hapus financial record</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>System</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Permission</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/users</code></td><td><code>teams_users.read</code></td><td>Daftar user</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/users</code></td><td><code>teams_users.create</code></td><td>Buat user baru</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td><code>/users/{user}</code></td><td><code>teams_users.update</code></td><td>Edit user</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/users/{user}</code></td><td><code>teams_users.delete</code></td><td>Hapus user</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/team-load</code></td><td><code>load.read</code></td><td>Data kapasitas tim</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/team-load/excluded-dates</code></td><td><code>load.read</code></td><td>Tambah tanggal libur</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/team-load/excluded-dates/{id}</code></td><td><code>load.read</code></td><td>Hapus tanggal libur</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/activity-logs</code></td><td><code>system_log.read</code></td><td>Audit log</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/activity-logs/cleanup</code></td><td><code>system_log.delete</code></td><td>Bersihkan log lama</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/settings/all</code></td><td><code>settings.read</code></td><td>Semua setting</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/settings/update</code></td><td><code>settings.update</code></td><td>Update setting</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/settings/branding/logo</code></td><td><code>settings.update</code></td><td>Upload logo app</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td><code>/settings/branding/logo</code></td><td><code>settings.update</code></td><td>Hapus logo app</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/settings/branding/favicon</code></td><td><code>settings.update</code></td><td>Upload favicon</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/settings/test-smtp</code></td><td><code>settings.update</code></td><td>Test koneksi SMTP</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td><code>/system/reset</code></td><td><code>settings.reset</code></td><td>⚠️ Reset semua data</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/integration/projects</code></td><td><code>integrasi.read</code></td><td>Daftar project integrasi</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td><code>/integration/registry</code></td><td><code>integrasi.read</code></td><td>Registry integrasi</td></tr>
+    </tbody>
+  </table></div>
+
+  <hr />
+
+  <!-- ══ 10 ══ -->
+  <h2 id="sec10"><span class="num">10</span> Email Notifications &amp; Scheduled Jobs</h2>
+
+  <h3>Email yang Dikirim Otomatis</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Event</th><th>Mail Class</th><th>Penerima</th><th>Trigger</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Task di-assign</td>
+        <td><code>TaskAssignedMail</code></td>
+        <td>Assignee task</td>
+        <td><code>POST /tasks</code> atau <code>PUT /tasks/{id}</code> dengan perubahan assignee</td>
+      </tr>
+      <tr>
+        <td>Task hampir jatuh tempo</td>
+        <td><code>TaskDueReminderMail</code></td>
+        <td>Assignee task</td>
+        <td>Scheduled command harian (<code>SendTaskDueReminders</code>)</td>
+      </tr>
+    </tbody>
+  </table></div>
+  <p>Setting per user: notifikasi email bisa dinonaktifkan via <code>task_email_notifications_enabled = false</code> di profil.</p>
+
+  <h3>Scheduled Commands</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Command</th><th>Jadwal</th><th>Fungsi</th></tr></thead>
+    <tbody>
+      <tr><td><code>SendTaskDueReminders</code></td><td>Harian</td><td>Kirim reminder untuk task yang due dalam waktu dekat dan belum dikirim reminder (<code>last_due_reminder_sent_at</code>)</td></tr>
+      <tr><td><code>CleanupLogs</code></td><td>Periodik</td><td>Hapus activity log yang sudah lama dari tabel <code>activity_logs</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Setting Keys (tabel <code>settings</code>)</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Key</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td><code>app_name</code></td><td>Nama aplikasi</td></tr>
+      <tr><td><code>app_logo_path</code></td><td>Path logo di storage</td></tr>
+      <tr><td><code>app_favicon_path</code></td><td>Path favicon</td></tr>
+      <tr><td><code>smtp_host</code></td><td>SMTP host</td></tr>
+      <tr><td><code>smtp_port</code></td><td>SMTP port</td></tr>
+      <tr><td><code>smtp_username</code></td><td>SMTP username</td></tr>
+      <tr><td><code>smtp_password</code></td><td>SMTP password</td></tr>
+      <tr><td><code>smtp_from_address</code></td><td>Alamat pengirim email</td></tr>
+      <tr><td><code>smtp_from_name</code></td><td>Nama pengirim email</td></tr>
+      <tr><td><code>allow_public_signup</code></td><td><code>true</code> / <code>false</code> — apakah endpoint signup aktif</td></tr>
+      <tr><td><code>sanctum_token_expiration_minutes</code></td><td>Durasi token login (default 720)</td></tr>
+    </tbody>
+  </table></div>
+
+  <hr />
+  <p style="color: var(--muted); font-size: 12px; text-align: center; padding-top: 16px;">
+    System Design — Project Tracker &nbsp;·&nbsp; Generated 2026-05-30 &nbsp;·&nbsp;
+    Update dokumen ini saat ada perubahan skema atau alur bisnis yang signifikan.
+  </p>
+
+</main>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#312e81',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#4338ca',
+      lineColor: '#6366f1',
+      secondaryColor: '#1e3a8a',
+      tertiaryColor: '#1a1d27',
+      background: '#1a1d27',
+      mainBkg: '#22263a',
+      nodeBorder: '#4338ca',
+      clusterBkg: '#1a1d27',
+      titleColor: '#e2e8f0',
+      edgeLabelBackground: '#1a1d27',
+      attributeBackgroundColorEven: '#1a1d27',
+      attributeBackgroundColorOdd: '#22263a',
+    },
+    flowchart: { curve: 'basis', htmlLabels: true },
+    er: { layoutDirection: 'TB', minEntityWidth: 100 },
+  });
+
+  // Active sidebar link on scroll
+  const sections = document.querySelectorAll('[id]');
+  const links = document.querySelectorAll('#sidebar nav a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`#sidebar nav a[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
