@@ -2145,9 +2145,18 @@ export default function ProjectBoard() {
                                 </div>
                             )}
                             {hasSubtasks && !isFreelance && (
-                                <p className="text-xs text-slate-500 dark:text-slate-400 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 px-3 py-2">
-                                    Parent manhours are summed from subtasks ({formatHours(subtasksTotalHours(editingSubtasks))} hrs). Edit hours on each subtask below.
-                                </p>
+                                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-4 py-3 flex items-center justify-between gap-4">
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Total MH</p>
+                                        <p className="text-xl font-bold text-slate-900 dark:text-white leading-none">
+                                            {formatHours(subtasksTotalHours(editingSubtasks))}
+                                            <span className="text-sm font-medium text-slate-500 ml-1">hrs</span>
+                                        </p>
+                                    </div>
+                                    <p className="text-xs text-slate-400 dark:text-slate-500 text-right leading-relaxed">
+                                        Summed from subtasks.<br />Edit hours on each subtask below.
+                                    </p>
+                                </div>
                             )}
                         </section>
 
