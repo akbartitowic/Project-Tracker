@@ -23,28 +23,28 @@ class ReportScheduleController extends Controller
     {
         $validated = $request->validate([
             'project_id'  => 'required|exists:projects,id',
-            'frequency'   => 'required|in:weekly,biweekly,monthly',
-            'day_of_week' => 'required|integer|min:0|max:6',
-            'send_time'   => ['required', 'regex:/^\d{2}:\d{2}$/'],
-            'timezone'    => 'nullable|string|max:64',
-            'end_date'    => 'nullable|date|after:today',
+            'frequency'   => 'required|in:weekly,biweekly,custom',
+            'day_of_week' => 'nullable|integer|min:0|max:6|required_if:frequency,weekly|required_if:frequency,biweekly',
+            'custom_date' => 'nullable|date|after_or_equal:today|required_if:frequency,custom',
             'emails'      => 'required|string',
             'subject'     => 'required|string|max:255',
             'body'        => 'required|string',
+            'timezone'    => 'nullable|string|max:64',
         ]);
 
         ProjectAccess::assertCanAccessProject($request->user(), (int) $validated['project_id']);
 
         $emails = array_values(array_filter(array_map('trim', explode(',', $validated['emails']))));
+        $tz     = $validated['timezone'] ?? ($request->user()->timezone ?? 'Asia/Jakarta');
 
         $schedule = ReportSchedule::create([
             'project_id'  => $validated['project_id'],
             'created_by'  => $request->user()->id,
             'frequency'   => $validated['frequency'],
-            'day_of_week' => $validated['day_of_week'],
-            'send_time'   => $validated['send_time'],
-            'timezone'    => $validated['timezone'] ?? ($request->user()->timezone ?? 'Asia/Jakarta'),
-            'end_date'    => $validated['end_date'] ?? null,
+            'day_of_week' => $validated['day_of_week'] ?? null,
+            'custom_date' => $validated['custom_date'] ?? null,
+            'send_time'   => '08:00',
+            'timezone'    => $tz,
             'emails'      => $emails,
             'subject'     => $validated['subject'],
             'body'        => $validated['body'],
@@ -54,8 +54,8 @@ class ReportScheduleController extends Controller
         $schedule->next_run_at = ReportSchedule::computeNextRun(
             $schedule->frequency,
             $schedule->day_of_week,
-            $schedule->send_time,
             $schedule->timezone,
+            $schedule->custom_date?->toDateString(),
         );
         $schedule->save();
 
@@ -70,14 +70,13 @@ class ReportScheduleController extends Controller
 
         $validated = $request->validate([
             'project_id'  => 'sometimes|exists:projects,id',
-            'frequency'   => 'sometimes|in:weekly,biweekly,monthly',
-            'day_of_week' => 'sometimes|integer|min:0|max:6',
-            'send_time'   => ['sometimes', 'regex:/^\d{2}:\d{2}$/'],
-            'timezone'    => 'nullable|string|max:64',
-            'end_date'    => 'nullable|date',
+            'frequency'   => 'sometimes|in:weekly,biweekly,custom',
+            'day_of_week' => 'nullable|integer|min:0|max:6',
+            'custom_date' => 'nullable|date',
             'emails'      => 'sometimes|string',
             'subject'     => 'sometimes|string|max:255',
             'body'        => 'sometimes|string',
+            'timezone'    => 'nullable|string|max:64',
         ]);
 
         if (isset($validated['project_id'])) {
@@ -92,13 +91,17 @@ class ReportScheduleController extends Controller
 
         $schedule->fill($validated);
 
-        // Recalculate next_run_at whenever timing fields change
         $schedule->next_run_at = ReportSchedule::computeNextRun(
             $schedule->frequency,
             $schedule->day_of_week,
-            $schedule->send_time,
             $schedule->timezone,
+            $schedule->custom_date?->toDateString(),
         );
+
+        // Re-activate in case it was deactivated after a custom send
+        if ($schedule->frequency !== 'custom') {
+            $schedule->is_active = true;
+        }
 
         $schedule->save();
 
@@ -117,8 +120,8 @@ class ReportScheduleController extends Controller
             $schedule->next_run_at = ReportSchedule::computeNextRun(
                 $schedule->frequency,
                 $schedule->day_of_week,
-                $schedule->send_time,
                 $schedule->timezone,
+                $schedule->custom_date?->toDateString(),
             );
         }
 
@@ -129,11 +132,10 @@ class ReportScheduleController extends Controller
 
     public function destroy(int $id, Request $request): JsonResponse
     {
-        $schedule = ReportSchedule::where('id', $id)
+        ReportSchedule::where('id', $id)
             ->where('created_by', $request->user()->id)
-            ->firstOrFail();
-
-        $schedule->delete();
+            ->firstOrFail()
+            ->delete();
 
         return response()->json(['message' => 'Schedule deleted.']);
     }

@@ -16,27 +16,23 @@ use Illuminate\Support\Facades\Mail;
 class SendScheduledReports extends Command
 {
     protected $signature   = 'reports:send-scheduled';
-    protected $description = 'Send auto-scheduled project reports via email';
+    protected $description = 'Send auto-scheduled project reports via email (runs daily at 08:00)';
 
     public function handle(): void
     {
-        $due = ReportSchedule::query()
+        $schedules = ReportSchedule::query()
             ->where('is_active', true)
-            ->where('next_run_at', '<=', now())
-            ->where(function ($q) {
-                $q->whereNull('end_date')
-                  ->orWhereDate('end_date', '>=', today());
-            })
             ->with('project')
-            ->get();
+            ->get()
+            ->filter(fn ($s) => $s->isDueToday());
 
-        if ($due->isEmpty()) {
+        if ($schedules->isEmpty()) {
             return;
         }
 
         $this->applyMailSettings();
 
-        foreach ($due as $schedule) {
+        foreach ($schedules as $schedule) {
             $this->runSchedule($schedule);
         }
     }
@@ -44,10 +40,10 @@ class SendScheduledReports extends Command
     private function runSchedule(ReportSchedule $schedule): void
     {
         try {
-            $data        = $this->buildReportData($schedule->project, $schedule->frequency);
-            $pdf         = Pdf::loadView('reports.project_report', $data);
-            $pdfContent  = $pdf->output();
-            $fileName    = "Report-{$schedule->project->name}-{$schedule->frequency}.pdf";
+            $data       = $this->buildReportData($schedule->project, $schedule->frequency);
+            $pdf        = Pdf::loadView('reports.project_report', $data);
+            $pdfContent = $pdf->output();
+            $fileName   = "Report-{$schedule->project->name}-{$schedule->frequency}.pdf";
 
             Mail::raw($schedule->body, function ($msg) use ($schedule, $pdfContent, $fileName) {
                 $msg->to($schedule->emails)
@@ -60,26 +56,33 @@ class SendScheduledReports extends Command
             Log::error("Scheduled report #{$schedule->id} failed: {$e->getMessage()}");
         }
 
-        // Always advance the schedule, even if mail failed
         $schedule->last_run_at = now();
-        $schedule->next_run_at = ReportSchedule::computeNextRunAfterExecution($schedule);
 
-        // Auto-deactivate when next run would fall after end_date
-        if ($schedule->end_date && $schedule->next_run_at->gt($schedule->end_date->endOfDay())) {
+        // Recalculate next_run_at for UI display
+        $schedule->next_run_at = ReportSchedule::computeNextRun(
+            $schedule->frequency,
+            $schedule->day_of_week,
+            $schedule->timezone,
+            $schedule->custom_date?->toDateString(),
+            now(),
+        );
+
+        // Custom (one-time) → deactivate after sending
+        if ($schedule->frequency === 'custom') {
             $schedule->is_active = false;
         }
 
         $schedule->save();
     }
 
-    // ── Report data builder (mirrors ReportController::getReportData) ──────
+    // ── Report data builder ─────────────────────────────────────────────────
 
     private function buildReportData(\App\Models\Project $project, string $range): array
     {
         $endDate   = Carbon::now();
         $startDate = match ($range) {
             'biweekly' => Carbon::now()->subWeeks(2),
-            'monthly'  => Carbon::now()->subMonth(),
+            'custom'   => Carbon::now()->subWeek(),
             default    => Carbon::now()->subWeek(),
         };
 
@@ -97,16 +100,14 @@ class SendScheduledReports extends Command
             ))
             ->values();
 
-        $projectTasks = Task::where('project_id', $project->id)->get();
-        $weights      = ['To Do' => 0, 'In Progress' => 25, 'Reopen' => 50, 'Review' => 75, 'Done' => 100];
-        $totalQuota   = (float) ($project->total_manhours ?? 0);
-
-        $totalUsed = (float) $projectTasks->sum(
+        $projectTasks    = Task::where('project_id', $project->id)->get();
+        $weights         = ['To Do' => 0, 'In Progress' => 25, 'Reopen' => 50, 'Review' => 75, 'Done' => 100];
+        $totalQuota      = (float) ($project->total_manhours ?? 0);
+        $totalUsed       = (float) $projectTasks->sum(
             fn ($t) => $this->normalizeStatus($t->status) !== 'To Do' ? (float) ($t->estimated_hours ?? 0) : 0
         );
-        $doneHours = (float) $projectTasks
-            ->filter(fn ($t) => $this->normalizeStatus($t->status) === 'Done')
-            ->sum('estimated_hours');
+        $doneHours       = (float) $projectTasks
+            ->filter(fn ($t) => $this->normalizeStatus($t->status) === 'Done')->sum('estimated_hours');
         $inProgressHours = (float) $projectTasks
             ->filter(fn ($t) => in_array($this->normalizeStatus($t->status), ['In Progress', 'Review', 'Reopen'], true))
             ->sum('estimated_hours');
@@ -132,21 +133,17 @@ class SendScheduledReports extends Command
 
         $categoryProgress = [];
         foreach ($categories as $cat) {
-            $catTasks   = $projectTasks->filter(
+            $catTasks = $projectTasks->filter(
                 fn ($t) => (trim((string) ($t->category ?? '')) ?: 'Uncategorized') === $cat
             )->values();
-            $count      = $catTasks->count();
+            $count       = $catTasks->count();
             $statusCounts = ['To Do' => 0, 'In Progress' => 0, 'Reopen' => 0, 'Review' => 0, 'Done' => 0];
-            $weightSum  = 0;
-
+            $weightSum   = 0;
             foreach ($catTasks as $t) {
                 $s = $this->normalizeStatus($t->status);
                 $weightSum += $weights[$s] ?? 0;
-                if (isset($statusCounts[$s])) {
-                    $statusCounts[$s]++;
-                }
+                if (isset($statusCounts[$s])) $statusCounts[$s]++;
             }
-
             $categoryProgress[$cat] = [
                 'weighted_total' => $count > 0 ? round($weightSum / $count) : 0,
                 'total'          => $count,
@@ -156,7 +153,7 @@ class SendScheduledReports extends Command
 
         return [
             'project'          => $project,
-            'range'            => $range,
+            'range'            => $range === 'custom' ? 'weekly' : $range,
             'startDate'        => $startDate->format('d M Y'),
             'endDate'          => $endDate->format('d M Y'),
             'tasksInRange'     => $tasksInRange,
