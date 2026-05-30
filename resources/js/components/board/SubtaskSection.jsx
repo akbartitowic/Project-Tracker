@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import TaskNotesSection from './TaskNotesSection';
 import AssigneeSearchSelect from './AssigneeSearchSelect';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../../utils/taskDates';
-import { parseOptionalManhoursInput } from '../../utils/taskBillable.jsx';
+import { parseOptionalManhoursInput, subtasksTotalHours } from '../../utils/taskBillable.jsx';
+
+export { subtasksTotalHours };
 
 const RUSH_HOUR_FACTOR = 1.3;
 
@@ -61,6 +63,7 @@ const emptyForm = () => ({
     startDate: '',
     dueDate: '',
     title: '',
+    description: '',
     priority: 'Medium',
     status: 'To Do',
     assignee: 'Unassigned',
@@ -74,11 +77,6 @@ const emptyForm = () => ({
 function subtaskBillableHours(st) {
     if (st?.is_billable === false) return 0;
     return Number(st.estimated_hours) || 0;
-}
-
-export function subtasksTotalHours(subtasks) {
-    if (!Array.isArray(subtasks) || subtasks.length === 0) return 0;
-    return subtasks.reduce((sum, st) => sum + subtaskBillableHours(st), 0);
 }
 
 export default function SubtaskSection({
@@ -145,7 +143,7 @@ export default function SubtaskSection({
             storedHours = parseOptionalManhoursInput(form.estimate) ?? 0;
         }
 
-        const description = form.description.trim();
+        const description = (form.description ?? '').trim();
 
         return {
             title: form.title,
@@ -383,7 +381,7 @@ export default function SubtaskSection({
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-slate-600">Category</label>
                                 <Select
-                                    value={form.category}
+                                    value={form.category || undefined}
                                     onValueChange={(val) => {
                                         const matched = roleQuotas.find((q) => q.role_name === val);
                                         setForm((f) => ({
@@ -501,7 +499,6 @@ export default function SubtaskSection({
                                 min="0"
                                 step="0.5"
                                 value={form.estimate}
-                                disabled={isProceeded}
                                 placeholder={form.billable ? '0' : 'Opsional'}
                                 onChange={(e) => setForm((f) => ({ ...f, estimate: e.target.value }))}
                             />

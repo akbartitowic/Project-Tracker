@@ -2101,7 +2101,7 @@ export default function ProjectBoard() {
                                     {categoryOptions.length > 0 && (
                                         <div className="flex flex-col gap-1.5">
                                             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</label>
-                                            <Select value={newTaskCategory} onValueChange={(val) => {
+                                            <Select value={newTaskCategory || undefined} onValueChange={(val) => {
                                                 setNewTaskCategory(val);
                                                 const matchedQuota = roleQuotas.find((q) => q.role_name === val);
                                                 if (matchedQuota) {

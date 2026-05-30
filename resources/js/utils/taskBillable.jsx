@@ -1,5 +1,3 @@
-import { subtasksTotalHours } from '../components/board/SubtaskSection';
-
 const BILLING_BADGE_CLASS = {
     billable:
         'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30',
@@ -69,6 +67,15 @@ export function TaskBillingBadges({ task, className = '' }) {
             ))}
         </span>
     );
+}
+
+/** Sum billable MH from subtask rows. */
+export function subtasksTotalHours(subtasks) {
+    if (!Array.isArray(subtasks) || subtasks.length === 0) return 0;
+    return subtasks.reduce((sum, st) => {
+        if (st?.is_billable === false) return sum;
+        return sum + (Number(st.estimated_hours) || 0);
+    }, 0);
 }
 
 /** Parse MH input; empty string → null (optional field). */
