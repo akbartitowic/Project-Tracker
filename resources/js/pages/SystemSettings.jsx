@@ -16,6 +16,8 @@ import {
     Loader2,
     Send,
     Image,
+    Download,
+    FileArchive,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -61,6 +63,33 @@ export default function SystemSettings() {
     const [resetStep, setResetStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
+    const [backupLoading, setBackupLoading] = useState({ sql: false, csv: false });
+
+    const handleBackup = async (format) => {
+        setBackupLoading((p) => ({ ...p, [format]: true }));
+        try {
+            const token = localStorage.getItem('auth_token');
+            const res = await fetch(`/api/system/backup/${format}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Backup gagal: ${res.statusText}`);
+            const blob = await res.blob();
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            const cd   = res.headers.get('Content-Disposition') || '';
+            const match = cd.match(/filename="(.+?)"/);
+            a.href     = url;
+            a.download = match ? match[1] : `backup.${format === 'csv' ? 'zip' : 'sql'}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            alert(err.message || 'Gagal download backup.');
+        } finally {
+            setBackupLoading((p) => ({ ...p, [format]: false }));
+        }
+    };
 
     const [smtpSettings, setSmtpSettings] = useState({
         mail_host: '',
@@ -268,6 +297,44 @@ export default function SystemSettings() {
                         )}
                     </CardContent>
                 </Card>
+
+                {hasPermission(user, 'settings.update') && (
+                    <Card className="border-slate-200 shadow-none dark:border-slate-800">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <Download className="size-4 text-primary" />
+                                Backup data
+                            </CardTitle>
+                            <CardDescription>
+                                Unduh seluruh data sebagai file SQL atau CSV (ZIP). Direkomendasikan sebelum reset.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md">
+                                SQL menghasilkan file <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 rounded">.sql</code> berisi INSERT statement semua tabel.
+                                CSV menghasilkan <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 rounded">.zip</code> berisi satu file per tabel.
+                            </p>
+                            <div className="flex gap-2 shrink-0">
+                                <Button variant="outline" size="sm" className="gap-1.5"
+                                    disabled={backupLoading.sql}
+                                    onClick={() => handleBackup('sql')}>
+                                    {backupLoading.sql
+                                        ? <Loader2 className="size-4 animate-spin" />
+                                        : <Database className="size-4" />}
+                                    SQL
+                                </Button>
+                                <Button variant="outline" size="sm" className="gap-1.5"
+                                    disabled={backupLoading.csv}
+                                    onClick={() => handleBackup('csv')}>
+                                    {backupLoading.csv
+                                        ? <Loader2 className="size-4 animate-spin" />
+                                        : <FileArchive className="size-4" />}
+                                    CSV (ZIP)
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {canResetData && (
                     <Card className="border-rose-200/80 bg-rose-50/30 shadow-none dark:border-rose-900/40 dark:bg-rose-950/10">

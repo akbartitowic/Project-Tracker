@@ -207,6 +207,10 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
         ->middleware(['permission:settings.update', 'throttle:10,1']);
     Route::post('/system/reset', [SystemController::class, 'resetData'])
         ->middleware(['permission:settings.reset', 'throttle:3,1']);
+    Route::get('/system/backup/sql', [SystemController::class, 'backupSql'])
+        ->middleware(['permission:settings.update', 'throttle:10,1']);
+    Route::get('/system/backup/csv', [SystemController::class, 'backupCsv'])
+        ->middleware(['permission:settings.update', 'throttle:10,1']);
 
     // 11. Financial Reports
     Route::get('/financial-reports/summary', [FinancialReportController::class, 'getSummary'])->middleware('permission:finance_report.read');
