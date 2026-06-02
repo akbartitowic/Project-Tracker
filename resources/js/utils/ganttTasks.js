@@ -27,30 +27,29 @@ export function hasBothScheduleDates(task) {
     return !!(parseTaskDate(task?.start_date) && parseTaskDate(task?.due_date));
 }
 
-/** Flat list of tasks/subtasks that have both start and due dates. */
+/** Group structure: parent task with expanded subtasks array. */
 export function buildGanttRows(tasks) {
     const rows = [];
     for (const task of tasks || []) {
         const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
-        if (hasBothScheduleDates(task)) {
+        const scheduledSubtasks = subtasks.filter((st) => hasBothScheduleDates(st));
+
+        // Always include parent if it has dates OR has any scheduled subtasks
+        if (hasBothScheduleDates(task) || scheduledSubtasks.length > 0) {
             rows.push({
                 id: task.id,
                 task,
                 isSubtask: false,
                 parentTitle: null,
                 parentFeature: null,
-            });
-        }
-        for (const st of subtasks) {
-            if (hasBothScheduleDates(st)) {
-                rows.push({
+                subtasks: scheduledSubtasks.map((st) => ({
                     id: st.id,
                     task: st,
                     isSubtask: true,
                     parentTitle: task.title,
                     parentFeature: task.feature_title,
-                });
-            }
+                })),
+            });
         }
     }
     return rows;

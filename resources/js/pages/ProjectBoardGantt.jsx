@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
-import { ArrowLeft, Briefcase, GanttChart, LayoutGrid, Loader2 } from 'lucide-react';
+import { ArrowLeft, Briefcase, GanttChart, LayoutGrid, Loader2, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -43,6 +43,7 @@ export default function ProjectBoardGantt() {
     const [loading, setLoading] = useState(true);
     const [project, setProject] = useState(null);
     const [tasks, setTasks] = useState([]);
+    const [expandedParents, setExpandedParents] = useState(new Set());
 
     useEffect(() => {
         if (!projectId) {
@@ -76,7 +77,20 @@ export default function ProjectBoardGantt() {
     }, [projectId, navigate]);
 
     const ganttRows = useMemo(() => buildGanttRows(tasks), [tasks]);
-    const timeline = useMemo(() => buildGanttTimeline(ganttRows), [ganttRows]);
+
+    // Get flat list of all displayable rows (parents + expanded subtasks)
+    const allDisplayRows = useMemo(() => {
+        const rows = [];
+        for (const parentRow of ganttRows) {
+            rows.push(parentRow);
+            if (expandedParents.has(parentRow.id) && parentRow.subtasks?.length > 0) {
+                rows.push(...parentRow.subtasks);
+            }
+        }
+        return rows;
+    }, [ganttRows, expandedParents]);
+
+    const timeline = useMemo(() => buildGanttTimeline(allDisplayRows), [allDisplayRows]);
     const chartWidth = timeline ? timeline.totalDays * GANTT_DAY_WIDTH : 0;
 
     const scheduledCount = ganttRows.length;
@@ -88,12 +102,24 @@ export default function ProjectBoardGantt() {
                 if (!ganttRows.some((r) => r.id === t.id)) n += 1;
             } else {
                 for (const st of subs) {
-                    if (!ganttRows.some((r) => r.id === st.id)) n += 1;
+                    if (!ganttRows.some((parent) => parent.subtasks?.some((sub) => sub.id === st.id))) n += 1;
                 }
             }
         }
         return n;
     }, [tasks, ganttRows]);
+
+    const toggleExpand = (parentId) => {
+        setExpandedParents((prev) => {
+            const next = new Set(prev);
+            if (next.has(parentId)) {
+                next.delete(parentId);
+            } else {
+                next.add(parentId);
+            }
+            return next;
+        });
+    };
 
     if (loading) {
         return (
@@ -173,30 +199,50 @@ export default function ProjectBoardGantt() {
                                 >
                                     Task / Subtask
                                 </div>
-                                {ganttRows.map((row) => {
+                                {allDisplayRows.map((row) => {
                                     const bar = barMetrics(row, timeline, GANTT_DAY_WIDTH);
+                                    const isExpanded = expandedParents.has(row.id);
+                                    const hasSubtasks = !row.isSubtask && row.subtasks && row.subtasks.length > 0;
                                     return (
                                         <div
                                             key={row.id}
                                             className="border-b border-slate-100 dark:border-slate-800 px-3 flex flex-col justify-center"
                                             style={{ height: GANTT_ROW_HEIGHT }}
                                         >
-                                            {row.isSubtask && (
-                                                <p className="text-[10px] text-slate-400 truncate">
-                                                    ↳ {row.parentFeature || row.parentTitle}
-                                                </p>
-                                            )}
-                                            <p
-                                                className={`font-medium text-slate-900 dark:text-white truncate ${
-                                                    row.isSubtask ? 'text-sm pl-2' : 'text-sm'
-                                                }`}
-                                            >
-                                                {row.task.title}
-                                            </p>
-                                            <p className="text-[10px] text-slate-500 truncate">
-                                                {row.task.status}
-                                                {bar ? ` · ${bar.durationDays} hari` : ''}
-                                            </p>
+                                            <div className="flex items-center gap-1.5">
+                                                {hasSubtasks && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleExpand(row.id)}
+                                                        className="flex items-center justify-center w-4 h-4 shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                                                    >
+                                                        <ChevronDown
+                                                            className={`size-3.5 transition-transform ${
+                                                                isExpanded ? 'rotate-0' : '-rotate-90'
+                                                            }`}
+                                                        />
+                                                    </button>
+                                                )}
+                                                {!hasSubtasks && <span className="w-4 shrink-0" />}
+                                                <div className="min-w-0 flex-1">
+                                                    {row.isSubtask && (
+                                                        <p className="text-[10px] text-slate-400 truncate">
+                                                            ↳ {row.parentFeature || row.parentTitle}
+                                                        </p>
+                                                    )}
+                                                    <p
+                                                        className={`font-medium text-slate-900 dark:text-white truncate ${
+                                                            row.isSubtask ? 'text-sm pl-2' : 'text-sm'
+                                                        }`}
+                                                    >
+                                                        {row.task.title}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-500 truncate">
+                                                        {row.task.status}
+                                                        {bar ? ` · ${bar.durationDays} hari` : ''}
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -246,7 +292,7 @@ export default function ProjectBoardGantt() {
                                             />
                                         )}
 
-                                        {ganttRows.map((row) => {
+                                        {allDisplayRows.map((row) => {
                                             const bar = barMetrics(row, timeline, GANTT_DAY_WIDTH);
                                             return (
                                                 <div
