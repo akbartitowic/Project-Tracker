@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import { ArrowLeft, Briefcase, GanttChart, LayoutGrid, Loader2, ChevronDown, Download } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -124,77 +122,34 @@ export default function ProjectBoardGantt() {
         });
     };
 
-    const exportToPDF = async () => {
-        if (!project || !timeline) return;
+    const exportToPDF = () => {
+        if (!project) return;
         setExporting(true);
-        try {
-            const element = document.getElementById('gantt-chart-container');
-            if (!element) {
-                alert('Gantt chart container not found');
-                return;
+
+        // Add print styles
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @media print {
+                body * { visibility: hidden; }
+                #gantt-chart-container, #gantt-chart-container * { visibility: visible; }
+                #gantt-chart-container { position: absolute; left: 0; top: 0; width: 100%; }
+                @page { margin: 10mm; size: landscape; }
             }
+        `;
+        document.head.appendChild(style);
 
-            // Capture the chart with white background
-            const canvas = await html2canvas(element, {
-                backgroundColor: '#ffffff',
-                scale: 2,
-                allowTaint: true,
-                useCORS: true,
-            });
+        // Set document title for PDF filename
+        const oldTitle = document.title;
+        document.title = `${project.name}-gantt-${new Date().toISOString().slice(0, 10)}`;
 
-            const imgData = canvas.toDataURL('image/png');
-            const imgWidth = 297; // A4 width in mm
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-            // Create PDF with landscape orientation
-            const pdf = new jsPDF({
-                orientation: 'landscape',
-                unit: 'mm',
-                format: 'a4',
-            });
-
-            let heightLeft = imgHeight;
-            let position = 0;
-
-            // Add title
-            pdf.setFontSize(14);
-            pdf.text(`${project.name} - Gantt Chart`, 10, 10);
-            pdf.setFontSize(10);
-            pdf.text(
-                `Generated: ${new Date().toLocaleString('id-ID')}`,
-                10,
-                16
-            );
-
-            // Add chart image(s)
-            const pageHeight = pdf.internal.pageSize.getHeight();
-            const contentStartY = 20;
-            const availableHeight = pageHeight - contentStartY - 10;
-
-            while (heightLeft > 0) {
-                const pageWidth = pdf.internal.pageSize.getWidth();
-                pdf.addImage(
-                    imgData,
-                    'PNG',
-                    10,
-                    position === 0 ? contentStartY : 10,
-                    pageWidth - 20,
-                    Math.min(heightLeft, availableHeight)
-                );
-                heightLeft -= availableHeight;
-                position += availableHeight;
-                if (heightLeft > 0) {
-                    pdf.addPage();
-                }
-            }
-
-            pdf.save(`${project.name}-gantt-${new Date().toISOString().slice(0, 10)}.pdf`);
-        } catch (err) {
-            console.error('Failed to export PDF', err);
-            alert('Gagal export PDF: ' + err.message);
-        } finally {
+        // Trigger print dialog
+        setTimeout(() => {
+            window.print();
+            // Cleanup
+            document.head.removeChild(style);
+            document.title = oldTitle;
             setExporting(false);
-        }
+        }, 100);
     };
 
     if (loading) {
