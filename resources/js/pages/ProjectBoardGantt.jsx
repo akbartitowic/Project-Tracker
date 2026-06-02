@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import { ArrowLeft, Briefcase, GanttChart, LayoutGrid, Loader2, ChevronDown, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -123,67 +125,97 @@ export default function ProjectBoardGantt() {
     };
 
     const exportToPDF = () => {
-        if (!project) return;
-        setExporting(true);
-
-        const chartElement = document.getElementById('gantt-chart-container');
-        if (!chartElement) {
-            alert('Gantt chart not found');
-            setExporting(false);
+        if (!project || !ganttRows.length) {
+            alert('Belum ada task dengan timeline');
             return;
         }
 
-        // Clone the chart
-        const clone = chartElement.cloneNode(true);
+        setExporting(true);
 
-        // Create print wrapper
-        const printWrapper = document.createElement('div');
-        printWrapper.id = 'print-wrapper';
-        printWrapper.style.cssText = 'width: 100%; background: white; padding: 10px;';
+        try {
+            // Build table data
+            const tableData = [];
+            for (const parentRow of ganttRows) {
+                const isExpanded = expandedParents.has(parentRow.id);
+                const parentBar = barMetrics(parentRow, timeline, GANTT_DAY_WIDTH);
 
-        // Add title
-        const title = document.createElement('h1');
-        title.textContent = `${project.name} - Gantt Chart`;
-        title.style.cssText = 'font-size: 18px; margin-bottom: 10px; font-weight: bold;';
+                // Add parent row
+                tableData.push([
+                    parentRow.task.title,
+                    '—',
+                    parentRow.task.start_date ? new Date(parentRow.task.start_date).toLocaleDateString('id-ID') : '—',
+                    parentRow.task.due_date ? new Date(parentRow.task.due_date).toLocaleDateString('id-ID') : '—',
+                    parentRow.task.status || '—',
+                ]);
 
-        const timestamp = document.createElement('p');
-        timestamp.textContent = `Generated: ${new Date().toLocaleString('id-ID')}`;
-        timestamp.style.cssText = 'font-size: 12px; color: #666; margin-bottom: 10px;';
-
-        printWrapper.appendChild(title);
-        printWrapper.appendChild(timestamp);
-        printWrapper.appendChild(clone);
-
-        // Hide everything except wrapper
-        const originalDisplay = {};
-        document.body.childNodes.forEach((node) => {
-            if (node.nodeType === 1) { // Element node
-                originalDisplay[node.id || Math.random()] = node.style.display;
-                node.style.display = 'none';
-            }
-        });
-
-        // Insert wrapper
-        document.body.appendChild(printWrapper);
-
-        // Set title
-        const oldTitle = document.title;
-        document.title = `${project.name}-gantt-${new Date().toISOString().slice(0, 10)}`;
-
-        // Print after layout
-        setTimeout(() => {
-            window.print();
-
-            // Cleanup
-            document.body.removeChild(printWrapper);
-            document.body.childNodes.forEach((node) => {
-                if (node.nodeType === 1) {
-                    node.style.display = originalDisplay[node.id || Math.random()] || '';
+                // Add subtasks if expanded
+                if (isExpanded && parentRow.subtasks?.length > 0) {
+                    for (const subtask of parentRow.subtasks) {
+                        tableData.push([
+                            `  ↳ ${subtask.task.title}`,
+                            subtask.task.feature_title || '—',
+                            subtask.task.start_date ? new Date(subtask.task.start_date).toLocaleDateString('id-ID') : '—',
+                            subtask.task.due_date ? new Date(subtask.task.due_date).toLocaleDateString('id-ID') : '—',
+                            subtask.task.status || '—',
+                        ]);
+                    }
                 }
+            }
+
+            // Create PDF
+            const doc = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4',
             });
-            document.title = oldTitle;
+
+            // Add title
+            doc.setFontSize(14);
+            doc.text(`${project.name} - Gantt Schedule`, 10, 10);
+
+            // Add timestamp
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Generated: ${new Date().toLocaleString('id-ID')}`, 10, 17);
+
+            // Add table
+            doc.setTextColor(0);
+            autoTable(doc, {
+                head: [['Task / Subtask', 'Feature', 'Start Date', 'End Date', 'Status']],
+                body: tableData,
+                startY: 24,
+                margin: { left: 10, right: 10 },
+                styles: {
+                    fontSize: 9,
+                    cellPadding: 3,
+                },
+                headStyles: {
+                    fillColor: [59, 130, 246], // primary color
+                    textColor: 255,
+                    fontStyle: 'bold',
+                },
+                alternateRowStyles: {
+                    fillColor: [245, 245, 245],
+                },
+                columnStyles: {
+                    0: { cellWidth: 60 },
+                    1: { cellWidth: 40 },
+                    2: { cellWidth: 30 },
+                    3: { cellWidth: 30 },
+                    4: { cellWidth: 28 },
+                },
+            });
+
+            // Save PDF
+            const filename = `${project.name}-gantt-${new Date().toISOString().slice(0, 10)}.pdf`;
+            doc.save(filename);
+
             setExporting(false);
-        }, 200);
+        } catch (err) {
+            console.error('Failed to export PDF', err);
+            alert('Gagal export PDF: ' + err.message);
+            setExporting(false);
+        }
     };
 
     if (loading) {

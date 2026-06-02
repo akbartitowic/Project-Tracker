@@ -15,6 +15,7 @@
         "clsx": "^2.1.1",
         "html2canvas": "^1.4.1",
         "jspdf": "^4.2.1",
+        "jspdf-autotable": "^5.0.8",
         "lucide-react": "^0.575.0",
         "radix-ui": "^1.4.3",
         "react": "^19.2.0",
