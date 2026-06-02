@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -237,6 +237,8 @@ export default function ProjectBoard() {
     const [tasks, setTasks] = useState([]);
     const [viewMode, setViewMode] = useState('kanban');
     const [listViewMode, setListViewMode] = useState('grid');
+    const [mobileKanbanCol, setMobileKanbanCol] = useState('To Do');
+    const kanbanScrollRef = useRef(null);
     const [projectListTab, setProjectListTab] = useState('active');
     const [projectListSearch, setProjectListSearch] = useState('');
     const [projectSortBy, setProjectSortBy] = useState('newest');
@@ -1677,7 +1679,7 @@ export default function ProjectBoard() {
                             <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{selectedProject.methodology} Board</p>
                         </div>
 
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                         <div className="flex gap-0.5 rounded-lg border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-700 dark:bg-slate-800/50">
                             <Button
                                 variant="ghost"
@@ -1746,7 +1748,7 @@ export default function ProjectBoard() {
                         <UserPlus className="size-3.5 text-slate-400" />
                     </button>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                         <div className="inline-flex flex-wrap rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
                             <Button
                                 variant="ghost"
@@ -1916,35 +1918,158 @@ export default function ProjectBoard() {
 
             {/* Board / List View */}
             {viewMode === 'kanban' ? (
-                <div className="board-scroll-x relative flex-1 min-h-0 overflow-x-auto overflow-y-hidden bg-slate-100/50 p-3 sm:p-4 dark:bg-[#0d1118]/50">
-                    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-                        <div className="flex h-full min-w-min gap-3 sm:gap-4">
-                            {COLUMNS.map(col => (
-                                <BoardColumn
+                <div className="flex flex-col flex-1 min-h-0">
+                    {/* Mobile: status tab bar */}
+                    <div className="sm:hidden flex overflow-x-auto border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28] shrink-0 scrollbar-none">
+                        {COLUMNS.map((col, idx) => {
+                            const count = getTasksByStatus(col.title).length;
+                            const active = mobileKanbanCol === col.title;
+                            return (
+                                <button
                                     key={col.title}
-                                    title={col.title}
-                                    color={col.color}
-                                    count={getTasksByStatus(col.title).length}
-                                    totalCount={tasks.length}
-                                    onAddTask={() => handleOpenModal('To Do')}
+                                    type="button"
+                                    onClick={() => {
+                                        setMobileKanbanCol(col.title);
+                                        if (kanbanScrollRef.current) {
+                                            const colWidth = kanbanScrollRef.current.firstChild?.children?.[idx]?.offsetWidth ?? 0;
+                                            const gap = 12;
+                                            kanbanScrollRef.current.scrollTo({ left: idx * (colWidth + gap), behavior: 'smooth' });
+                                        }
+                                    }}
+                                    className={cn(
+                                        'flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                                        active
+                                            ? 'border-primary text-primary'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                                    )}
                                 >
-                                    {getTasksByStatus(col.title).map(task => (
-                                        <DraggableTaskCard
-                                            key={task.id}
-                                            task={task}
-                                            isFreelance={isFreelance}
-                                            formatHours={formatHours}
-                                            assigneeName={task.assignee_id ? assigneeNameById[task.assignee_id] : null}
-                                            onClick={(t) => handleOpenModal(t.status, t)}
-                                        />
-                                    ))}
-                                </BoardColumn>
-                            ))}
-                        </div>
-                    </DndContext>
+                                    <span className={cn('size-2 rounded-full', col.color)} />
+                                    {col.title}
+                                    <span className={cn(
+                                        'rounded-full px-1.5 py-0.5 text-[10px] font-bold',
+                                        active ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-slate-800 text-slate-500',
+                                    )}>
+                                        {count}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Kanban scroll area */}
+                    <div
+                        ref={kanbanScrollRef}
+                        className="board-scroll-x relative flex-1 min-h-0 overflow-x-auto overflow-y-hidden bg-slate-100/50 p-3 sm:p-4 dark:bg-[#0d1118]/50"
+                        onScroll={(e) => {
+                            // Update active tab based on scroll position (mobile only)
+                            if (window.innerWidth >= 640) return;
+                            const el = e.currentTarget;
+                            const colWidth = el.firstChild?.children?.[0]?.offsetWidth ?? 0;
+                            const gap = 12;
+                            const idx = Math.round(el.scrollLeft / (colWidth + gap));
+                            const col = COLUMNS[Math.min(idx, COLUMNS.length - 1)];
+                            if (col && col.title !== mobileKanbanCol) setMobileKanbanCol(col.title);
+                        }}
+                    >
+                        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+                            <div className="flex h-full min-w-min gap-3 sm:gap-4">
+                                {COLUMNS.map(col => (
+                                    <BoardColumn
+                                        key={col.title}
+                                        title={col.title}
+                                        color={col.color}
+                                        count={getTasksByStatus(col.title).length}
+                                        totalCount={tasks.length}
+                                        onAddTask={() => handleOpenModal('To Do')}
+                                    >
+                                        {getTasksByStatus(col.title).map(task => (
+                                            <DraggableTaskCard
+                                                key={task.id}
+                                                task={task}
+                                                isFreelance={isFreelance}
+                                                formatHours={formatHours}
+                                                assigneeName={task.assignee_id ? assigneeNameById[task.assignee_id] : null}
+                                                onClick={(t) => handleOpenModal(t.status, t)}
+                                            />
+                                        ))}
+                                    </BoardColumn>
+                                ))}
+                            </div>
+                        </DndContext>
+                    </div>
                 </div>
             ) : (
                 <div className="board-column-scroll flex-1 min-h-0 overflow-auto p-3 sm:p-4">
+
+                    {/* ── Mobile: card list ── */}
+                    <div className="sm:hidden space-y-2">
+                        {tasks.length === 0 && (
+                            <p className="text-center text-slate-400 py-10 text-sm">Belum ada task.</p>
+                        )}
+                        {tasks.map((task) => (
+                            <div
+                                key={task.id}
+                                onClick={() => handleOpenModal(task.status, task)}
+                                className={cn(
+                                    'rounded-xl border bg-white dark:bg-[#151b28] p-3 cursor-pointer transition-colors active:bg-slate-50 dark:active:bg-slate-800',
+                                    isTaskBulkEditMode && selectedTaskIds.includes(task.id)
+                                        ? 'border-primary/50 bg-primary/5'
+                                        : 'border-slate-200 dark:border-slate-800',
+                                )}
+                                onClickCapture={(e) => {
+                                    if (isTaskBulkEditMode) { e.preventDefault(); toggleTaskSelection(task.id); }
+                                }}
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                                            {task.title}
+                                        </p>
+                                        {task.feature_title && (
+                                            <p className="text-[10px] text-primary font-bold uppercase tracking-wider mt-0.5 truncate">
+                                                {task.feature_title}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <Badge variant="outline" className={cn('shrink-0 text-[10px]',
+                                        task.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                                        task.status === 'In Progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400' :
+                                        task.status === 'Re-open' ? 'bg-rose-50 text-rose-600 border-rose-200' :
+                                        task.status === 'Review' ? 'bg-purple-50 text-purple-600 border-purple-200' :
+                                        'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400'
+                                    )}>
+                                        {task.status}
+                                    </Badge>
+                                </div>
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider',
+                                        task.priority === 'High' ? 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
+                                        task.priority === 'Medium' ? 'bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400' :
+                                        'bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'
+                                    )}>
+                                        {task.priority}
+                                    </span>
+                                    {task.assignee_id && (
+                                        <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                                            <span className="size-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                                {(assigneeNameById[task.assignee_id] || '?').charAt(0).toUpperCase()}
+                                            </span>
+                                            {assigneeNameById[task.assignee_id] || `#${task.assignee_id}`}
+                                        </span>
+                                    )}
+                                    {!isFreelance && task.estimated_hours > 0 && (
+                                        <span className="ml-auto text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                                            <Clock className="size-3" />
+                                            {formatHours(task.estimated_hours)}h
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* ── Desktop: table ── */}
+                    <div className="hidden sm:block bg-white dark:bg-[#151b28] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
                     <div className="bg-white dark:bg-[#151b28] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
                         <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
@@ -2054,6 +2179,8 @@ export default function ProjectBoard() {
                             </tbody>
                         </table>
                     </div>
+                    </div>{/* end hidden sm:block */}
+
                 </div>
             )}
 
