@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
-import { ArrowLeft, Briefcase, GanttChart, LayoutGrid, Loader2, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Briefcase, GanttChart, LayoutGrid, Loader2, ChevronDown, Download } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -44,6 +46,7 @@ export default function ProjectBoardGantt() {
     const [project, setProject] = useState(null);
     const [tasks, setTasks] = useState([]);
     const [expandedParents, setExpandedParents] = useState(new Set());
+    const [exporting, setExporting] = useState(false);
 
     useEffect(() => {
         if (!projectId) {
@@ -121,6 +124,79 @@ export default function ProjectBoardGantt() {
         });
     };
 
+    const exportToPDF = async () => {
+        if (!project || !timeline) return;
+        setExporting(true);
+        try {
+            const element = document.getElementById('gantt-chart-container');
+            if (!element) {
+                alert('Gantt chart container not found');
+                return;
+            }
+
+            // Capture the chart with white background
+            const canvas = await html2canvas(element, {
+                backgroundColor: '#ffffff',
+                scale: 2,
+                allowTaint: true,
+                useCORS: true,
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 297; // A4 width in mm
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            // Create PDF with landscape orientation
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: 'a4',
+            });
+
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            // Add title
+            pdf.setFontSize(14);
+            pdf.text(`${project.name} - Gantt Chart`, 10, 10);
+            pdf.setFontSize(10);
+            pdf.text(
+                `Generated: ${new Date().toLocaleString('id-ID')}`,
+                10,
+                16
+            );
+
+            // Add chart image(s)
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const contentStartY = 20;
+            const availableHeight = pageHeight - contentStartY - 10;
+
+            while (heightLeft > 0) {
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                pdf.addImage(
+                    imgData,
+                    'PNG',
+                    10,
+                    position === 0 ? contentStartY : 10,
+                    pageWidth - 20,
+                    Math.min(heightLeft, availableHeight)
+                );
+                heightLeft -= availableHeight;
+                position += availableHeight;
+                if (heightLeft > 0) {
+                    pdf.addPage();
+                }
+            }
+
+            pdf.save(`${project.name}-gantt-${new Date().toISOString().slice(0, 10)}.pdf`);
+        } catch (err) {
+            console.error('Failed to export PDF', err);
+            alert('Gagal export PDF: ' + err.message);
+        } finally {
+            setExporting(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex-1 flex items-center justify-center min-h-[320px]">
@@ -162,10 +238,20 @@ export default function ProjectBoardGantt() {
                             </div>
                         </div>
                     </div>
-                    <Button onClick={() => navigate(`/board/${projectId}`)}>
-                        <LayoutGrid className="size-4 mr-2" />
-                        Kanban Board
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={exportToPDF}
+                            disabled={exporting || scheduledCount === 0}
+                        >
+                            <Download className="size-4 mr-2" />
+                            {exporting ? 'Exporting...' : 'Export PDF'}
+                        </Button>
+                        <Button onClick={() => navigate(`/board/${projectId}`)}>
+                            <LayoutGrid className="size-4 mr-2" />
+                            Kanban Board
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -187,7 +273,10 @@ export default function ProjectBoardGantt() {
                         </CardContent>
                     </Card>
                 ) : (
-                    <Card className="flex-1 min-h-0 flex flex-col border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <Card
+                        id="gantt-chart-container"
+                        className="flex-1 min-h-0 flex flex-col border-slate-200 dark:border-slate-800 overflow-hidden"
+                    >
                         <div className="flex flex-1 min-h-0 overflow-hidden">
                             <div
                                 className="shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/50 z-20"
