@@ -126,14 +126,115 @@ export default function ProjectBoardGantt() {
         if (!project) return;
         setExporting(true);
 
-        // Add print styles
+        // Add optimized print styles for PDF export
         const style = document.createElement('style');
         style.innerHTML = `
             @media print {
-                body * { visibility: hidden; }
-                #gantt-chart-container, #gantt-chart-container * { visibility: visible; }
-                #gantt-chart-container { position: absolute; left: 0; top: 0; width: 100%; }
-                @page { margin: 10mm; size: landscape; }
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body, html { background: white; }
+                body > * { display: none; }
+
+                #gantt-chart-container {
+                    display: block !important;
+                    position: static !important;
+                    width: 100% !important;
+                    height: auto !important;
+                    border: none !important;
+                    overflow: visible !important;
+                }
+
+                #gantt-chart-container * {
+                    display: block !important;
+                    visibility: visible !important;
+                    position: static !important;
+                }
+
+                /* Chart header */
+                #gantt-chart-container > div:first-child {
+                    display: flex !important;
+                    margin-bottom: 8px;
+                    border-bottom: 1px solid #ccc;
+                    padding-bottom: 8px;
+                }
+
+                /* Main chart area */
+                #gantt-chart-container > div:not(:first-child) {
+                    display: flex !important;
+                    margin-top: 8px;
+                }
+
+                /* Label column */
+                #gantt-chart-container [style*="width: 280px"] {
+                    width: 200px !important;
+                    flex-shrink: 0 !important;
+                    border-right: 1px solid #ddd;
+                    overflow: visible !important;
+                }
+
+                /* Labels styling */
+                #gantt-chart-container [style*="height: 52px"] {
+                    height: 40px !important;
+                    font-size: 9px !important;
+                }
+
+                #gantt-chart-container [style*="height: 44px"] {
+                    height: 32px !important;
+                    font-size: 10px !important;
+                    padding: 4px !important;
+                    overflow: hidden !important;
+                }
+
+                /* Chart area */
+                #gantt-chart-container > div:not(:first-child) > div:last-child {
+                    flex: 1;
+                    overflow: visible !important;
+                }
+
+                /* Timeline header */
+                #gantt-chart-container [style*="height: 26px"] {
+                    height: 24px !important;
+                    font-size: 8px !important;
+                }
+
+                /* Task bars */
+                #gantt-chart-container button[type="button"] {
+                    height: 20px !important;
+                    font-size: 9px !important;
+                    border: 1px solid !important;
+                }
+
+                /* Grid lines and backgrounds */
+                #gantt-chart-container [style*="border-r"] {
+                    border-right-color: #e5e7eb !important;
+                    border-right-width: 1px !important;
+                }
+
+                /* Legend/footer */
+                #gantt-chart-container > div:last-child {
+                    margin-top: 12px;
+                    padding: 8px 0;
+                    border-top: 1px solid #ddd;
+                    font-size: 9px !important;
+                    display: flex !important;
+                    flex-wrap: wrap !important;
+                    gap: 16px !important;
+                }
+
+                /* Hide scrollbars and overflow */
+                ::-webkit-scrollbar { display: none; }
+                * { scrollbar-width: none; }
+
+                @page {
+                    margin: 8mm;
+                    size: landscape;
+                    orphans: 3;
+                    widows: 3;
+                }
+
+                /* Page break optimization */
+                #gantt-chart-container > div[style*="border-b"] {
+                    page-break-inside: avoid;
+                }
             }
         `;
         document.head.appendChild(style);
