@@ -2070,7 +2070,6 @@ export default function ProjectBoard() {
 
                     {/* ── Desktop: table ── */}
                     <div className="hidden sm:block bg-white dark:bg-[#151b28] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
-                    <div className="bg-white dark:bg-[#151b28] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
                         <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                                 <tr>
@@ -2178,7 +2177,6 @@ export default function ProjectBoard() {
                                 )}
                             </tbody>
                         </table>
-                    </div>
                     </div>{/* end hidden sm:block */}
 
                 </div>
