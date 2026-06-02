@@ -126,71 +126,64 @@ export default function ProjectBoardGantt() {
         if (!project) return;
         setExporting(true);
 
-        // Add print styles - simple and robust
-        const style = document.createElement('style');
-        style.innerHTML = `
-            @media print {
-                html, body {
-                    width: 100%;
-                    height: 100%;
-                    margin: 0;
-                    padding: 0;
-                    background: white;
-                }
+        const chartElement = document.getElementById('gantt-chart-container');
+        if (!chartElement) {
+            alert('Gantt chart not found');
+            setExporting(false);
+            return;
+        }
 
-                body > * {
-                    display: none !important;
-                }
+        // Clone the chart
+        const clone = chartElement.cloneNode(true);
 
-                #gantt-chart-container {
-                    display: block !important;
-                    width: 100% !important;
-                    height: auto !important;
-                    position: static !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    border: none !important;
-                    box-shadow: none !important;
-                    overflow: visible !important;
-                    background: white !important;
-                }
+        // Create print wrapper
+        const printWrapper = document.createElement('div');
+        printWrapper.id = 'print-wrapper';
+        printWrapper.style.cssText = 'width: 100%; background: white; padding: 10px;';
 
-                #gantt-chart-container > div {
-                    display: block !important;
-                    width: 100% !important;
-                    overflow: visible !important;
-                    position: static !important;
-                }
+        // Add title
+        const title = document.createElement('h1');
+        title.textContent = `${project.name} - Gantt Chart`;
+        title.style.cssText = 'font-size: 18px; margin-bottom: 10px; font-weight: bold;';
 
-                #gantt-chart-container > div > div {
-                    display: flex !important;
-                    width: 100% !important;
-                }
+        const timestamp = document.createElement('p');
+        timestamp.textContent = `Generated: ${new Date().toLocaleString('id-ID')}`;
+        timestamp.style.cssText = 'font-size: 12px; color: #666; margin-bottom: 10px;';
 
-                #gantt-chart-container button {
-                    cursor: pointer;
-                }
+        printWrapper.appendChild(title);
+        printWrapper.appendChild(timestamp);
+        printWrapper.appendChild(clone);
 
-                @page {
-                    margin: 5mm;
-                    size: landscape;
-                }
+        // Hide everything except wrapper
+        const originalDisplay = {};
+        document.body.childNodes.forEach((node) => {
+            if (node.nodeType === 1) { // Element node
+                originalDisplay[node.id || Math.random()] = node.style.display;
+                node.style.display = 'none';
             }
-        `;
-        document.head.appendChild(style);
+        });
 
-        // Set document title for PDF filename
+        // Insert wrapper
+        document.body.appendChild(printWrapper);
+
+        // Set title
         const oldTitle = document.title;
         document.title = `${project.name}-gantt-${new Date().toISOString().slice(0, 10)}`;
 
-        // Trigger print dialog
+        // Print after layout
         setTimeout(() => {
             window.print();
+
             // Cleanup
-            document.head.removeChild(style);
+            document.body.removeChild(printWrapper);
+            document.body.childNodes.forEach((node) => {
+                if (node.nodeType === 1) {
+                    node.style.display = originalDisplay[node.id || Math.random()] || '';
+                }
+            });
             document.title = oldTitle;
             setExporting(false);
-        }, 100);
+        }, 200);
     };
 
     if (loading) {
