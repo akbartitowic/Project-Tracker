@@ -171,7 +171,7 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
         <div
             ref={setNodeRef}
             className={cn(
-                'flex h-full max-h-full w-[min(18rem,88vw)] shrink-0 snap-start flex-col rounded-xl border bg-slate-50/90 transition-colors duration-200 dark:bg-[#151b28]/60 sm:w-72',
+                'flex w-[min(18rem,88vw)] shrink-0 snap-start flex-col rounded-xl border bg-slate-50/90 transition-colors duration-200 dark:bg-[#151b28]/60 sm:w-72 sm:h-full sm:max-h-full',
                 isOver
                     ? 'border-primary/40 bg-primary/5 shadow-sm dark:bg-primary/5'
                     : 'border-slate-200/80 dark:border-slate-800/60',
@@ -185,7 +185,7 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
                     <span className="shrink-0 text-[10px] font-semibold text-slate-400">{perc}%</span>
                 </div>
             </div>
-            <div className="board-column-scroll relative flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2.5">
+            <div className="board-column-scroll relative flex flex-col gap-2.5 p-2.5 sm:min-h-0 sm:flex-1 sm:overflow-y-auto">
                 {children}
                 {count === 0 && (
                     <p className="pointer-events-none py-6 text-center text-xs text-slate-400 dark:text-slate-500">
@@ -1651,7 +1651,7 @@ export default function ProjectBoard() {
     };
 
     return (
-        <div className="flex h-[calc(100dvh-4.25rem)] min-h-0 flex-col overflow-hidden bg-background-light dark:bg-background-dark transition-colors duration-200">
+        <div className="flex flex-col bg-background-light dark:bg-background-dark transition-colors duration-200 overflow-y-auto sm:h-[calc(100dvh-4.25rem)] sm:overflow-hidden sm:min-h-0">
             {/* Project Header & Stats */}
             <div className="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
                 <div className="flex flex-col gap-3 p-4 sm:p-5">
@@ -1918,7 +1918,7 @@ export default function ProjectBoard() {
 
             {/* Board / List View */}
             {viewMode === 'kanban' ? (
-                <div className="flex flex-col flex-1 min-h-0">
+                <div className="flex flex-col sm:flex-1 sm:min-h-0 min-h-[calc(100dvh-10rem)]">
                     {/* Mobile: status tab bar */}
                     <div className="sm:hidden flex overflow-x-auto border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28] shrink-0 scrollbar-none">
                         {COLUMNS.map((col, idx) => {
@@ -1959,7 +1959,7 @@ export default function ProjectBoard() {
                     {/* Kanban scroll area */}
                     <div
                         ref={kanbanScrollRef}
-                        className="board-scroll-x relative flex-1 min-h-0 overflow-x-auto overflow-y-hidden bg-slate-100/50 p-3 sm:p-4 dark:bg-[#0d1118]/50"
+                        className="board-scroll-x relative overflow-x-auto overflow-y-hidden bg-slate-100/50 p-3 sm:p-4 dark:bg-[#0d1118]/50 sm:flex-1 sm:min-h-0 min-h-[calc(100dvh-12rem)]"
                         onScroll={(e) => {
                             // Update active tab based on scroll position (mobile only)
                             if (window.innerWidth >= 640) return;
