@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Activity, Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,13 +100,6 @@ export default function Login() {
                             )}
                             Sign In to Dashboard
                         </Button>
-
-                        <div className="pt-6 text-center">
-                            <p className="text-slate-400 text-sm">
-                                Don't have an account? 
-                                <Link to="/signup" className="text-accent font-bold hover:underline ml-2">Sign Up Free</Link>
-                            </p>
-                        </div>
                     </form>
                 </div>
             </div>
