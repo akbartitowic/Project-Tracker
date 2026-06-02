@@ -247,120 +247,306 @@ export default function SubtaskSection({
                         const statusBusy = updatingStatusId === st.id;
 
                         return (
-                            <li
-                                key={st.id}
-                                className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-3 py-2.5"
-                            >
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{st.title}</p>
-                                    {st.description?.trim() && (
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 whitespace-pre-wrap">
-                                            {st.description.trim()}
-                                        </p>
-                                    )}
-                                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                        <span
-                                            className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border ${statusTriggerClass(statusLabel)}`}
+                            <React.Fragment key={st.id}>
+                                <li
+                                    className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-3 py-2.5"
+                                >
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{st.title}</p>
+                                        {st.description?.trim() && (
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 whitespace-pre-wrap">
+                                                {st.description.trim()}
+                                            </p>
+                                        )}
+                                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                            <span
+                                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border ${statusTriggerClass(statusLabel)}`}
+                                            >
+                                                {statusLabel}
+                                            </span>
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium">
+                                                {st.priority || 'Medium'}
+                                            </span>
+                                            {st.is_billable === false && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-400 font-medium">
+                                                    Non-billable
+                                                </span>
+                                            )}
+                                            {!isFreelance && (st.is_billable !== false || Number(st.estimated_hours) > 0) && (
+                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">
+                                                    {formatHours(st.estimated_hours || 0)} hrs
+                                                    {st.is_billable === false && Number(st.estimated_hours) > 0 && (
+                                                        <span className="text-slate-400"> load</span>
+                                                    )}
+                                                </span>
+                                            )}
+                                            {formatTaskDateRange(st.start_date, st.due_date) && (
+                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 w-full sm:w-auto">
+                                                    <CalendarRange className="size-3 shrink-0" />
+                                                    {formatTaskDateRange(st.start_date, st.due_date)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 shrink-0 sm:ml-auto">
+                                        {!isFreelance ? (
+                                            <Select
+                                                value={statusSelectValue(st.status)}
+                                                onValueChange={(val) => handleStatusChange(st.id, val)}
+                                                disabled={statusBusy || saving}
+                                            >
+                                                <SelectTrigger
+                                                    className={`h-8 w-[132px] text-xs font-semibold shadow-none ${statusTriggerClass(statusLabel)}`}
+                                                    aria-label={`Change status for ${st.title}`}
+                                                >
+                                                    {statusBusy ? (
+                                                        <Loader2 className="size-3.5 animate-spin" />
+                                                    ) : (
+                                                        <SelectValue />
+                                                    )}
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {SUBTASK_STATUSES.map((s) => (
+                                                        <SelectItem key={s} value={s}>
+                                                            {s}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <span
+                                                className={`text-xs px-2.5 py-1 rounded-md font-semibold border ${statusTriggerClass(statusLabel)}`}
+                                            >
+                                                {statusLabel}
+                                            </span>
+                                        )}
+                                        <button
+                                            type="button"
+                                            className="p-1.5 rounded-md text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700"
+                                            onClick={() => setNotesTarget({ id: st.id, title: st.title })}
+                                            aria-label="Notes subtask"
                                         >
-                                            {statusLabel}
-                                        </span>
-                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium">
-                                            {st.priority || 'Medium'}
-                                        </span>
-                                        {st.is_billable === false && (
-                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-400 font-medium">
-                                                Non-billable
-                                            </span>
-                                        )}
-                                        {!isFreelance && (st.is_billable !== false || Number(st.estimated_hours) > 0) && (
-                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">
-                                                {formatHours(st.estimated_hours || 0)} hrs
-                                                {st.is_billable === false && Number(st.estimated_hours) > 0 && (
-                                                    <span className="text-slate-400"> load</span>
-                                                )}
-                                            </span>
-                                        )}
-                                        {formatTaskDateRange(st.start_date, st.due_date) && (
-                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 w-full sm:w-auto">
-                                                <CalendarRange className="size-3 shrink-0" />
-                                                {formatTaskDateRange(st.start_date, st.due_date)}
-                                            </span>
+                                            <MessageSquare className="size-4" />
+                                        </button>
+                                        {!isFreelance && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    className="p-1.5 rounded-md text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700"
+                                                    onClick={() => openEdit(st)}
+                                                    aria-label="Edit subtask"
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="p-1.5 rounded-md text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                                                    onClick={() => handleDelete(st.id)}
+                                                    aria-label="Delete subtask"
+                                                    disabled={saving}
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </button>
+                                            </>
                                         )}
                                     </div>
-                                </div>
-
-                                <div className="flex items-center gap-1.5 shrink-0 sm:ml-auto">
-                                    {!isFreelance ? (
-                                        <Select
-                                            value={statusSelectValue(st.status)}
-                                            onValueChange={(val) => handleStatusChange(st.id, val)}
-                                            disabled={statusBusy || saving}
-                                        >
-                                            <SelectTrigger
-                                                className={`h-8 w-[132px] text-xs font-semibold shadow-none ${statusTriggerClass(statusLabel)}`}
-                                                aria-label={`Change status for ${st.title}`}
-                                            >
-                                                {statusBusy ? (
-                                                    <Loader2 className="size-3.5 animate-spin" />
-                                                ) : (
-                                                    <SelectValue />
-                                                )}
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {SUBTASK_STATUSES.map((s) => (
-                                                    <SelectItem key={s} value={s}>
-                                                        {s}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <span
-                                            className={`text-xs px-2.5 py-1 rounded-md font-semibold border ${statusTriggerClass(statusLabel)}`}
-                                        >
-                                            {statusLabel}
-                                        </span>
-                                    )}
-                                    <button
-                                        type="button"
-                                        className="p-1.5 rounded-md text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700"
-                                        onClick={() => setNotesTarget({ id: st.id, title: st.title })}
-                                        aria-label="Notes subtask"
-                                    >
-                                        <MessageSquare className="size-4" />
-                                    </button>
-                                    {!isFreelance && (
-                                        <>
-                                            <button
-                                                type="button"
-                                                className="p-1.5 rounded-md text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700"
-                                                onClick={() => openEdit(st)}
-                                                aria-label="Edit subtask"
-                                            >
-                                                <Pencil className="size-4" />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="p-1.5 rounded-md text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"
-                                                onClick={() => handleDelete(st.id)}
-                                                aria-label="Delete subtask"
-                                                disabled={saving}
-                                            >
-                                                <Trash2 className="size-4" />
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            </li>
+                                </li>
+                                {!isFreelance && editingId === st.id && (
+                                    <li className="list-none rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 p-3 space-y-3">
+                                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                            Edit subtask
+                                        </p>
+                                        <Input
+                                            placeholder="Subtask title *"
+                                            value={form.title}
+                                            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                                        />
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Description</label>
+                                            <Textarea
+                                                placeholder="Deskripsi subtask (opsional)..."
+                                                value={form.description}
+                                                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                                                className="min-h-[72px] resize-y text-sm"
+                                            />
+                                        </div>
+                                        <div className={`grid grid-cols-1 gap-3 ${categoryOptions.length > 0 ? 'sm:grid-cols-2' : ''}`}>
+                                            {categoryOptions.length > 0 && (
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-slate-600">Category</label>
+                                                    <Select
+                                                        value={form.category || undefined}
+                                                        onValueChange={(val) => {
+                                                            const matched = roleQuotas.find((q) => q.role_name === val);
+                                                            setForm((f) => ({
+                                                                ...f,
+                                                                category: val,
+                                                                roleFilter: matched ? String(matched.project_role_id) : f.roleFilter,
+                                                            }));
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="h-9"><SelectValue placeholder="Category" /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {categoryOptions.map((c) => (
+                                                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            )}
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-slate-600">Billing type</label>
+                                                <Select
+                                                    value={form.billable ? 'billable' : 'non-billable'}
+                                                    onValueChange={(val) => {
+                                                        const billable = val === 'billable';
+                                                        setForm((f) => ({
+                                                            ...f,
+                                                            billable,
+                                                            estimate: billable ? f.estimate : '',
+                                                            rushHour: billable ? f.rushHour : false,
+                                                        }));
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="billable">Billable</SelectItem>
+                                                        <SelectItem value="non-billable">Non-billable</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 space-y-2">
+                                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1">
+                                                <CalendarRange className="size-3" /> Timeline
+                                            </p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-slate-600">Start date</label>
+                                                    <Input
+                                                        type="date"
+                                                        value={form.startDate}
+                                                        onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+                                                        className="h-9"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-slate-600">Due date</label>
+                                                    <Input
+                                                        type="date"
+                                                        value={form.dueDate}
+                                                        min={form.startDate || undefined}
+                                                        onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+                                                        className="h-9"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-slate-600">Priority</label>
+                                                <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))}>
+                                                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="Low">Low</SelectItem>
+                                                        <SelectItem value="Medium">Medium</SelectItem>
+                                                        <SelectItem value="High">High</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-slate-600">Status</label>
+                                                <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+                                                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="To Do">To Do</SelectItem>
+                                                        <SelectItem value="In Progress">In Progress</SelectItem>
+                                                        <SelectItem value="Review">Review</SelectItem>
+                                                        <SelectItem value="Re-open">Re-open</SelectItem>
+                                                        <SelectItem value="Done">Done</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-1 sm:col-span-2">
+                                                <label className="text-xs font-medium text-slate-600">Assignee</label>
+                                                <AssigneeSearchSelect
+                                                    value={form.assignee}
+                                                    onChange={(v) => setForm((f) => ({ ...f, assignee: v }))}
+                                                    options={assigneeSelectOptions}
+                                                    placeholder="Ketik min. 2 karakter..."
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className={`grid grid-cols-1 gap-2 ${form.billable && isScrum ? 'sm:grid-cols-[1fr_auto] items-end' : ''}`}>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-slate-600">
+                                                    Estimated MH
+                                                    {!form.billable && (
+                                                        <span className="font-normal text-slate-400"> (opsional, Team Load)</span>
+                                                    )}
+                                                    {form.billable && isWaterfall && (
+                                                        <span className="font-normal text-slate-400"> (Team Load)</span>
+                                                    )}
+                                                </label>
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={form.estimate}
+                                                    placeholder={form.billable ? '0' : 'Opsional'}
+                                                    onChange={(e) => setForm((f) => ({ ...f, estimate: e.target.value }))}
+                                                />
+                                            </div>
+                                            {form.billable && isScrum && (
+                                                <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-2">
+                                                    <Checkbox
+                                                        checked={form.rushHour}
+                                                        onCheckedChange={(c) => setForm((f) => ({ ...f, rushHour: c === true }))}
+                                                    />
+                                                    <span className="text-xs text-slate-600">Rush hour</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {!isWaterfall && form.billable && categoryBasedRoleQuotas.length > 0 && (
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-slate-600">Role quota</label>
+                                                <Select value={form.roleFilter} onValueChange={(v) => setForm((f) => ({ ...f, roleFilter: v }))}>
+                                                    <SelectTrigger className="h-9"><SelectValue placeholder="General" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="All">General quota</SelectItem>
+                                                        {categoryBasedRoleQuotas
+                                                            .filter((q) => q.quota_hours > 0)
+                                                            .map((q) => (
+                                                                <SelectItem key={q.project_role_id} value={String(q.project_role_id)}>
+                                                                    {q.role_name}
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                        <div className="flex gap-2 justify-end">
+                                            <Button type="button" variant="outline" size="sm" onClick={resetForm}>
+                                                Cancel
+                                            </Button>
+                                            <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
+                                                {saving && <Loader2 className="mr-1 size-3 animate-spin" />}
+                                                Save subtask
+                                            </Button>
+                                        </div>
+                                    </li>
+                                )}
+                            </React.Fragment>
                         );
                     })}
                 </ul>
             )}
 
-            {!isFreelance && editingId && (
+            {!isFreelance && editingId === 'new' && (
                 <div className="rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 p-3 space-y-3">
                     <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        {editingId === 'new' ? 'New subtask' : 'Edit subtask'}
+                        New subtask
                     </p>
                     <Input
                         placeholder="Subtask title *"
@@ -504,14 +690,14 @@ export default function SubtaskSection({
                             />
                         </div>
                         {form.billable && isScrum && (
-                                <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-2">
-                                    <Checkbox
-                                        checked={form.rushHour}
-                                        onCheckedChange={(c) => setForm((f) => ({ ...f, rushHour: c === true }))}
-                                    />
-                                    <span className="text-xs text-slate-600">Rush hour</span>
-                                </div>
-                            )}
+                            <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-2">
+                                <Checkbox
+                                    checked={form.rushHour}
+                                    onCheckedChange={(c) => setForm((f) => ({ ...f, rushHour: c === true }))}
+                                />
+                                <span className="text-xs text-slate-600">Rush hour</span>
+                            </div>
+                        )}
                     </div>
                     {!isWaterfall && form.billable && categoryBasedRoleQuotas.length > 0 && (
                         <div className="space-y-1">
@@ -537,7 +723,7 @@ export default function SubtaskSection({
                         </Button>
                         <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
                             {saving && <Loader2 className="mr-1 size-3 animate-spin" />}
-                            {editingId === 'new' ? 'Add subtask' : 'Save subtask'}
+                            Add subtask
                         </Button>
                     </div>
                 </div>
