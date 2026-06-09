@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
-import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star } from 'lucide-react';
+import { Clock, Plus, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star } from 'lucide-react';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../utils/taskDates';
 import { hasPermission } from '../utils/permissions';
 import { Card, CardContent } from "@/components/ui/card";
