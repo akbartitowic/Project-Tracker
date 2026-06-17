@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -60,6 +61,7 @@ body {
 }
 
 .board-metrics-scroll {
+  overflow-x: auto;
   scroll-behavior: smooth;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;

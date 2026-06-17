@@ -369,9 +369,11 @@ class TaskController extends Controller
                 return response()->json(['error' => 'Forbidden'], 403);
             }
             $query->where('tasks.project_id', $projectId)
-                ->whereNull('tasks.parent_task_id');
+                ->whereNull('tasks.parent_task_id')
+                ->where(fn ($q) => $q->whereNull('tasks.is_backlog')->orWhere('tasks.is_backlog', false));
         } else {
-            $query->whereNull('tasks.parent_task_id');
+            $query->whereNull('tasks.parent_task_id')
+                ->where(fn ($q) => $q->whereNull('tasks.is_backlog')->orWhere('tasks.is_backlog', false));
         }
 
         $tasks = $query->get();
@@ -662,11 +664,14 @@ class TaskController extends Controller
             'due_date' => 'nullable|date',
             'start_date' => 'nullable|date',
             'is_billable' => 'nullable|boolean',
+            'is_backlog' => 'nullable|boolean',
             'parent_task_id' => 'nullable|integer|exists:tasks,id',
         ]);
 
         $parentTaskId = isset($validated['parent_task_id']) ? (int) $validated['parent_task_id'] : null;
-        TaskAggregationService::assertValidParent($parentTaskId, (int) $validated['project_id']);
+        if (!($validated['is_backlog'] ?? false)) {
+            TaskAggregationService::assertValidParent($parentTaskId, (int) $validated['project_id']);
+        }
 
         if ($dateErr = $this->validateTaskDateRange($validated)) {
             return response()->json($dateErr, 422);
@@ -822,6 +827,54 @@ class TaskController extends Controller
         $this->log('Project', 'Deleted Task', "Deleted task ID: {$id}");
 
         return response()->json(['message' => 'Task deleted']);
+    }
+
+    public function backlog(Request $request)
+    {
+        $user = $request->user();
+        $projectId = (int) $request->query('project_id');
+        if (!$projectId) {
+            return response()->json(['error' => 'project_id required'], 422);
+        }
+        if (!ProjectAccess::canAccessProject($user, $projectId)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+        $items = Task::where('project_id', $projectId)
+            ->where('is_backlog', true)
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'title', 'feature_title', 'description', 'priority', 'estimated_hours', 'created_at']);
+        return response()->json(['data' => $items]);
+    }
+
+    public function promote(Request $request, $id)
+    {
+        $user = $request->user();
+        $task = Task::findOrFail($id);
+        if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+        $validated = $request->validate([
+            'parent_task_id' => 'nullable|integer|exists:tasks,id',
+        ]);
+
+        $update = ['is_backlog' => false, 'status' => 'To Do'];
+
+        if (!empty($validated['parent_task_id'])) {
+            $parentTaskId = (int) $validated['parent_task_id'];
+            TaskAggregationService::assertValidParent($parentTaskId, (int) $task->project_id);
+            $update['parent_task_id'] = $parentTaskId;
+            $update['sort_order'] = (int) Task::where('parent_task_id', $parentTaskId)->max('sort_order') + 1;
+        }
+
+        $task->update($update);
+
+        if (!empty($update['parent_task_id'])) {
+            TaskAggregationService::syncParentEstimatedHours((int) $update['parent_task_id']);
+        }
+
+        $this->log('Project', 'Promoted Backlog', "Backlog '{$task->title}' moved to board in project ID: {$task->project_id}");
+
+        return response()->json(['id' => $task->id]);
     }
 
     public function bulkEditManhours(Request $request)

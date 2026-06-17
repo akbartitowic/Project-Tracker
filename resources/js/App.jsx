@@ -5,6 +5,8 @@ import ProjectList from './pages/ProjectList';
 import ProjectBoard from './pages/ProjectBoard';
 import ProjectBoardDashboard from './pages/ProjectBoardDashboard';
 import ProjectBoardGantt from './pages/ProjectBoardGantt';
+import ProjectBoardBacklog from './pages/ProjectBoardBacklog';
+import ProjectBoardNotes from './pages/ProjectBoardNotes';
 import TeamUsers from './pages/TeamUsers';
 import ProjectRoles from './pages/ProjectRoles';
 import SystemRoles from './pages/SystemRoles';
@@ -81,6 +83,8 @@ function App() {
           <Route path="create-project" element={<ProjectList />} />
           <Route path="board/:projectId/dashboard" element={<ProjectBoardDashboard />} />
           <Route path="board/:projectId/gantt" element={<ProjectBoardGantt />} />
+          <Route path="board/:projectId/backlog" element={<ProjectBoardBacklog />} />
+          <Route path="board/:projectId/notes" element={<ProjectBoardNotes />} />
           <Route path="board/:projectId?" element={<ProjectBoard />} />
           <Route path="team-load" element={<TeamLoad />} />
           <Route path="users" element={<TeamUsers />} />

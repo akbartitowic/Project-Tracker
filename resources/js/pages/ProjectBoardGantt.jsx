@@ -93,7 +93,14 @@ export default function ProjectBoardGantt() {
         return rows;
     }, [ganttRows, expandedParents]);
 
-    const timeline = useMemo(() => buildGanttTimeline(allDisplayRows), [allDisplayRows]);
+    const timeline = useMemo(() => {
+        const allRows = [];
+        for (const parentRow of ganttRows) {
+            allRows.push(parentRow);
+            allRows.push(...(parentRow.subtasks || []));
+        }
+        return buildGanttTimeline(allRows);
+    }, [ganttRows]);
     const chartWidth = timeline ? timeline.totalDays * GANTT_DAY_WIDTH : 0;
 
     const scheduledCount = ganttRows.length;

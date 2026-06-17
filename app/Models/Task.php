@@ -28,10 +28,12 @@ class Task extends Model
         'category',
         'due_date',
         'start_date',
+        'is_backlog',
     ];
 
     protected $casts = [
         'is_billable' => 'boolean',
+        'is_backlog' => 'boolean',
         'rush_hour' => 'boolean',
         'due_date' => 'date',
         'start_date' => 'date',

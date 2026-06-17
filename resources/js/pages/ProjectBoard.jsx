@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
-import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star } from 'lucide-react';
+import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star, Inbox } from 'lucide-react';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../utils/taskDates';
 import { hasPermission } from '../utils/permissions';
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,7 +18,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import SubtaskSection, { subtasksTotalHours } from '../components/board/SubtaskSection';
 import AssigneeSearchSelect from '../components/board/AssigneeSearchSelect';
 import TaskNotesSection from '../components/board/TaskNotesSection';
-import ProjectNotesPanel from '../components/board/ProjectNotesPanel';
 import {
     billableHoursForTask,
     loadHoursForTask,
@@ -71,6 +70,15 @@ function effectiveHoursFromBaseInput(baseStr, rushHour) {
     return rushHour ? Math.round(b * RUSH_HOUR_FACTOR * 1000) / 1000 : b;
 }
 
+function normalizeSubtaskStatus(status) {
+    const v = String(status || '').trim().toLowerCase();
+    if (v === 'done') return 'Done';
+    if (v === 'in progress') return 'In Progress';
+    if (v === 're-open' || v === 'reopen') return 'Re-open';
+    if (v === 'review') return 'Review';
+    return 'To Do';
+}
+
 function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours }) {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: task.id,
@@ -117,11 +125,6 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                             Rush
                         </span>
                     )}
-                    {task.subtasks?.length > 0 && (
-                        <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300">
-                            {task.subtasks.length} sub
-                        </span>
-                    )}
                     {!isFreelance && hoursLabel && (
                         <span className="ml-auto flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-slate-500 dark:text-slate-400">
                             <Clock className="size-3 shrink-0" />
@@ -151,6 +154,24 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                         {formatTaskDateRange(task.start_date, task.due_date)}
                     </p>
                 )}
+
+                {task.subtasks?.length > 0 && (() => {
+                    const WEIGHTS = { 'Done': 100, 'Review': 75, 'In Progress': 50, 'Re-open': 25, 'To Do': 0 };
+                    const total = task.subtasks.length;
+                    const pct = Math.round(task.subtasks.reduce((sum, s) => sum + (WEIGHTS[normalizeSubtaskStatus(s.status)] ?? 0), 0) / total);
+                    return (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                            <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 shrink-0">{total} sub</span>
+                            <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                                <span
+                                    className="absolute inset-y-0 left-0 rounded-full bg-slate-400 dark:bg-slate-500 transition-all"
+                                    style={{ width: `${pct}%` }}
+                                />
+                            </span>
+                            <span className="text-[9px] font-semibold tabular-nums text-slate-500 dark:text-slate-400 shrink-0">{pct}%</span>
+                        </div>
+                    );
+                })()}
 
                 <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
                     <span className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400" title={assigneeLabel}>
@@ -236,6 +257,7 @@ export default function ProjectBoard() {
     const [projectMembers, setProjectMembers] = useState([]);
     const [tasks, setTasks] = useState([]);
     const [viewMode, setViewMode] = useState('kanban');
+    const [filterMemberId, setFilterMemberId] = useState(null);
     const [listViewMode, setListViewMode] = useState('grid');
     const [mobileKanbanCol, setMobileKanbanCol] = useState('To Do');
     const kanbanScrollRef = useRef(null);
@@ -282,7 +304,9 @@ export default function ProjectBoard() {
     const [bulkEditRoleFilter, setBulkEditRoleFilter] = useState('All');
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
     const [isUpdatingProjectStatus, setIsUpdatingProjectStatus] = useState(false);
-    const [isProjectNotesOpen, setIsProjectNotesOpen] = useState(false);
+    const [isDeletingTask, setIsDeletingTask] = useState(false);
+    const [confirmDeleteTaskOpen, setConfirmDeleteTaskOpen] = useState(false);
+
     const isFreelance = isFreelanceUser(user);
     const canUpdateBoard = hasPermission(user, 'project_board.update');
 
@@ -894,7 +918,11 @@ export default function ProjectBoard() {
         }
     };
 
-    const getTasksByStatus = (status) => tasks.filter(t => t.status === status);
+    const visibleTasks = useMemo(
+        () => filterMemberId ? tasks.filter((t) => String(t.assignee_id) === String(filterMemberId)) : tasks,
+        [tasks, filterMemberId]
+    );
+    const getTasksByStatus = (status) => visibleTasks.filter(t => t.status === status);
 
     const toggleTaskSelection = (taskId) => {
         setSelectedTaskIds(prev => 
@@ -905,10 +933,10 @@ export default function ProjectBoard() {
     };
 
     const toggleAllTasks = () => {
-        if (selectedTaskIds.length === tasks.length) {
+        if (selectedTaskIds.length === visibleTasks.length) {
             setSelectedTaskIds([]);
         } else {
-            setSelectedTaskIds(tasks.map(t => t.id));
+            setSelectedTaskIds(visibleTasks.map(t => t.id));
         }
     };
 
@@ -999,6 +1027,21 @@ export default function ProjectBoard() {
         }
     };
 
+    const handleDeleteTask = async () => {
+        if (!editingTaskId) return;
+        setIsDeletingTask(true);
+        try {
+            await fetchAPI(`/tasks/${editingTaskId}`, { method: 'DELETE' });
+            setConfirmDeleteTaskOpen(false);
+            closeTaskModal();
+            setTasks((prev) => prev.filter((t) => Number(t.id) !== Number(editingTaskId)));
+        } catch (err) {
+            alert(err.message || 'Gagal menghapus task.');
+        } finally {
+            setIsDeletingTask(false);
+        }
+    };
+
     const COLUMNS = [
         { title: 'To Do', color: 'bg-slate-400' },
         { title: 'In Progress', color: 'bg-primary' },
@@ -1085,7 +1128,15 @@ export default function ProjectBoard() {
         () => projects.filter((p) => p.status === 'Done'),
         [projects]
     );
-    const displayedProjects = projectListTab === 'done' ? doneProjects : activeProjects;
+    const favoriteProjects = useMemo(
+        () => projects.filter((p) => pinnedProjectIds.includes(String(p.id))),
+        [projects, pinnedProjectIds]
+    );
+    const displayedProjects = projectListTab === 'done'
+        ? doneProjects
+        : projectListTab === 'favorite'
+            ? favoriteProjects
+            : activeProjects;
 
     const filteredDisplayedProjects = useMemo(() => {
         const q = projectListSearch.trim().toLowerCase();
@@ -1224,6 +1275,20 @@ export default function ProjectBoard() {
                                 Done
                                 <span className="text-xs opacity-80">({doneProjects.length})</span>
                             </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className={cn('h-8 gap-1.5 px-3', projectListTab === 'favorite' && 'bg-primary text-white hover:bg-primary hover:text-white')}
+                                onClick={() => {
+                                    setProjectListTab('favorite');
+                                    setSelectedProjectIds([]);
+                                }}
+                            >
+                                <Star className={cn('size-3.5', projectListTab === 'favorite' ? 'fill-current' : 'fill-amber-400 text-amber-500')} />
+                                Favorit
+                                <span className="text-xs opacity-80">({favoriteProjects.length})</span>
+                            </Button>
                         </div>
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                             <div className="relative w-full sm:w-56">
@@ -1259,7 +1324,9 @@ export default function ProjectBoard() {
                             {displayedProjects.length === 0
                                 ? projectListTab === 'done'
                                     ? 'Belum ada project Done.'
-                                    : 'Belum ada project aktif.'
+                                    : projectListTab === 'favorite'
+                                        ? 'Belum ada project favorit. Klik bintang ★ pada project untuk menambahkan.'
+                                        : 'Belum ada project aktif.'
                                 : 'Tidak ada hasil pencarian.'}
                         </div>
                     ) : listViewMode === 'grid' ? (
@@ -1399,7 +1466,7 @@ export default function ProjectBoard() {
                             ))}
                         </div>
                     ) : (
-                        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
+                        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
                             <table className="w-full text-left text-sm whitespace-nowrap">
                                 <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                                     <tr>
@@ -1679,7 +1746,7 @@ export default function ProjectBoard() {
                             <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{selectedProject.methodology} Board</p>
                         </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
                         <div className="flex gap-0.5 rounded-lg border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-700 dark:bg-slate-800/50">
                             <Button
                                 variant="ghost"
@@ -1721,35 +1788,84 @@ export default function ProjectBoard() {
                 </div>
 
                     <div className="flex flex-col gap-3 border-t border-slate-100 pt-3 dark:border-slate-800 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                    <button
-                        type="button"
-                        onClick={() => openAssignMembersModal(selectedProject)}
-                        className="inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-left transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800"
-                    >
-                        <div className="flex items-center -space-x-2">
-                            {assignedProjectUsers.slice(0, 3).map((member) => (
-                                <div
-                                    key={member.user_id}
-                                    title={member.user_name}
-                                    className="inline-flex size-7 items-center justify-center rounded-full bg-white text-[10px] font-bold text-slate-700 ring-2 ring-slate-50 dark:bg-slate-600 dark:text-slate-200 dark:ring-slate-800"
-                                >
-                                    {(member.user_name || 'U').charAt(0).toUpperCase()}
-                                </div>
-                            ))}
-                            {assignedProjectUsers.length === 0 && (
-                                <div className="inline-flex size-7 items-center justify-center rounded-full bg-white text-[10px] font-medium text-slate-400 ring-2 ring-slate-50 dark:bg-slate-600 dark:ring-slate-800">
-                                    —
-                                </div>
-                            )}
-                        </div>
-                        <span className="text-sm text-slate-600 dark:text-slate-300">
-                            {assignedProjectUsers.length} member{assignedProjectUsers.length === 1 ? '' : 's'}
-                        </span>
-                        <UserPlus className="size-3.5 text-slate-400" />
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => openAssignMembersModal(selectedProject)}
+                            className="inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-left transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                        >
+                            <div className="flex items-center -space-x-2">
+                                {assignedProjectUsers.slice(0, 3).map((member) => (
+                                    <div
+                                        key={member.user_id}
+                                        title={member.user_name}
+                                        className="inline-flex size-7 items-center justify-center rounded-full bg-white text-[10px] font-bold text-slate-700 ring-2 ring-slate-50 dark:bg-slate-600 dark:text-slate-200 dark:ring-slate-800"
+                                    >
+                                        {(member.user_name || 'U').charAt(0).toUpperCase()}
+                                    </div>
+                                ))}
+                                {assignedProjectUsers.length === 0 && (
+                                    <div className="inline-flex size-7 items-center justify-center rounded-full bg-white text-[10px] font-medium text-slate-400 ring-2 ring-slate-50 dark:bg-slate-600 dark:ring-slate-800">
+                                        —
+                                    </div>
+                                )}
+                            </div>
+                            <span className="text-sm text-slate-600 dark:text-slate-300">
+                                {assignedProjectUsers.length} member{assignedProjectUsers.length === 1 ? '' : 's'}
+                            </span>
+                            <UserPlus className="size-3.5 text-slate-400" />
+                        </button>
+
+                        {assignedProjectUsers.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1">
+                                {assignedProjectUsers.map((member) => {
+                                    const isMe = String(member.user_id) === String(user?.id);
+                                    const isActive = String(filterMemberId) === String(member.user_id);
+                                    return (
+                                        <button
+                                            key={member.user_id}
+                                            type="button"
+                                            title={isMe ? `My Task (${member.user_name})` : member.user_name}
+                                            onClick={() => setFilterMemberId((prev) => String(prev) === String(member.user_id) ? null : String(member.user_id))}
+                                            className={cn(
+                                                'inline-flex size-7 items-center justify-center rounded-full text-[10px] font-bold transition-all ring-2',
+                                                isActive
+                                                    ? 'bg-primary text-white ring-primary/30 scale-110'
+                                                    : 'bg-slate-100 text-slate-600 ring-slate-200 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:ring-slate-600 dark:hover:bg-slate-600',
+                                            )}
+                                        >
+                                            {(member.user_name || 'U').charAt(0).toUpperCase()}
+                                        </button>
+                                    );
+                                })}
+                                {filterMemberId && (
+                                    <button
+                                        type="button"
+                                        title="Hapus filter"
+                                        onClick={() => setFilterMemberId(null)}
+                                        className="inline-flex size-7 items-center justify-center rounded-full text-[10px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
+                        <Button
+                            type="button"
+                            variant={String(filterMemberId) === String(user?.id) ? 'default' : 'outline'}
+                            size="sm"
+                            className={cn('h-8 gap-1.5', String(filterMemberId) === String(user?.id) && 'shadow-md shadow-primary/20')}
+                            onClick={() => setFilterMemberId((prev) => String(prev) === String(user?.id) ? null : String(user?.id))}
+                            title="Tampilkan hanya task saya"
+                        >
+                            <Star className={cn('size-3.5', String(filterMemberId) === String(user?.id) && 'fill-current')} />
+                            My Task
+                        </Button>
+                    </div>
 
                     <div className="flex flex-wrap items-center gap-1.5">
-                        <div className="inline-flex flex-wrap rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
+                        <div className="flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -1772,10 +1888,19 @@ export default function ProjectBoard() {
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 gap-1.5 px-2.5 text-slate-600 dark:text-slate-300"
-                                onClick={() => setIsProjectNotesOpen(true)}
+                                onClick={() => navigate(`/board/${selectedProject.id}/notes`)}
                             >
                                 <BookOpen className="size-4 shrink-0" />
                                 <span className="hidden md:inline">Notes</span>
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1.5 px-2.5 text-slate-600 dark:text-slate-300"
+                                onClick={() => navigate(`/board/${selectedProject.id}/backlog`)}
+                            >
+                                <Inbox className="size-4 shrink-0" />
+                                <span className="hidden md:inline">Backlog</span>
                             </Button>
                         </div>
 
@@ -2003,10 +2128,10 @@ export default function ProjectBoard() {
 
                     {/* ── Mobile: card list ── */}
                     <div className="sm:hidden space-y-2">
-                        {tasks.length === 0 && (
-                            <p className="text-center text-slate-400 py-10 text-sm">Belum ada task.</p>
+                        {visibleTasks.length === 0 && (
+                            <p className="text-center text-slate-400 py-10 text-sm">{filterMemberId ? 'Tidak ada task untuk member ini.' : 'Belum ada task.'}</p>
                         )}
-                        {tasks.map((task) => (
+                        {visibleTasks.map((task) => (
                             <div
                                 key={task.id}
                                 onClick={() => handleOpenModal(task.status, task)}
@@ -2073,7 +2198,7 @@ export default function ProjectBoard() {
                         <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                                 <tr>
-                                    {isTaskBulkEditMode && <th className="px-6 py-4 w-10"><Checkbox checked={tasks.length > 0 && selectedTaskIds.length === tasks.length} onCheckedChange={toggleAllTasks} aria-label="Select all" /></th>}
+                                    {isTaskBulkEditMode && <th className="px-6 py-4 w-10"><Checkbox checked={visibleTasks.length > 0 && selectedTaskIds.length === visibleTasks.length} onCheckedChange={toggleAllTasks} aria-label="Select all" /></th>}
                                     <th className="px-6 py-4 font-medium">Task</th>
                                     <th className="px-6 py-4 font-medium">Status</th>
                                     <th className="px-6 py-4 font-medium">Priority</th>
@@ -2084,7 +2209,10 @@ export default function ProjectBoard() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                                {tasks.map(task => (
+                                {visibleTasks.length === 0 && (
+                                    <tr><td colSpan={8} className="px-6 py-10 text-center text-sm text-slate-400">{filterMemberId ? 'Tidak ada task untuk member ini.' : 'Belum ada task.'}</td></tr>
+                                )}
+                                {visibleTasks.map(task => (
                                     <tr key={task.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedTaskIds.includes(task.id) ? 'bg-primary/5 dark:bg-primary/10' : ''}`} onClick={(e) => {
                                         if (isTaskBulkEditMode) {
                                             toggleTaskSelection(task.id);
@@ -2492,10 +2620,43 @@ export default function ProjectBoard() {
                     </div>
 
                     <DialogFooter className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 bg-slate-50/80 dark:bg-slate-900/40">
+                        {editingTaskId && canUpdateBoard && (
+                            <Button type="button" variant="ghost"
+                                className="mr-auto text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1.5"
+                                onClick={() => setConfirmDeleteTaskOpen(true)}
+                                disabled={isSubmitting}>
+                                <Trash2 className="size-4" />
+                                Hapus Task
+                            </Button>
+                        )}
                         <Button type="button" variant="outline" onClick={closeTaskModal}>Cancel</Button>
                         <Button type="submit" form="task-edit-form" disabled={isSubmitting}>
                             {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
                             {editingTaskId ? 'Save Changes' : 'Create Task'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Confirm Delete Task */}
+            <Dialog open={confirmDeleteTaskOpen} onOpenChange={setConfirmDeleteTaskOpen}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-600">
+                            <Trash2 className="size-4" />
+                            Hapus Task
+                        </DialogTitle>
+                        <DialogDescription>
+                            Task <strong className="text-slate-700 dark:text-slate-200">"{editingTask?.title}"</strong> akan dihapus permanen beserta semua subtask dan catatannya. Tindakan ini tidak bisa dibatalkan.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="mt-2">
+                        <Button type="button" variant="outline" onClick={() => setConfirmDeleteTaskOpen(false)} disabled={isDeletingTask}>
+                            Batal
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={handleDeleteTask} disabled={isDeletingTask}>
+                            {isDeletingTask && <Loader2 className="mr-2 size-4 animate-spin" />}
+                            Ya, Hapus
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -2740,27 +2901,6 @@ export default function ProjectBoard() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={isProjectNotesOpen} onOpenChange={setIsProjectNotesOpen}>
-                <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-                    <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
-                        <DialogTitle className="flex items-center gap-2">
-                            <BookOpen className="size-5 text-primary" />
-                            Project Notes
-                        </DialogTitle>
-                        <DialogDescription>
-                            Note, link development, dan dokumen penting untuk project ini.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
-                        <ProjectNotesPanel
-                            projectId={selectedProject?.id}
-                            projectName={selectedProject?.name}
-                            currentUserId={user?.id}
-                            canDeleteAny={canUpdateBoard}
-                        />
-                    </div>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

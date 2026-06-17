@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\ProjectRole;
 use App\Models\Task;
 use App\Models\TeamLoadExcludedDate;
 use App\Models\User;
 use App\Support\WeekdaySchedule;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class TeamLoadService
@@ -65,10 +67,19 @@ class TeamLoadService
             Carbon::parse($range['range_end']),
         );
 
+        $rolesByUser = DB::table('project_members')
+            ->join('project_roles', 'project_members.project_role_id', '=', 'project_roles.id')
+            ->select('project_members.user_id', 'project_roles.id as role_id', 'project_roles.name as role_name')
+            ->get()
+            ->groupBy('user_id')
+            ->map(fn ($rows) => $rows->map(fn ($r) => ['id' => $r->role_id, 'name' => $r->role_name])->unique('id')->values()->all());
+
+        $allRoles = ProjectRole::query()->orderBy('name')->get(['id', 'name'])->toArray();
+
         $users = User::query()
             ->orderBy('name')
             ->get(['id', 'name'])
-            ->map(function (User $user) use ($dailyByUser, $detailsByUser, $timelineDays, $excludedDates) {
+            ->map(function (User $user) use ($dailyByUser, $detailsByUser, $timelineDays, $excludedDates, $rolesByUser) {
                 $raw = $dailyByUser[$user->id] ?? [];
                 $rawDetails = $detailsByUser[$user->id] ?? [];
                 $daily = [];
@@ -92,6 +103,7 @@ class TeamLoadService
                     'peak_mh' => round($peak, 2),
                     'daily_mh' => $daily,
                     'daily_details' => $details,
+                    'roles' => $rolesByUser->get($user->id, []),
                 ];
             })
             ->values()
@@ -103,6 +115,7 @@ class TeamLoadService
             'timeline_days' => $timelineDays,
             'excluded_dates' => $this->excludedDatesPayload(),
             'users' => $users,
+            'roles' => $allRoles,
         ];
     }
 

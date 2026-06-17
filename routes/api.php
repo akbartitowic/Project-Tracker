@@ -89,6 +89,7 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     // 4. Tasks Routes
     Route::get('/tasks', [TaskController::class, 'index'])->middleware('permission:project_board.read');
     Route::get('/tasks/template', [TaskController::class, 'downloadTemplate'])->middleware('permission:project_board.read');
+    Route::get('/tasks/backlog', [TaskController::class, 'backlog'])->middleware('permission:project_board.read');
     Route::post('/tasks/import', [TaskController::class, 'import'])->middleware('permission:project_board.create');
     Route::post('/tasks', [TaskController::class, 'store'])->middleware('permission:project_board.create');
     Route::put('/tasks/bulk-edit', [TaskController::class, 'bulkEditManhours'])->middleware('permission:project_board.update');
@@ -98,6 +99,7 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::put('/tasks/{id}', [TaskController::class, 'update'])->middleware('permission:project_board.update');
     Route::delete('/tasks/{id}', [TaskController::class, 'destroy'])->middleware('permission:project_board.update');
     Route::put('/tasks/{id}/status', [TaskController::class, 'updateStatus'])->middleware('permission:project_board.update');
+    Route::post('/tasks/{id}/promote', [TaskController::class, 'promote'])->middleware('permission:project_board.update');
 
     // 4. Manhours Routes
     Route::get('/manhours', [ManhourController::class, 'index'])->middleware('permission:project_board.read');
