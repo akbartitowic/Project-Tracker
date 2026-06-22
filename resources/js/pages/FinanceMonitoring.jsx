@@ -94,67 +94,62 @@ function FinanceProjectTable({ projects, onSelectProject }) {
 
     return (
         <SectionTable className="border-0 rounded-none">
-            <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 uppercase tracking-wide">
                 <tr>
-                    <th className="px-4 py-3 font-medium">Project</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Methodology</th>
-                    <th className="px-4 py-3 font-medium text-right">Quotation value</th>
-                    <th className="px-4 py-3 font-medium text-right w-28">Action</th>
+                    <th className="px-5 py-2.5 font-medium text-left">Project</th>
+                    <th className="px-4 py-2.5 font-medium hidden sm:table-cell">Status</th>
+                    <th className="px-4 py-2.5 font-medium hidden md:table-cell">Metodologi</th>
+                    <th className="px-5 py-2.5 font-medium text-right">Nilai Quotation</th>
                 </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                 {projects.map((proj) => (
                     <tr
                         key={proj.id}
-                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 cursor-pointer transition-colors"
+                        className="group hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
                         onClick={() => onSelectProject(proj.id)}
                     >
-                        <td className="px-4 py-3">
+                        <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3 min-w-0">
                                 <ProjectCompanyIcon
                                     logoUrl={proj.company_logo_url}
                                     projectName={proj.name}
                                 />
-                                <span className="font-semibold text-slate-900 dark:text-white truncate">
-                                    {proj.name}
-                                </span>
+                                <div className="min-w-0">
+                                    <span className="font-semibold text-sm text-slate-900 dark:text-white truncate block">
+                                        {proj.name}
+                                    </span>
+                                    {/* Status shown inline on mobile */}
+                                    <span className={`sm:hidden inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded-full border mt-0.5 ${projectStatusBadgeClass[proj.status] || projectStatusBadgeClass.Planning}`}>
+                                        {proj.status || 'Planning'}
+                                    </span>
+                                </div>
                             </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3.5 hidden sm:table-cell">
                             <Badge
                                 variant="outline"
-                                className={`font-normal ${projectStatusBadgeClass[proj.status] || projectStatusBadgeClass.Planning}`}
+                                className={`font-normal text-xs ${projectStatusBadgeClass[proj.status] || projectStatusBadgeClass.Planning}`}
                             >
                                 {proj.status || 'Planning'}
                             </Badge>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3.5 hidden md:table-cell">
                             {proj.methodology ? (
-                                <Badge variant="outline" className="font-normal">
+                                <Badge variant="outline" className="font-normal text-xs text-slate-600 dark:text-slate-300">
                                     {proj.methodology}
                                 </Badge>
                             ) : (
-                                <span className="text-slate-400">—</span>
+                                <span className="text-slate-300 dark:text-slate-600">—</span>
                             )}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white whitespace-nowrap">
-                            {formatCurrency(proj.quotation_value || 0)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1 text-primary"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onSelectProject(proj.id);
-                                }}
-                            >
-                                Open
-                                <ArrowUpRight className="size-3.5" />
-                            </Button>
+                        <td className="px-5 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                                <span className="font-semibold text-sm text-slate-900 dark:text-white whitespace-nowrap">
+                                    {proj.quotation_value ? formatCurrency(proj.quotation_value) : <span className="text-slate-400 font-normal text-xs">Belum diisi</span>}
+                                </span>
+                                <ArrowUpRight className="size-3.5 text-slate-300 group-hover:text-primary transition-colors shrink-0" />
+                            </div>
                         </td>
                     </tr>
                 ))}
@@ -1021,6 +1016,13 @@ export default function FinanceMonitoring() {
         [filteredProjects]
     );
 
+    const totalQuotationValue = useMemo(
+        () => projects.reduce((s, p) => s + Number(p.quotation_value || 0), 0),
+        [projects]
+    );
+    const allActiveCount = useMemo(() => projects.filter((p) => p.status !== 'Done').length, [projects]);
+    const allDoneCount = useMemo(() => projects.filter((p) => p.status === 'Done').length, [projects]);
+
     const allocationPercentage = summary ? (summary.total_allocated / (summary.quotation_value || 1)) * 100 : 0;
     const allocations = summary?.allocations || [];
     const expenseAllocations = allocations.filter((alloc) => !alloc.is_topup);
@@ -1047,19 +1049,20 @@ export default function FinanceMonitoring() {
             <div className="mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8 space-y-6 pb-16">
                 {!isDetailView ? (
                     <div className="space-y-6">
+                        {/* ── Page header ── */}
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                             <div>
                                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
                                     Finance Monitoring
                                 </h1>
-                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xl">
-                                    Track quotation, cost allocations, margin, and manhour quota per project.
+                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                    Pantau quotation, alokasi biaya, margin, dan quota manhour per project.
                                 </p>
                             </div>
-                            <div className="relative w-full sm:w-72 shrink-0">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                            <div className="relative w-full sm:w-64 shrink-0">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" />
                                 <Input
-                                    placeholder="Search projects..."
+                                    placeholder="Cari project…"
                                     className="pl-10"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -1067,32 +1070,62 @@ export default function FinanceMonitoring() {
                             </div>
                         </div>
 
+                        {/* ── Summary stats ── */}
+                        {!loading && projects.length > 0 && (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                                    <CardContent className="pt-4 pb-4 px-4">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Project Aktif</p>
+                                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{allActiveCount}</p>
+                                        <p className="text-xs text-slate-400 mt-0.5">Planning &amp; In Progress</p>
+                                    </CardContent>
+                                </Card>
+                                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                                    <CardContent className="pt-4 pb-4 px-4">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Project Selesai</p>
+                                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{allDoneCount}</p>
+                                        <p className="text-xs text-slate-400 mt-0.5">Marked as Done</p>
+                                    </CardContent>
+                                </Card>
+                                <Card className="border-slate-200 dark:border-slate-800 shadow-sm col-span-2 sm:col-span-1">
+                                    <CardContent className="pt-4 pb-4 px-4">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Nilai Quotation</p>
+                                        <p className="text-xl font-bold text-slate-900 dark:text-white truncate">{formatCurrency(totalQuotationValue)}</p>
+                                        <p className="text-xs text-slate-400 mt-0.5">Dari {projects.length} project</p>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        )}
+
+                        {/* ── Project tables ── */}
                         {loading ? (
                             <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                                 <CardContent className="flex items-center justify-center py-16 text-slate-500 gap-2 text-sm">
                                     <Loader2 className="size-5 animate-spin" />
-                                    Loading projects…
+                                    Memuat data project…
                                 </CardContent>
                             </Card>
                         ) : filteredProjects.length === 0 ? (
                             <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                                 <CardContent className="py-16 text-center text-slate-500 text-sm">
-                                    {searchTerm ? 'No projects match your search.' : 'No projects available.'}
+                                    {searchTerm ? `Tidak ada project yang cocok dengan "${searchTerm}".` : 'Belum ada data project.'}
                                 </CardContent>
                             </Card>
                         ) : (
-                            <>
-                                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-base font-semibold">Active projects</CardTitle>
-                                        <CardDescription>
-                                            Planning or in progress · {activeProjects.length} project(s)
-                                        </CardDescription>
+                            <div className="space-y-4">
+                                <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                                    <CardHeader className="pb-2 pt-4 px-5">
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                                Project Aktif
+                                            </CardTitle>
+                                            <span className="text-xs text-slate-400">{activeProjects.length} project</span>
+                                        </div>
                                     </CardHeader>
                                     <CardContent className="p-0">
                                         {activeProjects.length === 0 ? (
-                                            <div className="py-10 text-center text-slate-500 text-sm border-t border-slate-100 dark:border-slate-800">
-                                                {searchTerm ? 'No active projects match your search.' : 'No active projects.'}
+                                            <div className="py-8 text-center text-slate-400 text-sm border-t border-slate-100 dark:border-slate-800">
+                                                {searchTerm ? 'Tidak ada project aktif yang cocok.' : 'Tidak ada project aktif.'}
                                             </div>
                                         ) : (
                                             <FinanceProjectTable projects={activeProjects} onSelectProject={selectProject} />
@@ -1100,30 +1133,39 @@ export default function FinanceMonitoring() {
                                     </CardContent>
                                 </Card>
 
-                                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-base font-semibold">Completed projects</CardTitle>
-                                        <CardDescription>
-                                            Marked as done on board · {completedProjects.length} project(s)
-                                        </CardDescription>
+                                <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                                    <CardHeader className="pb-2 pt-4 px-5">
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                                Project Selesai
+                                            </CardTitle>
+                                            <span className="text-xs text-slate-400">{completedProjects.length} project</span>
+                                        </div>
                                     </CardHeader>
                                     <CardContent className="p-0">
                                         {completedProjects.length === 0 ? (
-                                            <div className="py-10 text-center text-slate-500 text-sm border-t border-slate-100 dark:border-slate-800">
-                                                {searchTerm ? 'No completed projects match your search.' : 'No completed projects.'}
+                                            <div className="py-8 text-center text-slate-400 text-sm border-t border-slate-100 dark:border-slate-800">
+                                                {searchTerm ? 'Tidak ada project selesai yang cocok.' : 'Belum ada project yang selesai.'}
                                             </div>
                                         ) : (
                                             <FinanceProjectTable projects={completedProjects} onSelectProject={selectProject} />
                                         )}
                                     </CardContent>
                                 </Card>
-
-                                <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                                    Showing {filteredProjects.length} of {projects.length} project(s)
-                                    {searchTerm ? ` matching "${searchTerm}"` : ''}
-                                </p>
-                            </>
+                            </div>
                         )}
+
+                        {/* ── Section divider ── */}
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-slate-200 dark:border-slate-800" />
+                            </div>
+                            <div className="relative flex justify-start">
+                                <span className="bg-white dark:bg-slate-950 pr-3 text-xs font-medium text-slate-400 uppercase tracking-widest">
+                                    Konfigurasi Integrasi
+                                </span>
+                            </div>
+                        </div>
 
                         {/* ── Global Integration Card ── */}
                         <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
