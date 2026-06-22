@@ -329,6 +329,20 @@ export default function FinanceMonitoring() {
     const [showApiKey, setShowApiKey] = useState(false);
     const [showSecret, setShowSecret] = useState(false);
 
+    // Global integration states
+    const [globalIntegration, setGlobalIntegration] = useState(null);
+    const [globalIntegrationLoading, setGlobalIntegrationLoading] = useState(false);
+    const [globalIntegrationError, setGlobalIntegrationError] = useState(null);
+    const [globalWebhookUrlInput, setGlobalWebhookUrlInput] = useState('');
+    const [savingGlobalWebhook, setSavingGlobalWebhook] = useState(false);
+    const [togglingGlobalActive, setTogglingGlobalActive] = useState(false);
+    const [regeneratingGlobal, setRegeneratingGlobal] = useState(false);
+    const [testingGlobalWebhook, setTestingGlobalWebhook] = useState(false);
+    const [globalTestResult, setGlobalTestResult] = useState(null);
+    const [copiedGlobalKey, setCopiedGlobalKey] = useState('');
+    const [showGlobalApiKey, setShowGlobalApiKey] = useState(false);
+    const [showGlobalSecret, setShowGlobalSecret] = useState(false);
+
     const selectedProjectData = useMemo(
         () => projects.find((project) => project.id === selectedProject) || null,
         [projects, selectedProject]
@@ -431,6 +445,91 @@ export default function FinanceMonitoring() {
         });
     };
 
+    const loadGlobalIntegration = useCallback(async () => {
+        setGlobalIntegrationLoading(true);
+        setGlobalIntegrationError(null);
+        try {
+            const res = await fetchAPI('/global-integration');
+            setGlobalIntegration(res.data);
+            setGlobalWebhookUrlInput(res.data.webhook_url || '');
+            setGlobalTestResult(null);
+        } catch (e) {
+            setGlobalIntegrationError('Gagal memuat konfigurasi global integration.');
+        } finally {
+            setGlobalIntegrationLoading(false);
+        }
+    }, []);
+
+    const saveGlobalWebhookUrl = async () => {
+        setSavingGlobalWebhook(true);
+        try {
+            const res = await fetchAPI('/global-integration', {
+                method: 'PUT',
+                body: JSON.stringify({ webhook_url: globalWebhookUrlInput || null }),
+            });
+            setGlobalIntegration(res.data);
+        } catch (e) {
+            alert('Gagal menyimpan: ' + e.message);
+        } finally {
+            setSavingGlobalWebhook(false);
+        }
+    };
+
+    const toggleGlobalActive = async () => {
+        if (!globalIntegration) return;
+        setTogglingGlobalActive(true);
+        try {
+            const res = await fetchAPI('/global-integration', {
+                method: 'PUT',
+                body: JSON.stringify({ is_active: !globalIntegration.is_active }),
+            });
+            setGlobalIntegration(res.data);
+        } catch (e) {
+            alert('Gagal mengubah status: ' + e.message);
+        } finally {
+            setTogglingGlobalActive(false);
+        }
+    };
+
+    const regenerateGlobalApiKey = async () => {
+        if (!window.confirm('Global API key lama akan langsung tidak berlaku. Lanjutkan?')) return;
+        setRegeneratingGlobal(true);
+        try {
+            const res = await fetchAPI('/global-integration/regenerate-key', { method: 'POST' });
+            setGlobalIntegration(res.data);
+            setShowGlobalApiKey(true);
+        } catch (e) {
+            alert('Gagal regenerate key: ' + e.message);
+        } finally {
+            setRegeneratingGlobal(false);
+        }
+    };
+
+    const testGlobalWebhook = async () => {
+        setTestingGlobalWebhook(true);
+        setGlobalTestResult(null);
+        try {
+            const res = await fetchAPI('/global-integration/test', { method: 'POST' });
+            setGlobalTestResult({ success: res.success, message: res.message });
+            setGlobalIntegration((prev) => prev ? {
+                ...prev,
+                webhook_test_status: res.success ? 'success' : 'failed',
+                webhook_test_sent_at: new Date().toISOString(),
+            } : prev);
+        } catch (e) {
+            setGlobalTestResult({ success: false, message: e.message });
+        } finally {
+            setTestingGlobalWebhook(false);
+        }
+    };
+
+    const copyGlobalToClipboard = (text, key) => {
+        navigator.clipboard.writeText(text).then(() => {
+            setCopiedGlobalKey(key);
+            setTimeout(() => setCopiedGlobalKey(''), 2000);
+        });
+    };
+
     const loadInitialData = async () => {
         try {
             const [projData, catData, rolesData] = await Promise.all([
@@ -475,6 +574,7 @@ export default function FinanceMonitoring() {
 
     useEffect(() => {
         loadInitialData();
+        loadGlobalIntegration();
     }, []);
 
     useEffect(() => {
@@ -1024,6 +1124,192 @@ export default function FinanceMonitoring() {
                                 </p>
                             </>
                         )}
+
+                        {/* ── Global Integration Card ── */}
+                        <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center gap-2">
+                                    <Plug className="size-4 text-primary" />
+                                    <CardTitle className="text-base">Integrasi API Global</CardTitle>
+                                </div>
+                                <CardDescription>
+                                    Satu API key dan webhook untuk semua project sekaligus — cocok untuk sistem ERP / akuntansi.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {globalIntegrationLoading ? (
+                                    <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
+                                        <Loader2 className="size-4 animate-spin" /> Memuat konfigurasi global...
+                                    </div>
+                                ) : globalIntegrationError ? (
+                                    <div className="flex items-center gap-2 text-sm text-rose-500 py-4">
+                                        <X className="size-4" /> {globalIntegrationError}
+                                        <Button variant="outline" size="sm" className="ml-2 h-7 text-xs" onClick={loadGlobalIntegration}>
+                                            Coba lagi
+                                        </Button>
+                                    </div>
+                                ) : globalIntegration ? (
+                                    <div className="space-y-6">
+
+                                        {/* Status row */}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-sm text-slate-500">Status:</span>
+                                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${globalIntegration.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                {globalIntegration.is_active ? 'Aktif' : 'Nonaktif'}
+                                            </span>
+                                            {canUpdate && (
+                                                <Button variant="outline" size="sm" className="h-6 text-xs px-2" onClick={toggleGlobalActive} disabled={togglingGlobalActive}>
+                                                    {togglingGlobalActive ? <Loader2 className="size-3 animate-spin" /> : (globalIntegration.is_active ? 'Nonaktifkan' : 'Aktifkan')}
+                                                </Button>
+                                            )}
+                                            {globalIntegration.webhook_last_status && (
+                                                <span className="text-xs text-slate-400 ml-2">
+                                                    Live:
+                                                    <span className={`ml-1 font-medium ${globalIntegration.webhook_last_status === 'success' ? 'text-emerald-600' : 'text-rose-500'}`}>
+                                                        {globalIntegration.webhook_last_status}
+                                                    </span>
+                                                    {globalIntegration.webhook_last_sent_at && ` · ${new Date(globalIntegration.webhook_last_sent_at).toLocaleString('id-ID')}`}
+                                                </span>
+                                            )}
+                                            {globalIntegration.webhook_test_status && (
+                                                <span className="text-xs text-slate-400">
+                                                    Test:
+                                                    <span className={`ml-1 font-medium ${globalIntegration.webhook_test_status === 'success' ? 'text-emerald-600' : 'text-rose-500'}`}>
+                                                        {globalIntegration.webhook_test_status}
+                                                    </span>
+                                                    {globalIntegration.webhook_test_sent_at && ` · ${new Date(globalIntegration.webhook_test_sent_at).toLocaleString('id-ID')}`}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            {/* Left: Inbound */}
+                                            <div className="space-y-4">
+                                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 border-b pb-1">
+                                                    Inbound — App lain → Semua Project
+                                                </h4>
+
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Endpoint URL</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <code className="flex-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 truncate">
+                                                            {globalIntegration.inbound_endpoint}
+                                                        </code>
+                                                        <Button size="icon" variant="outline" className="shrink-0 size-8"
+                                                            onClick={() => copyGlobalToClipboard(globalIntegration.inbound_endpoint, 'endpoint')}>
+                                                            {copiedGlobalKey === 'endpoint' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                                                        </Button>
+                                                    </div>
+                                                    <p className="text-xs text-amber-600 dark:text-amber-400">Sertakan <code className="bg-amber-50 dark:bg-amber-900/30 px-1 rounded">project_id</code> di body saat membuat allocation.</p>
+                                                </div>
+
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Global API Key</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <code className="flex-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 truncate">
+                                                            {showGlobalApiKey ? globalIntegration.inbound_api_key : '•'.repeat(24)}
+                                                        </code>
+                                                        <Button size="icon" variant="outline" className="shrink-0 size-8" onClick={() => setShowGlobalApiKey((v) => !v)}>
+                                                            {showGlobalApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                                                        </Button>
+                                                        <Button size="icon" variant="outline" className="shrink-0 size-8"
+                                                            onClick={() => copyGlobalToClipboard(globalIntegration.inbound_api_key, 'apikey')}>
+                                                            {copiedGlobalKey === 'apikey' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                                                        </Button>
+                                                        {canUpdate && (
+                                                            <Button size="icon" variant="outline" className="shrink-0 size-8"
+                                                                onClick={regenerateGlobalApiKey} disabled={regeneratingGlobal} title="Regenerate">
+                                                                <RefreshCw className={`size-3.5 ${regeneratingGlobal ? 'animate-spin' : ''}`} />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Webhook Secret</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <code className="flex-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 truncate">
+                                                            {showGlobalSecret ? globalIntegration.webhook_secret : '•'.repeat(20)}
+                                                        </code>
+                                                        <Button size="icon" variant="outline" className="shrink-0 size-8" onClick={() => setShowGlobalSecret((v) => !v)}>
+                                                            {showGlobalSecret ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                                                        </Button>
+                                                        <Button size="icon" variant="outline" className="shrink-0 size-8"
+                                                            onClick={() => copyGlobalToClipboard(globalIntegration.webhook_secret, 'secret')}>
+                                                            {copiedGlobalKey === 'secret' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Right: Outbound */}
+                                            <div className="space-y-4">
+                                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 border-b pb-1">
+                                                    Outbound — Semua perubahan → App lain
+                                                </h4>
+
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Webhook URL Tujuan</label>
+                                                    <div className="flex gap-2">
+                                                        <Input
+                                                            className="text-sm h-9"
+                                                            placeholder="https://erp-kamu.com/webhook/hubtask"
+                                                            value={globalWebhookUrlInput}
+                                                            onChange={(e) => setGlobalWebhookUrlInput(e.target.value)}
+                                                            disabled={!canUpdate}
+                                                        />
+                                                        {canUpdate && (
+                                                            <Button size="sm" className="shrink-0 h-9" onClick={saveGlobalWebhookUrl} disabled={savingGlobalWebhook}>
+                                                                {savingGlobalWebhook ? <Loader2 className="size-3.5 animate-spin" /> : 'Simpan'}
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs text-slate-400">Menerima events dari semua project. Payload menyertakan <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">project_id</code> untuk routing.</p>
+                                                </div>
+
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Events</label>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {['allocation.created', 'allocation.updated', 'allocation.realized', 'allocation.paid', 'allocation.deleted'].map((e) => (
+                                                            <span key={e} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-mono">{e}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {canUpdate && globalIntegration.webhook_url && (
+                                                    <div className="space-y-2">
+                                                        <Button variant="outline" size="sm" className="gap-1.5 h-8"
+                                                            onClick={testGlobalWebhook} disabled={testingGlobalWebhook}>
+                                                            {testingGlobalWebhook ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                                                            Test Webhook
+                                                        </Button>
+                                                        {globalTestResult && (
+                                                            <p className={`text-xs flex items-center gap-1 ${globalTestResult.success ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                {globalTestResult.success ? <Check className="size-3.5" /> : <X className="size-3.5" />}
+                                                                {globalTestResult.message}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <details className="text-xs">
+                                            <summary className="cursor-pointer text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 select-none">
+                                                Contoh penggunaan API (Global Key)
+                                            </summary>
+                                            <div className="mt-3 pl-2 border-l-2 border-slate-200 dark:border-slate-700">
+                                                <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Tambah allocation ke project tertentu (POST)</p>
+                                                <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl -X POST ${globalIntegration.inbound_endpoint} \\
+  -H "X-Api-Key: YOUR_GLOBAL_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"project_id":1,"category":"Development","amount":5000000}'`}</pre>
+                                            </div>
+                                        </details>
+                                    </div>
+                                ) : null}
+                            </CardContent>
+                        </Card>
                     </div>
                 ) : (
                 <div className="flex flex-col gap-6">

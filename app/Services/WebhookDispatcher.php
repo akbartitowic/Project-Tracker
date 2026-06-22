@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\GlobalIntegration;
 use App\Models\ProjectAllocation;
 use App\Models\ProjectIntegration;
 use Illuminate\Support\Facades\Http;
@@ -11,15 +12,6 @@ class WebhookDispatcher
 {
     public function dispatch(string $event, ProjectAllocation $allocation): void
     {
-        $integration = ProjectIntegration::where('project_id', $allocation->project_id)
-            ->where('is_active', true)
-            ->whereNotNull('webhook_url')
-            ->first();
-
-        if (!$integration) {
-            return;
-        }
-
         $payload = [
             'event'      => $event,
             'project_id' => $allocation->project_id,
@@ -27,25 +19,40 @@ class WebhookDispatcher
             'data'       => $this->serializeAllocation($allocation),
         ];
 
+        // Fire project-level webhook
+        $projectIntegration = ProjectIntegration::where('project_id', $allocation->project_id)
+            ->where('is_active', true)
+            ->whereNotNull('webhook_url')
+            ->first();
+
+        if ($projectIntegration) {
+            $this->fire($projectIntegration, $event, $payload);
+        }
+
+        // Fire global webhook
+        $global = GlobalIntegration::where('is_active', true)
+            ->whereNotNull('webhook_url')
+            ->first();
+
+        if ($global) {
+            $this->fire($global, $event, $payload);
+        }
+    }
+
+    private function fire($integration, string $event, array $payload): void
+    {
         $body    = json_encode($payload);
-        $headers = [
-            'Content-Type' => 'application/json',
-            'X-HubTask-Event' => $event,
-        ];
+        $headers = ['Content-Type' => 'application/json', 'X-HubTask-Event' => $event];
 
         if ($integration->webhook_secret) {
             $headers['X-Webhook-Signature'] = 'sha256=' . hash_hmac('sha256', $body, $integration->webhook_secret);
         }
 
         try {
-            $response = Http::withHeaders($headers)
-                ->timeout(5)
-                ->post($integration->webhook_url, $payload);
-
-            $status = $response->successful() ? 'success' : 'failed';
+            $response = Http::withHeaders($headers)->timeout(5)->post($integration->webhook_url, $payload);
+            $status   = $response->successful() ? 'success' : 'failed';
         } catch (\Throwable $e) {
             Log::warning('Webhook dispatch failed', [
-                'project_id'  => $allocation->project_id,
                 'webhook_url' => $integration->webhook_url,
                 'error'       => $e->getMessage(),
             ]);

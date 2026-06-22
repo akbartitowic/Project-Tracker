@@ -31,6 +31,7 @@ use App\Http\Controllers\ProjectNoteController;
 use App\Http\Controllers\ReportScheduleController;
 use App\Http\Controllers\ExternalAllocationController;
 use App\Http\Controllers\ProjectIntegrationController;
+use App\Http\Controllers\GlobalIntegrationController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/signup', [AuthController::class, 'signup'])
@@ -227,6 +228,12 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::put('/projects/{id}/integration', [ProjectIntegrationController::class, 'update'])->middleware('permission:finance_monitoring.update');
     Route::post('/projects/{id}/integration/regenerate-key', [ProjectIntegrationController::class, 'regenerateKey'])->middleware('permission:finance_monitoring.update');
     Route::post('/projects/{id}/integration/test', [ProjectIntegrationController::class, 'testWebhook'])->middleware('permission:finance_monitoring.update');
+
+    // 13. Global Integration Settings
+    Route::get('/global-integration', [GlobalIntegrationController::class, 'show'])->middleware('permission:finance_monitoring.read');
+    Route::put('/global-integration', [GlobalIntegrationController::class, 'update'])->middleware('permission:finance_monitoring.update');
+    Route::post('/global-integration/regenerate-key', [GlobalIntegrationController::class, 'regenerateKey'])->middleware('permission:finance_monitoring.update');
+    Route::post('/global-integration/test', [GlobalIntegrationController::class, 'testWebhook'])->middleware('permission:finance_monitoring.update');
 });
 
 // External API — authenticated via X-Api-Key header (no Sanctum user session needed)
