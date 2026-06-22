@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { hasPermission } from '../utils/permissions';
 import {
     Wallet,
     Briefcase,
@@ -20,6 +22,13 @@ import {
     Ban,
     CircleDollarSign,
     X,
+    Plug,
+    Copy,
+    Check,
+    RefreshCw,
+    Send,
+    Eye,
+    EyeOff,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import ManhourBucketBreakdown from '@/components/ManhourBucketBreakdown';
@@ -239,6 +248,8 @@ function UserSearchInput({ value, onChange, options = [], placeholder = 'Cari us
 export default function FinanceMonitoring() {
     const { projectId: projectIdParam } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const canUpdate = hasPermission(user, 'finance_monitoring.update');
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [projectRolesList, setProjectRolesList] = useState([]);
@@ -304,6 +315,18 @@ export default function FinanceMonitoring() {
     const [isSwitchingMh, setIsSwitchingMh] = useState(false);
     const [deactivatingQuotaId, setDeactivatingQuotaId] = useState(null);
 
+    // Integration / API states
+    const [integration, setIntegration] = useState(null);
+    const [integrationLoading, setIntegrationLoading] = useState(false);
+    const [webhookUrlInput, setWebhookUrlInput] = useState('');
+    const [savingWebhook, setSavingWebhook] = useState(false);
+    const [regenerating, setRegenerating] = useState(false);
+    const [testingWebhook, setTestingWebhook] = useState(false);
+    const [testResult, setTestResult] = useState(null);
+    const [copiedKey, setCopiedKey] = useState('');
+    const [showApiKey, setShowApiKey] = useState(false);
+    const [showSecret, setShowSecret] = useState(false);
+
     const selectedProjectData = useMemo(
         () => projects.find((project) => project.id === selectedProject) || null,
         [projects, selectedProject]
@@ -312,6 +335,75 @@ export default function FinanceMonitoring() {
         const methodology = (selectedProjectData?.methodology ?? summary?.methodology ?? '').toLowerCase();
         return methodology.includes('waterfall');
     }, [selectedProjectData, summary]);
+
+    const loadIntegration = useCallback(async (projectId) => {
+        const id = Number(projectId);
+        if (!id) return;
+        setIntegrationLoading(true);
+        try {
+            const res = await fetchAPI(`/projects/${id}/integration`);
+            setIntegration(res.data);
+            setWebhookUrlInput(res.data.webhook_url || '');
+            setTestResult(null);
+        } catch (e) {
+            console.error('Failed to load integration:', e);
+        } finally {
+            setIntegrationLoading(false);
+        }
+    }, []);
+
+    const saveWebhookUrl = async () => {
+        if (!selectedProject) return;
+        setSavingWebhook(true);
+        try {
+            const res = await fetchAPI(`/projects/${selectedProject}/integration`, {
+                method: 'PUT',
+                body: JSON.stringify({ webhook_url: webhookUrlInput || null }),
+            });
+            setIntegration(res.data);
+        } catch (e) {
+            alert('Gagal menyimpan webhook URL: ' + e.message);
+        } finally {
+            setSavingWebhook(false);
+        }
+    };
+
+    const regenerateApiKey = async () => {
+        if (!selectedProject) return;
+        if (!window.confirm('API key lama akan langsung tidak berlaku. Lanjutkan?')) return;
+        setRegenerating(true);
+        try {
+            const res = await fetchAPI(`/projects/${selectedProject}/integration/regenerate-key`, { method: 'POST' });
+            setIntegration(res.data);
+            setShowApiKey(true);
+        } catch (e) {
+            alert('Gagal regenerate key: ' + e.message);
+        } finally {
+            setRegenerating(false);
+        }
+    };
+
+    const testWebhook = async () => {
+        if (!selectedProject) return;
+        setTestingWebhook(true);
+        setTestResult(null);
+        try {
+            const res = await fetchAPI(`/projects/${selectedProject}/integration/test`, { method: 'POST' });
+            setTestResult({ success: res.success, message: res.message });
+            setIntegration((prev) => prev ? { ...prev, webhook_last_status: res.success ? 'success' : 'failed', webhook_last_sent_at: new Date().toISOString() } : prev);
+        } catch (e) {
+            setTestResult({ success: false, message: e.message });
+        } finally {
+            setTestingWebhook(false);
+        }
+    };
+
+    const copyToClipboard = (text, key) => {
+        navigator.clipboard.writeText(text).then(() => {
+            setCopiedKey(key);
+            setTimeout(() => setCopiedKey(''), 2000);
+        });
+    };
 
     const loadInitialData = async () => {
         try {
@@ -378,7 +470,8 @@ export default function FinanceMonitoring() {
         }
 
         loadProjectFinance(project.id);
-    }, [projectIdParam, projects, navigate, loadProjectFinance]);
+        loadIntegration(project.id);
+    }, [projectIdParam, projects, navigate, loadProjectFinance, loadIntegration]);
 
     const handleAddAllocation = async (e) => {
         e.preventDefault();
@@ -1899,6 +1992,199 @@ export default function FinanceMonitoring() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* ── Integrasi API Section ── */}
+            {selectedProject && (
+                <div className="mt-6 px-4 md:px-6 pb-10">
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center gap-2">
+                                <Plug className="size-4 text-primary" />
+                                <CardTitle className="text-base">Integrasi API</CardTitle>
+                            </div>
+                            <CardDescription>
+                                Hubungkan aplikasi lain ke finance monitoring project ini melalui API.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {integrationLoading ? (
+                                <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
+                                    <Loader2 className="size-4 animate-spin" /> Memuat konfigurasi...
+                                </div>
+                            ) : integration ? (
+                                <div className="space-y-6">
+
+                                    {/* Status badge */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-slate-500">Status integrasi:</span>
+                                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${integration.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                            {integration.is_active ? 'Aktif' : 'Nonaktif'}
+                                        </span>
+                                        {integration.webhook_last_status && (
+                                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${integration.webhook_last_status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                Webhook terakhir: {integration.webhook_last_status}
+                                            </span>
+                                        )}
+                                        {integration.webhook_last_sent_at && (
+                                            <span className="text-xs text-slate-400">
+                                                {new Date(integration.webhook_last_sent_at).toLocaleString('id-ID')}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        {/* Left: Inbound API */}
+                                        <div className="space-y-4">
+                                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 border-b pb-1">
+                                                Inbound — App lain → HubTask
+                                            </h4>
+
+                                            {/* Endpoint URL */}
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Endpoint URL</label>
+                                                <div className="flex items-center gap-2">
+                                                    <code className="flex-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 truncate">
+                                                        {integration.inbound_endpoint}
+                                                    </code>
+                                                    <Button size="icon" variant="outline" className="shrink-0 size-8"
+                                                        onClick={() => copyToClipboard(integration.inbound_endpoint, 'endpoint')}>
+                                                        {copiedKey === 'endpoint' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            {/* API Key */}
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">API Key (X-Api-Key header)</label>
+                                                <div className="flex items-center gap-2">
+                                                    <code className="flex-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 truncate">
+                                                        {showApiKey ? integration.inbound_api_key : '•'.repeat(24)}
+                                                    </code>
+                                                    <Button size="icon" variant="outline" className="shrink-0 size-8"
+                                                        onClick={() => setShowApiKey((v) => !v)}>
+                                                        {showApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                                                    </Button>
+                                                    <Button size="icon" variant="outline" className="shrink-0 size-8"
+                                                        onClick={() => copyToClipboard(integration.inbound_api_key, 'apikey')}>
+                                                        {copiedKey === 'apikey' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                                                    </Button>
+                                                    {canUpdate && (
+                                                        <Button size="icon" variant="outline" className="shrink-0 size-8"
+                                                            onClick={regenerateApiKey} disabled={regenerating}
+                                                            title="Regenerate API Key">
+                                                            <RefreshCw className={`size-3.5 ${regenerating ? 'animate-spin' : ''}`} />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-slate-400">Kirim header: <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">X-Api-Key: {'{api_key}'}</code></p>
+                                            </div>
+
+                                            {/* Webhook Secret */}
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Webhook Secret (HMAC-SHA256)</label>
+                                                <div className="flex items-center gap-2">
+                                                    <code className="flex-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 truncate">
+                                                        {showSecret ? integration.webhook_secret : '•'.repeat(20)}
+                                                    </code>
+                                                    <Button size="icon" variant="outline" className="shrink-0 size-8"
+                                                        onClick={() => setShowSecret((v) => !v)}>
+                                                        {showSecret ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                                                    </Button>
+                                                    <Button size="icon" variant="outline" className="shrink-0 size-8"
+                                                        onClick={() => copyToClipboard(integration.webhook_secret, 'secret')}>
+                                                        {copiedKey === 'secret' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-xs text-slate-400">Verifikasi header <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">X-Webhook-Signature</code> dari HubTask.</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Right: Outbound Webhook */}
+                                        <div className="space-y-4">
+                                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 border-b pb-1">
+                                                Outbound — HubTask → App lain
+                                            </h4>
+
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Webhook URL Tujuan</label>
+                                                <div className="flex gap-2">
+                                                    <Input
+                                                        className="text-sm h-9"
+                                                        placeholder="https://app-kamu.com/webhook/hubtask"
+                                                        value={webhookUrlInput}
+                                                        onChange={(e) => setWebhookUrlInput(e.target.value)}
+                                                        disabled={!canUpdate}
+                                                    />
+                                                    {canUpdate && (
+                                                        <Button size="sm" className="shrink-0 h-9" onClick={saveWebhookUrl} disabled={savingWebhook}>
+                                                            {savingWebhook ? <Loader2 className="size-3.5 animate-spin" /> : 'Simpan'}
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-slate-400">
+                                                    HubTask akan POST ke URL ini setiap ada perubahan allocation.
+                                                </p>
+                                            </div>
+
+                                            {/* Events info */}
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Events yang dikirim</label>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {['allocation.created', 'allocation.updated', 'allocation.realized', 'allocation.paid', 'allocation.deleted'].map((e) => (
+                                                        <span key={e} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-mono">{e}</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Test webhook */}
+                                            {canUpdate && integration.webhook_url && (
+                                                <div className="space-y-2">
+                                                    <Button variant="outline" size="sm" className="gap-1.5 h-8"
+                                                        onClick={testWebhook} disabled={testingWebhook}>
+                                                        {testingWebhook
+                                                            ? <Loader2 className="size-3.5 animate-spin" />
+                                                            : <Send className="size-3.5" />}
+                                                        Test Webhook
+                                                    </Button>
+                                                    {testResult && (
+                                                        <p className={`text-xs flex items-center gap-1 ${testResult.success ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {testResult.success ? <Check className="size-3.5" /> : <X className="size-3.5" />}
+                                                            {testResult.message}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* API Usage Example */}
+                                    <details className="text-xs">
+                                        <summary className="cursor-pointer text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 select-none">
+                                            Contoh penggunaan API
+                                        </summary>
+                                        <div className="mt-3 space-y-3 pl-2 border-l-2 border-slate-200 dark:border-slate-700">
+                                            <div>
+                                                <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Tambah allocation (POST)</p>
+                                                <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl -X POST ${integration.inbound_endpoint} \\
+  -H "X-Api-Key: YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"category":"Development","amount":5000000,"description":"Sprint 1"}'`}</pre>
+                                            </div>
+                                            <div>
+                                                <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Edit allocation (PUT)</p>
+                                                <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl -X PUT ${integration.inbound_endpoint}/{id} \\
+  -H "X-Api-Key: YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"amount":6000000,"realized_amount":5500000,"paid_amount":5500000}'`}</pre>
+                                            </div>
+                                        </div>
+                                    </details>
+                                </div>
+                            ) : null}
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }

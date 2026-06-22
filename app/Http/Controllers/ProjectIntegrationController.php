@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ProjectIntegration;
 use App\Support\ProjectAccess;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 
 class ProjectIntegrationController extends Controller
 {
@@ -82,6 +83,60 @@ class ProjectIntegrationController extends Controller
         $integration->save();
 
         return response()->json(['data' => $this->serialize($integration, $id)]);
+    }
+
+    /**
+     * POST /api/projects/{id}/integration/test
+     * Send a test ping to the configured webhook URL.
+     */
+    public function testWebhook(Request $request, int $id)
+    {
+        ProjectAccess::assertCanAccessProject($request->user(), $id);
+
+        $integration = ProjectIntegration::where('project_id', $id)->first();
+
+        if (!$integration || !$integration->webhook_url) {
+            return response()->json(['message' => 'Webhook URL belum dikonfigurasi.'], 422);
+        }
+
+        $payload = [
+            'event'      => 'test',
+            'project_id' => $id,
+            'timestamp'  => now()->toIso8601String(),
+            'message'    => 'Test webhook from HubTask',
+        ];
+
+        $body    = json_encode($payload);
+        $headers = ['Content-Type' => 'application/json', 'X-HubTask-Event' => 'test'];
+
+        if ($integration->webhook_secret) {
+            $headers['X-Webhook-Signature'] = 'sha256=' . hash_hmac('sha256', $body, $integration->webhook_secret);
+        }
+
+        try {
+            $response = Http::withHeaders($headers)->timeout(5)->post($integration->webhook_url, $payload);
+            $success  = $response->successful();
+            $status   = $success ? 'success' : 'failed';
+
+            $integration->webhook_last_sent_at = now();
+            $integration->webhook_last_status  = $status;
+            $integration->saveQuietly();
+
+            return response()->json([
+                'success'     => $success,
+                'status_code' => $response->status(),
+                'message'     => $success ? 'Webhook berhasil dikirim.' : 'Webhook dikirim tapi server tujuan merespons error.',
+            ]);
+        } catch (\Throwable $e) {
+            $integration->webhook_last_sent_at = now();
+            $integration->webhook_last_status  = 'failed';
+            $integration->saveQuietly();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengirim webhook: ' . $e->getMessage(),
+            ], 502);
+        }
     }
 
     private function serialize(ProjectIntegration $i, int $projectId): array

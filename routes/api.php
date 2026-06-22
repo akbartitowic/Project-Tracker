@@ -226,6 +226,7 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/projects/{id}/integration', [ProjectIntegrationController::class, 'show'])->middleware('permission:finance_monitoring.read');
     Route::put('/projects/{id}/integration', [ProjectIntegrationController::class, 'update'])->middleware('permission:finance_monitoring.update');
     Route::post('/projects/{id}/integration/regenerate-key', [ProjectIntegrationController::class, 'regenerateKey'])->middleware('permission:finance_monitoring.update');
+    Route::post('/projects/{id}/integration/test', [ProjectIntegrationController::class, 'testWebhook'])->middleware('permission:finance_monitoring.update');
 });
 
 // External API — authenticated via X-Api-Key header (no Sanctum user session needed)
