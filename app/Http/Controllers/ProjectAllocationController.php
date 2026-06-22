@@ -9,6 +9,7 @@ use App\Models\Manhour;
 use App\Models\ProjectRoleQuota;
 use App\Models\Task;
 use App\Support\ProjectAccess;
+use App\Services\WebhookDispatcher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -107,6 +108,9 @@ class ProjectAllocationController extends Controller
         }
 
         $allocation = ProjectAllocation::create($validated);
+
+        app(WebhookDispatcher::class)->dispatch('allocation.created', $allocation);
+
         return response()->json(['id' => $allocation->id]);
     }
 
@@ -134,6 +138,8 @@ class ProjectAllocationController extends Controller
 
         $allocation->update($validated);
 
+        app(WebhookDispatcher::class)->dispatch('allocation.updated', $allocation->fresh());
+
         return response()->json([
             'message' => 'Allocation updated',
             'data' => $allocation->fresh(),
@@ -149,7 +155,15 @@ class ProjectAllocationController extends Controller
 
         ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $allocation->project_id);
 
-        $deleted = $allocation->delete();
+        $projectId    = $allocation->project_id;
+        $allocationId = $allocation->id;
+        $deleted      = $allocation->delete();
+
+        if ($deleted) {
+            $stub = new ProjectAllocation(['project_id' => $projectId]);
+            $stub->id = $allocationId;
+            app(WebhookDispatcher::class)->dispatch('allocation.deleted', $stub);
+        }
 
         return response()->json(['deleted' => $deleted ? 1 : 0]);
     }
@@ -174,6 +188,8 @@ class ProjectAllocationController extends Controller
         $allocation->realized_amount = $validated['realized_amount'];
         $allocation->realized_at = now();
         $allocation->save();
+
+        app(WebhookDispatcher::class)->dispatch('allocation.realized', $allocation);
 
         return response()->json([
             'message' => 'Realization saved',
@@ -224,6 +240,8 @@ class ProjectAllocationController extends Controller
         $allocation->paid_at = ($targetAmount > 0 && $newPaid >= $targetAmount) ? now() : null;
         $allocation->save();
 
+        app(WebhookDispatcher::class)->dispatch('allocation.paid', $allocation->fresh());
+
         return response()->json([
             'message' => !empty($validated['reset']) ? 'Paid amount reset' : 'Payment recorded',
             'data' => $allocation->fresh(),
@@ -270,7 +288,7 @@ class ProjectAllocationController extends Controller
             $roleQuota->save();
 
             // 3. Create allocation entry with is_topup flag
-            ProjectAllocation::create([
+            $topupAllocation = ProjectAllocation::create([
                 'project_id' => $id,
                 'category_id' => $validated['category_id'],
                 'project_role_id' => $validated['project_role_id'],
@@ -281,6 +299,9 @@ class ProjectAllocationController extends Controller
             ]);
 
             DB::commit();
+
+            app(WebhookDispatcher::class)->dispatch('allocation.created', $topupAllocation);
+
             return response()->json(['message' => 'Top up successful']);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -311,7 +332,7 @@ class ProjectAllocationController extends Controller
             $project->quotation_value += $validated['additional_quotation'];
             $project->save();
 
-            ProjectAllocation::create([
+            $crAllocation = ProjectAllocation::create([
                 'project_id' => $id,
                 'category_id' => $this->resolveChangeRequestCategoryId(),
                 'amount' => $validated['additional_quotation'],
@@ -324,6 +345,9 @@ class ProjectAllocationController extends Controller
             ]);
 
             DB::commit();
+
+            app(WebhookDispatcher::class)->dispatch('allocation.created', $crAllocation);
+
             return response()->json(['message' => 'Change request recorded']);
         } catch (\Exception $e) {
             DB::rollBack();
