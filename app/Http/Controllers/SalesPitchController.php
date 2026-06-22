@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\Presale;
+use App\Models\Project;
 use App\Models\ProjectCategory;
 use App\Models\SalesCategoryProject;
 use App\Models\SalesPitch;
@@ -298,6 +299,23 @@ class SalesPitchController extends Controller
 
         $pitch->save();
 
+        $titleChanged = array_key_exists('title', $validated);
+        $dealChanged = array_key_exists('final_deal_value', $validated);
+        if ($titleChanged || $dealChanged) {
+            $pitch->loadMissing('presale');
+            $projectId = $pitch->presale?->converted_project_id;
+            if ($projectId) {
+                $projectUpdates = [];
+                if ($titleChanged) {
+                    $projectUpdates['name'] = $pitch->title;
+                }
+                if ($dealChanged) {
+                    $projectUpdates['quotation_value'] = $pitch->final_deal_value;
+                }
+                Project::where('id', $projectId)->update($projectUpdates);
+            }
+        }
+
         return response()->json(['data' => $this->serializePitch($pitch->fresh())]);
     }
 
@@ -323,6 +341,7 @@ class SalesPitchController extends Controller
         }
 
         $validated = $request->validate([
+            'title' => 'nullable|string|max:255',
             'company_id' => 'required|integer|exists:companies,id',
             'project_category_id' => 'required|integer|exists:project_categories,id',
             'sales_category_project_ids' => 'nullable|array',
@@ -332,7 +351,9 @@ class SalesPitchController extends Controller
         ]);
 
         $companyName = Company::query()->find($validated['company_id'])?->name;
-        $title = trim((string) ($presale->project_name ?: $presale->name));
+        $presaleTitle = trim((string) ($presale->project_name ?: $presale->name));
+        $customTitle = isset($validated['title']) ? trim((string) $validated['title']) : '';
+        $title = $customTitle !== '' ? $customTitle : ($presaleTitle !== '' ? $presaleTitle : 'Project Win');
         $now = now();
         $closedAt = $presale->converted_at
             ? Carbon::parse($presale->converted_at)
@@ -342,8 +363,8 @@ class SalesPitchController extends Controller
             'user_id' => $request->user()->id,
             'company_id' => $validated['company_id'],
             'project_category_id' => $validated['project_category_id'],
-            'title' => $title !== '' ? $title : 'Project Win',
-            'prospect_name' => $title !== '' ? $title : 'Project Win',
+            'title' => $title,
+            'prospect_name' => $title,
             'company_name' => $companyName,
             'email' => null,
             'phone' => null,
@@ -366,6 +387,14 @@ class SalesPitchController extends Controller
 
         $presale->sales_pitch_id = $pitch->id;
         $presale->save();
+
+        if ($presale->converted_project_id) {
+            $projectUpdates = ['quotation_value' => $validated['final_deal_value']];
+            if ($customTitle !== '') {
+                $projectUpdates['name'] = $title;
+            }
+            Project::where('id', $presale->converted_project_id)->update($projectUpdates);
+        }
 
         return response()->json(['data' => $this->serializePitch($pitch->fresh())]);
     }

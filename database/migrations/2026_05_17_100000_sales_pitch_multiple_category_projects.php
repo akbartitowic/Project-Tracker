@@ -12,7 +12,8 @@ return new class extends Migration
         Schema::create('sales_pitch_sales_category_project', function (Blueprint $table) {
             $table->id();
             $table->foreignId('sales_pitch_id')->constrained('sales_pitches')->cascadeOnDelete();
-            $table->foreignId('sales_category_project_id')->constrained('sales_category_projects')->cascadeOnDelete();
+            $table->unsignedBigInteger('sales_category_project_id');
+            $table->foreign('sales_category_project_id', 'spscp_scp_id_foreign')->references('id')->on('sales_category_projects')->cascadeOnDelete();
             $table->unique(['sales_pitch_id', 'sales_category_project_id'], 'pitch_category_unique');
         });
 

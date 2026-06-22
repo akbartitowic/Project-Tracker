@@ -696,9 +696,11 @@ export default function Sales() {
     try {
       if (isPresale) {
         const finalNum = Number(pitchEditForm.final_deal_value);
+        const customTitle = (pitchEditForm.title || '').trim();
         await fetchAPI(`/sales-pitches/link-won-presale/${row.presale_id}`, {
           method: 'POST',
           body: JSON.stringify({
+            ...(customTitle ? { title: customTitle } : {}),
             company_id: toFk(pitchEditForm.company_id),
             project_category_id: toFk(pitchEditForm.project_category_id),
             sales_category_project_ids: pitchEditForm.sales_category_project_ids.map((id) => Number(id)),
