@@ -308,9 +308,9 @@ export default function IntegrationProjects() {
     const totals = meta?.totals;
 
     return (
-        <div className="mx-auto max-w-[1500px] p-4 pb-16 sm:p-6 sm:pb-20 lg:p-8">
+        <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
             <div className="flex flex-col gap-2 mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Plug className="size-8 text-primary" />
                     Integrasi — Sales to Project
                 </h1>

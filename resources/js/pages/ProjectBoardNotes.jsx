@@ -439,7 +439,7 @@ export default function ProjectBoardNotes() {
 
             {/* ── Top bar ── */}
             <div className="shrink-0 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3">
-                <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+                <div className="w-full flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 min-w-0">
                         <button
                             type="button"
@@ -475,7 +475,7 @@ export default function ProjectBoardNotes() {
 
             {/* ── Category tab bar ── */}
             <div className="shrink-0 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6">
-                <div className="max-w-6xl mx-auto flex gap-1">
+                <div className="w-full flex gap-1 overflow-x-auto">
                     {PROJECT_NOTE_CATEGORY_LIST.map((cat) => {
                         const Icon   = CATEGORY_ICON[cat.key] || BookOpen;
                         const active = activeCategory === cat.key;

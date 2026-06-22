@@ -267,7 +267,7 @@ export default function ProjectBoardDashboard() {
 
     return (
         <div className="flex-1 w-full overflow-y-auto bg-slate-50/50 dark:bg-background-dark">
-            <div className="max-w-6xl mx-auto p-5 sm:p-8 space-y-8">
+            <div className="w-full px-4 py-5 sm:px-6 sm:py-8 lg:px-8 space-y-8">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div className="flex gap-4 min-w-0">
                         <ProjectCompanyIcon
