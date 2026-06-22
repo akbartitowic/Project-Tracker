@@ -1317,21 +1317,21 @@ export default function FinanceMonitoring() {
                                                 <div>
                                                     <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Tambah allocation ke project tertentu (POST)</p>
                                                     <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl -X POST ${globalIntegration.inbound_endpoint} \\
-  -H "X-Api-Key: YOUR_GLOBAL_KEY" \\
+  -H "X-Api-Key: ${globalIntegration.inbound_api_key}" \\
   -H "Content-Type: application/json" \\
   -d '{"project_id":1,"category":"Development","amount":5000000,"description":"Sprint 1"}'`}</pre>
                                                 </div>
                                                 <div>
                                                     <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Edit allocation (PUT)</p>
                                                     <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl -X PUT ${globalIntegration.inbound_endpoint}/{id} \\
-  -H "X-Api-Key: YOUR_GLOBAL_KEY" \\
+  -H "X-Api-Key: ${globalIntegration.inbound_api_key}" \\
   -H "Content-Type: application/json" \\
   -d '{"realized_amount":4500000}'`}</pre>
                                                 </div>
                                                 <div>
                                                     <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Lihat semua allocation (GET, opsional filter project)</p>
                                                     <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl "${globalIntegration.inbound_endpoint}?project_id=1" \\
-  -H "X-Api-Key: YOUR_GLOBAL_KEY"`}</pre>
+  -H "X-Api-Key: ${globalIntegration.inbound_api_key}"`}</pre>
                                                 </div>
                                             </div>
                                         </details>
@@ -2527,14 +2527,14 @@ export default function FinanceMonitoring() {
                                             <div>
                                                 <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Tambah allocation (POST)</p>
                                                 <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl -X POST ${integration.inbound_endpoint} \\
-  -H "X-Api-Key: YOUR_API_KEY" \\
+  -H "X-Api-Key: ${integration.inbound_api_key}" \\
   -H "Content-Type: application/json" \\
   -d '{"category":"Development","amount":5000000,"description":"Sprint 1"}'`}</pre>
                                             </div>
                                             <div>
                                                 <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Edit allocation (PUT)</p>
                                                 <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl -X PUT ${integration.inbound_endpoint}/{id} \\
-  -H "X-Api-Key: YOUR_API_KEY" \\
+  -H "X-Api-Key: ${integration.inbound_api_key}" \\
   -H "Content-Type: application/json" \\
   -d '{"amount":6000000,"realized_amount":5500000,"paid_amount":5500000}'`}</pre>
                                             </div>
