@@ -29,6 +29,8 @@ use App\Http\Controllers\SalesCategoryProjectController;
 use App\Http\Controllers\TeamLoadController;
 use App\Http\Controllers\ProjectNoteController;
 use App\Http\Controllers\ReportScheduleController;
+use App\Http\Controllers\ExternalAllocationController;
+use App\Http\Controllers\ProjectIntegrationController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/signup', [AuthController::class, 'signup'])
@@ -219,4 +221,17 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/financial-reports/project-realization', [FinancialReportController::class, 'projectRealizationSummary'])->middleware('permission:realization_report.read');
     Route::post('/financial-reports/records', [FinancialReportController::class, 'storeRecord'])->middleware('permission:finance_report.create');
     Route::delete('/financial-reports/records/{id}', [FinancialReportController::class, 'destroyRecord'])->middleware('permission:finance_report.delete');
+
+    // 12. Project Integration Settings
+    Route::get('/projects/{id}/integration', [ProjectIntegrationController::class, 'show'])->middleware('permission:finance_monitoring.read');
+    Route::put('/projects/{id}/integration', [ProjectIntegrationController::class, 'update'])->middleware('permission:finance_monitoring.update');
+    Route::post('/projects/{id}/integration/regenerate-key', [ProjectIntegrationController::class, 'regenerateKey'])->middleware('permission:finance_monitoring.update');
+});
+
+// External API — authenticated via X-Api-Key header (no Sanctum user session needed)
+Route::middleware(['external.apikey', 'throttle:60,1'])->prefix('external')->group(function () {
+    Route::get('/allocations', [ExternalAllocationController::class, 'index']);
+    Route::post('/allocations', [ExternalAllocationController::class, 'store']);
+    Route::put('/allocations/{id}', [ExternalAllocationController::class, 'update']);
+    Route::delete('/allocations/{id}', [ExternalAllocationController::class, 'destroy']);
 });

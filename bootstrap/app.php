@@ -13,9 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'permission' => \App\Http\Middleware\CheckPermission::class,
+            'permission'  => \App\Http\Middleware\CheckPermission::class,
             'token.lifetime' => \App\Http\Middleware\ValidateSanctumTokenLifetime::class,
             'signup.enabled' => \App\Http\Middleware\RestrictPublicSignup::class,
+            'external.apikey' => \App\Http\Middleware\ExternalApiKeyMiddleware::class,
         ]);
 
 
