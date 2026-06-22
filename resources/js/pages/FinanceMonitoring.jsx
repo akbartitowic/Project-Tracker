@@ -96,10 +96,10 @@ function FinanceProjectTable({ projects, onSelectProject }) {
         <SectionTable className="border-0 rounded-none">
             <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 uppercase tracking-wide">
                 <tr>
-                    <th className="px-5 py-2.5 font-medium text-left">Project</th>
-                    <th className="px-4 py-2.5 font-medium hidden sm:table-cell">Status</th>
-                    <th className="px-4 py-2.5 font-medium hidden md:table-cell">Metodologi</th>
-                    <th className="px-5 py-2.5 font-medium text-right">Nilai Quotation</th>
+                    <th className="px-4 py-2.5 font-medium text-left">Project</th>
+                    <th className="px-3 py-2.5 font-medium hidden sm:table-cell">Status</th>
+                    <th className="px-3 py-2.5 font-medium hidden md:table-cell">Metodologi</th>
+                    <th className="px-4 py-2.5 font-medium text-right">Nilai Quotation</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -109,24 +109,23 @@ function FinanceProjectTable({ projects, onSelectProject }) {
                         className="group hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
                         onClick={() => onSelectProject(proj.id)}
                     >
-                        <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3 min-w-0">
+                        <td className="px-4 py-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
                                 <ProjectCompanyIcon
                                     logoUrl={proj.company_logo_url}
                                     projectName={proj.name}
                                 />
                                 <div className="min-w-0">
-                                    <span className="font-semibold text-sm text-slate-900 dark:text-white truncate block">
+                                    <span className="font-semibold text-sm text-slate-900 dark:text-white truncate block leading-snug">
                                         {proj.name}
                                     </span>
-                                    {/* Status shown inline on mobile */}
                                     <span className={`sm:hidden inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded-full border mt-0.5 ${projectStatusBadgeClass[proj.status] || projectStatusBadgeClass.Planning}`}>
                                         {proj.status || 'Planning'}
                                     </span>
                                 </div>
                             </div>
                         </td>
-                        <td className="px-4 py-3.5 hidden sm:table-cell">
+                        <td className="px-3 py-3 hidden sm:table-cell">
                             <Badge
                                 variant="outline"
                                 className={`font-normal text-xs ${projectStatusBadgeClass[proj.status] || projectStatusBadgeClass.Planning}`}
@@ -134,7 +133,7 @@ function FinanceProjectTable({ projects, onSelectProject }) {
                                 {proj.status || 'Planning'}
                             </Badge>
                         </td>
-                        <td className="px-4 py-3.5 hidden md:table-cell">
+                        <td className="px-3 py-3 hidden md:table-cell">
                             {proj.methodology ? (
                                 <Badge variant="outline" className="font-normal text-xs text-slate-600 dark:text-slate-300">
                                     {proj.methodology}
@@ -143,8 +142,8 @@ function FinanceProjectTable({ projects, onSelectProject }) {
                                 <span className="text-slate-300 dark:text-slate-600">—</span>
                             )}
                         </td>
-                        <td className="px-5 py-3.5 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                        <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
                                 <span className="font-semibold text-sm text-slate-900 dark:text-white whitespace-nowrap">
                                     {proj.quotation_value ? formatCurrency(proj.quotation_value) : <span className="text-slate-400 font-normal text-xs">Belum diisi</span>}
                                 </span>
@@ -1046,11 +1045,11 @@ export default function FinanceMonitoring() {
 
     return (
         <div className="flex-1 flex flex-col overflow-y-auto w-full">
-            <div className="mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8 space-y-6 pb-16">
+            <div className="w-full px-4 py-5 sm:px-6 lg:px-8 space-y-5 pb-16">
                 {!isDetailView ? (
-                    <div className="space-y-6">
+                    <div className="space-y-5">
                         {/* ── Page header ── */}
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                             <div>
                                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
                                     Finance Monitoring
@@ -1074,24 +1073,24 @@ export default function FinanceMonitoring() {
                         {!loading && projects.length > 0 && (
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-                                    <CardContent className="pt-4 pb-4 px-4">
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Project Aktif</p>
-                                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{allActiveCount}</p>
-                                        <p className="text-xs text-slate-400 mt-0.5">Planning &amp; In Progress</p>
+                                    <CardContent className="p-4">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Project Aktif</p>
+                                        <p className="text-2xl font-bold text-slate-900 dark:text-white mt-0.5">{allActiveCount}</p>
+                                        <p className="text-xs text-slate-400 mt-1">Planning &amp; In Progress</p>
                                     </CardContent>
                                 </Card>
                                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-                                    <CardContent className="pt-4 pb-4 px-4">
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Project Selesai</p>
-                                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{allDoneCount}</p>
-                                        <p className="text-xs text-slate-400 mt-0.5">Marked as Done</p>
+                                    <CardContent className="p-4">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Project Selesai</p>
+                                        <p className="text-2xl font-bold text-slate-900 dark:text-white mt-0.5">{allDoneCount}</p>
+                                        <p className="text-xs text-slate-400 mt-1">Marked as Done</p>
                                     </CardContent>
                                 </Card>
                                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm col-span-2 sm:col-span-1">
-                                    <CardContent className="pt-4 pb-4 px-4">
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Nilai Quotation</p>
-                                        <p className="text-xl font-bold text-slate-900 dark:text-white truncate">{formatCurrency(totalQuotationValue)}</p>
-                                        <p className="text-xs text-slate-400 mt-0.5">Dari {projects.length} project</p>
+                                    <CardContent className="p-4">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Total Nilai Quotation</p>
+                                        <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-0.5 truncate">{formatCurrency(totalQuotationValue)}</p>
+                                        <p className="text-xs text-slate-400 mt-1">Dari {projects.length} project</p>
                                     </CardContent>
                                 </Card>
                             </div>
@@ -1112,59 +1111,43 @@ export default function FinanceMonitoring() {
                                 </CardContent>
                             </Card>
                         ) : (
-                            <div className="space-y-4">
+                            <div className="space-y-3">
                                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                                    <CardHeader className="pb-2 pt-4 px-5">
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                                                Project Aktif
-                                            </CardTitle>
-                                            <span className="text-xs text-slate-400">{activeProjects.length} project</span>
+                                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Project Aktif</p>
+                                        <span className="text-xs text-slate-400 tabular-nums">{activeProjects.length} project</span>
+                                    </div>
+                                    {activeProjects.length === 0 ? (
+                                        <div className="py-8 text-center text-slate-400 text-sm">
+                                            {searchTerm ? 'Tidak ada project aktif yang cocok.' : 'Tidak ada project aktif.'}
                                         </div>
-                                    </CardHeader>
-                                    <CardContent className="p-0">
-                                        {activeProjects.length === 0 ? (
-                                            <div className="py-8 text-center text-slate-400 text-sm border-t border-slate-100 dark:border-slate-800">
-                                                {searchTerm ? 'Tidak ada project aktif yang cocok.' : 'Tidak ada project aktif.'}
-                                            </div>
-                                        ) : (
-                                            <FinanceProjectTable projects={activeProjects} onSelectProject={selectProject} />
-                                        )}
-                                    </CardContent>
+                                    ) : (
+                                        <FinanceProjectTable projects={activeProjects} onSelectProject={selectProject} />
+                                    )}
                                 </Card>
 
                                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                                    <CardHeader className="pb-2 pt-4 px-5">
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                                                Project Selesai
-                                            </CardTitle>
-                                            <span className="text-xs text-slate-400">{completedProjects.length} project</span>
+                                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Project Selesai</p>
+                                        <span className="text-xs text-slate-400 tabular-nums">{completedProjects.length} project</span>
+                                    </div>
+                                    {completedProjects.length === 0 ? (
+                                        <div className="py-8 text-center text-slate-400 text-sm">
+                                            {searchTerm ? 'Tidak ada project selesai yang cocok.' : 'Belum ada project yang selesai.'}
                                         </div>
-                                    </CardHeader>
-                                    <CardContent className="p-0">
-                                        {completedProjects.length === 0 ? (
-                                            <div className="py-8 text-center text-slate-400 text-sm border-t border-slate-100 dark:border-slate-800">
-                                                {searchTerm ? 'Tidak ada project selesai yang cocok.' : 'Belum ada project yang selesai.'}
-                                            </div>
-                                        ) : (
-                                            <FinanceProjectTable projects={completedProjects} onSelectProject={selectProject} />
-                                        )}
-                                    </CardContent>
+                                    ) : (
+                                        <FinanceProjectTable projects={completedProjects} onSelectProject={selectProject} />
+                                    )}
                                 </Card>
                             </div>
                         )}
 
                         {/* ── Section divider ── */}
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-slate-200 dark:border-slate-800" />
-                            </div>
-                            <div className="relative flex justify-start">
-                                <span className="bg-white dark:bg-slate-950 pr-3 text-xs font-medium text-slate-400 uppercase tracking-widest">
-                                    Konfigurasi Integrasi
-                                </span>
-                            </div>
+                        <div className="flex items-center gap-3 pt-1">
+                            <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">
+                                Konfigurasi Integrasi
+                            </span>
+                            <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
                         </div>
 
                         {/* ── Global Integration Card ── */}
@@ -2378,7 +2361,7 @@ export default function FinanceMonitoring() {
 
             {/* ── Integrasi API Section ── */}
             {selectedProject && (
-                <div className="mt-6 px-4 md:px-6 pb-10">
+                <div className="mt-2">
                     <Card>
                         <CardHeader className="pb-3">
                             <div className="flex items-center gap-2">
