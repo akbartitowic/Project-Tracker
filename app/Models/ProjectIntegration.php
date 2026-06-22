@@ -16,11 +16,14 @@ class ProjectIntegration extends Model
         'is_active',
         'webhook_last_sent_at',
         'webhook_last_status',
+        'webhook_test_sent_at',
+        'webhook_test_status',
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
+        'is_active'            => 'boolean',
         'webhook_last_sent_at' => 'datetime',
+        'webhook_test_sent_at' => 'datetime',
     ];
 
     public function project(): BelongsTo

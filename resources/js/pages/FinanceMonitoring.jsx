@@ -318,8 +318,10 @@ export default function FinanceMonitoring() {
     // Integration / API states
     const [integration, setIntegration] = useState(null);
     const [integrationLoading, setIntegrationLoading] = useState(false);
+    const [integrationError, setIntegrationError] = useState(null);
     const [webhookUrlInput, setWebhookUrlInput] = useState('');
     const [savingWebhook, setSavingWebhook] = useState(false);
+    const [togglingActive, setTogglingActive] = useState(false);
     const [regenerating, setRegenerating] = useState(false);
     const [testingWebhook, setTestingWebhook] = useState(false);
     const [testResult, setTestResult] = useState(null);
@@ -340,17 +342,37 @@ export default function FinanceMonitoring() {
         const id = Number(projectId);
         if (!id) return;
         setIntegrationLoading(true);
+        setIntegrationError(null);
+        setIntegration(null);
+        setTestResult(null);
+        setShowApiKey(false);
+        setShowSecret(false);
         try {
             const res = await fetchAPI(`/projects/${id}/integration`);
             setIntegration(res.data);
             setWebhookUrlInput(res.data.webhook_url || '');
-            setTestResult(null);
         } catch (e) {
-            console.error('Failed to load integration:', e);
+            setIntegrationError('Gagal memuat konfigurasi integrasi.');
         } finally {
             setIntegrationLoading(false);
         }
     }, []);
+
+    const toggleActive = async () => {
+        if (!selectedProject || !integration) return;
+        setTogglingActive(true);
+        try {
+            const res = await fetchAPI(`/projects/${selectedProject}/integration`, {
+                method: 'PUT',
+                body: JSON.stringify({ is_active: !integration.is_active }),
+            });
+            setIntegration(res.data);
+        } catch (e) {
+            alert('Gagal mengubah status integrasi: ' + e.message);
+        } finally {
+            setTogglingActive(false);
+        }
+    };
 
     const saveWebhookUrl = async () => {
         if (!selectedProject) return;
@@ -390,7 +412,11 @@ export default function FinanceMonitoring() {
         try {
             const res = await fetchAPI(`/projects/${selectedProject}/integration/test`, { method: 'POST' });
             setTestResult({ success: res.success, message: res.message });
-            setIntegration((prev) => prev ? { ...prev, webhook_last_status: res.success ? 'success' : 'failed', webhook_last_sent_at: new Date().toISOString() } : prev);
+            setIntegration((prev) => prev ? {
+                ...prev,
+                webhook_test_status: res.success ? 'success' : 'failed',
+                webhook_test_sent_at: new Date().toISOString(),
+            } : prev);
         } catch (e) {
             setTestResult({ success: false, message: e.message });
         } finally {
@@ -2011,23 +2037,43 @@ export default function FinanceMonitoring() {
                                 <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
                                     <Loader2 className="size-4 animate-spin" /> Memuat konfigurasi...
                                 </div>
+                            ) : integrationError ? (
+                                <div className="flex items-center gap-2 text-sm text-rose-500 py-4">
+                                    <X className="size-4" /> {integrationError}
+                                    <Button variant="outline" size="sm" className="ml-2 h-7 text-xs" onClick={() => loadIntegration(selectedProject)}>
+                                        Coba lagi
+                                    </Button>
+                                </div>
                             ) : integration ? (
                                 <div className="space-y-6">
 
-                                    {/* Status badge */}
-                                    <div className="flex items-center gap-2">
+                                    {/* Status row */}
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <span className="text-sm text-slate-500">Status integrasi:</span>
                                         <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${integration.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                                             {integration.is_active ? 'Aktif' : 'Nonaktif'}
                                         </span>
+                                        {canUpdate && (
+                                            <Button variant="outline" size="sm" className="h-6 text-xs px-2" onClick={toggleActive} disabled={togglingActive}>
+                                                {togglingActive ? <Loader2 className="size-3 animate-spin" /> : (integration.is_active ? 'Nonaktifkan' : 'Aktifkan')}
+                                            </Button>
+                                        )}
                                         {integration.webhook_last_status && (
-                                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${integration.webhook_last_status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                                                Webhook terakhir: {integration.webhook_last_status}
+                                            <span className="text-xs text-slate-400 ml-2">
+                                                Live webhook:
+                                                <span className={`ml-1 font-medium ${integration.webhook_last_status === 'success' ? 'text-emerald-600' : 'text-rose-500'}`}>
+                                                    {integration.webhook_last_status}
+                                                </span>
+                                                {integration.webhook_last_sent_at && ` · ${new Date(integration.webhook_last_sent_at).toLocaleString('id-ID')}`}
                                             </span>
                                         )}
-                                        {integration.webhook_last_sent_at && (
+                                        {integration.webhook_test_status && (
                                             <span className="text-xs text-slate-400">
-                                                {new Date(integration.webhook_last_sent_at).toLocaleString('id-ID')}
+                                                Test:
+                                                <span className={`ml-1 font-medium ${integration.webhook_test_status === 'success' ? 'text-emerald-600' : 'text-rose-500'}`}>
+                                                    {integration.webhook_test_status}
+                                                </span>
+                                                {integration.webhook_test_sent_at && ` · ${new Date(integration.webhook_test_sent_at).toLocaleString('id-ID')}`}
                                             </span>
                                         )}
                                     </div>

@@ -155,14 +155,11 @@ class ProjectAllocationController extends Controller
 
         ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $allocation->project_id);
 
-        $projectId    = $allocation->project_id;
-        $allocationId = $allocation->id;
-        $deleted      = $allocation->delete();
+        $deleted = $allocation->delete();
 
+        // Attributes remain accessible after delete() in Laravel, so full payload is preserved
         if ($deleted) {
-            $stub = new ProjectAllocation(['project_id' => $projectId]);
-            $stub->id = $allocationId;
-            app(WebhookDispatcher::class)->dispatch('allocation.deleted', $stub);
+            app(WebhookDispatcher::class)->dispatch('allocation.deleted', $allocation);
         }
 
         return response()->json(['deleted' => $deleted ? 1 : 0]);

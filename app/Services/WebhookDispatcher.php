@@ -59,10 +59,13 @@ class WebhookDispatcher
 
     private function serializeAllocation(ProjectAllocation $a): array
     {
+        $a->loadMissing('category');
+
         return [
             'id'              => $a->id,
             'project_id'      => $a->project_id,
             'category_id'     => $a->category_id,
+            'category'        => $a->category?->name,
             'amount'          => (float) ($a->amount ?? 0),
             'description'     => $a->description,
             'is_topup'        => (bool) $a->is_topup,

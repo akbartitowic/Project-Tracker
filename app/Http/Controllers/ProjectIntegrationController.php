@@ -118,8 +118,8 @@ class ProjectIntegrationController extends Controller
             $success  = $response->successful();
             $status   = $success ? 'success' : 'failed';
 
-            $integration->webhook_last_sent_at = now();
-            $integration->webhook_last_status  = $status;
+            $integration->webhook_test_sent_at = now();
+            $integration->webhook_test_status  = $status;
             $integration->saveQuietly();
 
             return response()->json([
@@ -128,8 +128,8 @@ class ProjectIntegrationController extends Controller
                 'message'     => $success ? 'Webhook berhasil dikirim.' : 'Webhook dikirim tapi server tujuan merespons error.',
             ]);
         } catch (\Throwable $e) {
-            $integration->webhook_last_sent_at = now();
-            $integration->webhook_last_status  = 'failed';
+            $integration->webhook_test_sent_at = now();
+            $integration->webhook_test_status  = 'failed';
             $integration->saveQuietly();
 
             return response()->json([
@@ -149,6 +149,8 @@ class ProjectIntegrationController extends Controller
             'is_active'             => $i->is_active,
             'webhook_last_sent_at'  => $i->webhook_last_sent_at?->toIso8601String(),
             'webhook_last_status'   => $i->webhook_last_status,
+            'webhook_test_sent_at'  => $i->webhook_test_sent_at?->toIso8601String(),
+            'webhook_test_status'   => $i->webhook_test_status,
             'inbound_endpoint'      => url('/api/external/allocations'),
         ];
     }
