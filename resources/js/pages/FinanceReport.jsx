@@ -189,7 +189,7 @@ export default function FinanceReport() {
     ];
 
     return (
-        <div className="mx-auto max-w-[1280px] animate-in fade-in p-4 pb-16 duration-500 sm:p-6 sm:pb-20 lg:p-8 space-y-8">
+        <div className="w-full animate-in fade-in px-4 py-5 sm:px-6 lg:px-8 pb-16 duration-500 space-y-8">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
