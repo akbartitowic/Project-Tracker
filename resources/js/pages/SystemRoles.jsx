@@ -12,6 +12,7 @@ import {
     LayoutGrid,
     Eye,
     EyeOff,
+    Plug,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,12 +22,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
 const ACTIONS = ['create', 'read', 'update', 'delete'];
+
 const ACTION_LABELS = {
     create: 'Create',
     read: 'Menu',
     update: 'Update',
     delete: 'Delete',
 };
+
 const ACTION_HINTS = {
     read: 'Tampilkan menu di sidebar',
     create: 'Tambah data baru',
@@ -34,15 +37,27 @@ const ACTION_HINTS = {
     delete: 'Hapus data',
 };
 
+/* Per-module, per-action extra notes — used to clarify integration impact */
+const MODULE_ACTION_NOTES = {
+    finance_monitoring: {
+        update: 'Termasuk akses melihat & mengelola konfigurasi API integrasi (API key, webhook)',
+    },
+};
+
+function formatModuleName(raw) {
+    return raw
+        .split(/[_\s]+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+}
+
 function permissionIdsFromRole(role) {
     return new Set((role?.permissions || []).map((p) => p.id));
 }
 
 function setsEqual(a, b) {
     if (a.size !== b.size) return false;
-    for (const id of a) {
-        if (!b.has(id)) return false;
-    }
+    for (const id of a) if (!b.has(id)) return false;
     return true;
 }
 
@@ -97,15 +112,10 @@ export default function SystemRoles() {
         }
     }, [selectedRoleId]);
 
-    useEffect(() => {
-        loadData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    useEffect(() => { loadData(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
     const selectRole = (role) => {
-        if (isDirty && !window.confirm('Ada perubahan yang belum disimpan. Buang perubahan?')) {
-            return;
-        }
+        if (isDirty && !window.confirm('Ada perubahan yang belum disimpan. Buang perubahan?')) return;
         setSelectedRoleId(role.id);
         const ids = permissionIdsFromRole(role);
         setDraftPermissionIds(new Set(ids));
@@ -129,23 +139,17 @@ export default function SystemRoles() {
 
     const filteredRoles = useMemo(() => {
         const q = roleSearch.trim().toLowerCase();
-        if (!q) return roles;
-        return roles.filter((r) => r.name.toLowerCase().includes(q));
+        return q ? roles.filter((r) => r.name.toLowerCase().includes(q)) : roles;
     }, [roles, roleSearch]);
 
     const filteredModules = useMemo(() => {
         const q = moduleSearch.trim().toLowerCase();
-        if (!q) return modulePermissionGroups;
-        return modulePermissionGroups.filter((g) => g.moduleName.toLowerCase().includes(q));
+        return q ? modulePermissionGroups.filter((g) => g.moduleName.toLowerCase().includes(q)) : modulePermissionGroups;
     }, [modulePermissionGroups, moduleSearch]);
 
     const totalPermissionCount = useMemo(() => {
         let n = 0;
-        modulePermissionGroups.forEach((g) => {
-            ACTIONS.forEach((a) => {
-                if (g.byAction[a]) n += 1;
-            });
-        });
+        modulePermissionGroups.forEach((g) => ACTIONS.forEach((a) => { if (g.byAction[a]) n += 1; }));
         return n;
     }, [modulePermissionGroups]);
 
@@ -157,18 +161,14 @@ export default function SystemRoles() {
     const handleTogglePermission = (id) => {
         setDraftPermissionIds((prev) => {
             const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
+            if (next.has(id)) next.delete(id); else next.add(id);
             return next;
         });
     };
 
     const handleToggleModuleAll = (moduleGroup) => {
-        const modulePermissionIds = ACTIONS
-            .map((action) => moduleGroup.byAction[action]?.id)
-            .filter(Boolean);
-        if (modulePermissionIds.length === 0) return;
-
+        const modulePermissionIds = ACTIONS.map((a) => moduleGroup.byAction[a]?.id).filter(Boolean);
+        if (!modulePermissionIds.length) return;
         setDraftPermissionIds((prev) => {
             const next = new Set(prev);
             const allActive = modulePermissionIds.every((id) => next.has(id));
@@ -184,10 +184,7 @@ export default function SystemRoles() {
         try {
             await fetchAPI(`/roles/${selectedRole.id}`, {
                 method: 'PUT',
-                body: JSON.stringify({
-                    name: selectedRole.name,
-                    permissions: Array.from(draftPermissionIds),
-                }),
+                body: JSON.stringify({ name: selectedRole.name, permissions: Array.from(draftPermissionIds) }),
             });
             await loadData(selectedRole.id);
         } catch (err) {
@@ -197,9 +194,7 @@ export default function SystemRoles() {
         }
     };
 
-    const handleDiscard = () => {
-        setDraftPermissionIds(new Set(baselinePermissionIds));
-    };
+    const handleDiscard = () => setDraftPermissionIds(new Set(baselinePermissionIds));
 
     const handleCreateRole = async () => {
         if (!newRoleName.trim()) return;
@@ -220,8 +215,7 @@ export default function SystemRoles() {
         if (!window.confirm(`Hapus role "${name}"? User dengan role ini bisa terpengaruh.`)) return;
         try {
             await fetchAPI(`/roles/${id}`, { method: 'DELETE' });
-            const nextId = selectedRoleId === id ? null : selectedRoleId;
-            await loadData(nextId);
+            await loadData(selectedRoleId === id ? null : selectedRoleId);
         } catch (err) {
             alert(`Gagal menghapus: ${err.message}`);
         }
@@ -233,35 +227,32 @@ export default function SystemRoles() {
         return { active, total: ids.length };
     };
 
+    const hasIntegrationNote = (moduleName, action) =>
+        Boolean(MODULE_ACTION_NOTES[moduleName]?.[action]);
+
     return (
-        <div className="flex h-[calc(100dvh-4.25rem)] min-h-0 flex-col overflow-hidden bg-slate-50/80 dark:bg-background-dark">
-            {/* Page header */}
+        <div className="flex h-[calc(100dvh-4.25rem)] min-h-0 flex-col overflow-hidden">
+            {/* ── Page header ── */}
             <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 dark:border-slate-800 dark:bg-[#151b28]">
-                <div className="mx-auto flex max-w-[1400px] flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-2.5">
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                <Lock className="size-5" />
-                            </div>
-                            <div>
-                                <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-white">
-                                    Access Control
-                                </h1>
-                                <p className="text-sm text-slate-500 dark:text-slate-400">
-                                    Kelola role sistem dan hak akses per menu
-                                </p>
-                            </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                            <Lock className="size-5" />
+                        </div>
+                        <div className="min-w-0">
+                            <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl dark:text-white">
+                                Roles &amp; Akses
+                            </h1>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                Kelola role dan izin per menu — termasuk akses integrasi API
+                            </p>
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary" className="tabular-nums">
-                            {roles.length} role
-                        </Badge>
-                        <Badge variant="outline" className="tabular-nums">
-                            {modulePermissionGroups.length} menu
-                        </Badge>
+                        <Badge variant="secondary" className="tabular-nums">{roles.length} role</Badge>
+                        <Badge variant="outline" className="tabular-nums">{modulePermissionGroups.length} menu</Badge>
                         <Button
-                            className="gap-1.5 shadow-md shadow-primary/15"
+                            className="gap-1.5 shadow-sm"
                             size="sm"
                             onClick={() => setIsCreating(true)}
                         >
@@ -272,9 +263,47 @@ export default function SystemRoles() {
                 </div>
             </div>
 
-            <div className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col gap-0 overflow-hidden p-4 sm:flex-row sm:p-5">
-                {/* Roles sidebar */}
-                <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28] sm:w-72 sm:max-w-[280px]">
+            {/* ── Mobile: horizontal role tabs ── */}
+            <div className="sm:hidden shrink-0 border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-[#151b28]">
+                {isLoading ? (
+                    <div className="flex items-center gap-2 py-1 text-sm text-slate-400">
+                        <Loader2 className="size-3.5 animate-spin" /> Memuat…
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <div className="flex gap-1.5 pb-0.5">
+                            {filteredRoles.map((role) => (
+                                <button
+                                    key={role.id}
+                                    type="button"
+                                    onClick={() => selectRole(role)}
+                                    className={cn(
+                                        'shrink-0 rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors',
+                                        selectedRoleId === role.id
+                                            ? 'bg-primary text-white'
+                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300',
+                                    )}
+                                >
+                                    {role.name}
+                                </button>
+                            ))}
+                            <button
+                                type="button"
+                                onClick={() => setIsCreating(true)}
+                                className="shrink-0 rounded-full border border-dashed border-slate-300 px-3 py-1 text-sm text-slate-400 hover:border-primary hover:text-primary dark:border-slate-700"
+                            >
+                                + Baru
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* ── Main content ── */}
+            <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-4 sm:flex-row sm:gap-4 sm:px-6 sm:py-5 lg:px-8">
+
+                {/* Desktop roles sidebar */}
+                <aside className="hidden sm:flex w-64 lg:w-72 shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
                     <div className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
                         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                             System roles
@@ -284,7 +313,7 @@ export default function SystemRoles() {
                             <Input
                                 value={roleSearch}
                                 onChange={(e) => setRoleSearch(e.target.value)}
-                                placeholder="Cari role..."
+                                placeholder="Cari role…"
                                 className="h-8 pl-8 text-sm"
                             />
                         </div>
@@ -304,44 +333,26 @@ export default function SystemRoles() {
                                     const count = role.permissions?.length ?? 0;
                                     return (
                                         <li key={role.id}>
-                                            <div
-                                                className={cn(
-                                                    'group flex w-full items-center gap-1 rounded-lg transition-colors',
-                                                    isSelected
-                                                        ? 'bg-primary text-white shadow-sm'
-                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/60',
-                                                )}
-                                            >
+                                            <div className={cn(
+                                                'group flex w-full items-center gap-1 rounded-lg transition-colors',
+                                                isSelected ? 'bg-primary text-white shadow-sm' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60',
+                                            )}>
                                                 <button
                                                     type="button"
                                                     onClick={() => selectRole(role)}
                                                     className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left"
                                                 >
-                                                    <div
-                                                        className={cn(
-                                                            'flex size-8 shrink-0 items-center justify-center rounded-lg',
-                                                            isSelected
-                                                                ? 'bg-white/20'
-                                                                : 'bg-slate-100 text-slate-500 dark:bg-slate-800',
-                                                        )}
-                                                    >
+                                                    <div className={cn(
+                                                        'flex size-8 shrink-0 items-center justify-center rounded-lg',
+                                                        isSelected ? 'bg-white/20' : 'bg-slate-100 text-slate-500 dark:bg-slate-800',
+                                                    )}>
                                                         <Shield className="size-4" />
                                                     </div>
                                                     <div className="min-w-0 flex-1">
-                                                        <p
-                                                            className={cn(
-                                                                'truncate text-sm font-semibold',
-                                                                isSelected ? 'text-white' : 'text-slate-900 dark:text-white',
-                                                            )}
-                                                        >
+                                                        <p className={cn('truncate text-sm font-semibold', isSelected ? 'text-white' : 'text-slate-900 dark:text-white')}>
                                                             {role.name}
                                                         </p>
-                                                        <p
-                                                            className={cn(
-                                                                'text-[11px] tabular-nums',
-                                                                isSelected ? 'text-white/80' : 'text-slate-500',
-                                                            )}
-                                                        >
+                                                        <p className={cn('text-[11px] tabular-nums', isSelected ? 'text-white/80' : 'text-slate-500')}>
                                                             {count} izin aktif
                                                         </p>
                                                     </div>
@@ -381,36 +392,25 @@ export default function SystemRoles() {
                                 }}
                             />
                             <div className="flex gap-2">
-                                <Button size="sm" className="h-8 flex-1" onClick={handleCreateRole}>
-                                    Simpan
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 flex-1"
-                                    onClick={() => {
-                                        setIsCreating(false);
-                                        setNewRoleName('');
-                                    }}
-                                >
-                                    Batal
-                                </Button>
+                                <Button size="sm" className="h-8 flex-1" onClick={handleCreateRole}>Simpan</Button>
+                                <Button size="sm" variant="outline" className="h-8 flex-1" onClick={() => { setIsCreating(false); setNewRoleName(''); }}>Batal</Button>
                             </div>
                         </div>
                     )}
                 </aside>
 
-                {/* Permissions panel */}
-                <section className="mt-4 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28] sm:mt-0 sm:ml-4">
+                {/* ── Permissions panel ── */}
+                <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
                     {!selectedRole ? (
                         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center text-slate-400">
                             <LayoutGrid className="size-12 opacity-20" />
-                            <p className="text-sm font-medium">Pilih role di sebelah kiri untuk mengatur izin</p>
+                            <p className="text-sm font-medium">Pilih role untuk mengatur izin aksesnya</p>
                         </div>
                     ) : (
                         <>
+                            {/* Panel header */}
                             <div className="shrink-0 border-b border-slate-100 px-4 py-3 dark:border-slate-800 sm:px-5">
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                     <div className="min-w-0">
                                         <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">
                                             Mengatur akses
@@ -439,14 +439,7 @@ export default function SystemRoles() {
                                             Slug
                                         </Button>
                                         {isDirty && (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8"
-                                                onClick={handleDiscard}
-                                                disabled={isSaving}
-                                            >
+                                            <Button type="button" variant="ghost" size="sm" className="h-8" onClick={handleDiscard} disabled={isSaving}>
                                                 Batalkan
                                             </Button>
                                         )}
@@ -456,36 +449,34 @@ export default function SystemRoles() {
                                             onClick={handleSavePermissions}
                                             disabled={isSaving || !isDirty}
                                         >
-                                            {isSaving ? (
-                                                <Loader2 className="size-3.5 animate-spin" />
-                                            ) : (
-                                                <Save className="size-3.5" />
-                                            )}
-                                            Simpan perubahan
+                                            {isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                                            Simpan
                                         </Button>
                                     </div>
                                 </div>
 
-                                <div className="relative mt-3 max-w-md">
+                                <div className="relative mt-3 max-w-sm">
                                     <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
                                     <Input
                                         value={moduleSearch}
                                         onChange={(e) => setModuleSearch(e.target.value)}
-                                        placeholder="Cari menu / modul..."
+                                        placeholder="Cari menu / modul…"
                                         className="h-8 pl-8 text-sm"
                                     />
                                 </div>
                             </div>
 
+                            {/* Permission cards */}
                             <div className="board-column-scroll min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
                                 {filteredModules.length === 0 ? (
                                     <p className="py-8 text-center text-sm text-slate-500">Menu tidak ditemukan</p>
                                 ) : (
-                                    <div className="space-y-3">
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                                         {filteredModules.map((moduleGroup) => {
                                             const { active, total } = moduleStats(moduleGroup);
                                             const moduleIds = ACTIONS.map((a) => moduleGroup.byAction[a]?.id).filter(Boolean);
                                             const allSelected = moduleIds.length > 0 && moduleIds.every((id) => draftPermissionIds.has(id));
+                                            const hasIntegration = Object.keys(MODULE_ACTION_NOTES[moduleGroup.moduleName] || {}).length > 0;
 
                                             return (
                                                 <Card
@@ -493,19 +484,24 @@ export default function SystemRoles() {
                                                     className="overflow-hidden border-slate-200/90 shadow-none dark:border-slate-700/80"
                                                 >
                                                     <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5 dark:border-slate-800 dark:bg-slate-900/40">
-                                                        <div className="min-w-0">
-                                                            <h3 className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
-                                                                {moduleGroup.moduleName}
-                                                            </h3>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <h3 className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                                                    {formatModuleName(moduleGroup.moduleName)}
+                                                                </h3>
+                                                                {hasIntegration && (
+                                                                    <Plug className="size-3 shrink-0 text-primary/70" title="Mengontrol akses integrasi API" />
+                                                                )}
+                                                            </div>
                                                             <p className="text-[11px] text-slate-500 tabular-nums">
-                                                                {active} dari {total} izin
+                                                                {active} dari {total} izin aktif
                                                             </p>
                                                         </div>
                                                         <Button
                                                             type="button"
                                                             variant="outline"
                                                             size="sm"
-                                                            className="h-7 shrink-0 px-2 text-[11px]"
+                                                            className="h-6 shrink-0 px-2 text-[11px]"
                                                             onClick={() => handleToggleModuleAll(moduleGroup)}
                                                         >
                                                             {allSelected ? 'Hapus semua' : 'Pilih semua'}
@@ -517,12 +513,13 @@ export default function SystemRoles() {
                                                             if (!perm) return null;
                                                             const checked = draftPermissionIds.has(perm.id);
                                                             const isRead = action === 'read';
+                                                            const integrationNote = MODULE_ACTION_NOTES[moduleGroup.moduleName]?.[action];
 
                                                             return (
                                                                 <label
                                                                     key={perm.id}
                                                                     className={cn(
-                                                                        'flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/30',
+                                                                        'flex cursor-pointer items-start gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/30',
                                                                         checked && isRead && 'bg-blue-50/50 dark:bg-blue-950/20',
                                                                         checked && !isRead && 'bg-emerald-50/40 dark:bg-emerald-950/15',
                                                                     )}
@@ -530,20 +527,20 @@ export default function SystemRoles() {
                                                                     <Checkbox
                                                                         checked={checked}
                                                                         onCheckedChange={() => handleTogglePermission(perm.id)}
-                                                                        className="mt-0.5"
+                                                                        className="mt-0.5 shrink-0"
                                                                     />
                                                                     <div className="min-w-0 flex-1">
-                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                        <div className="flex flex-wrap items-center gap-1.5">
                                                                             <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
                                                                                 {isRead ? 'Sidebar menu' : ACTION_LABELS[action]}
                                                                             </span>
                                                                             <Badge
                                                                                 variant="outline"
                                                                                 className={cn(
-                                                                                    'h-5 px-1.5 text-[10px] font-semibold uppercase',
+                                                                                    'h-4 px-1 text-[10px] font-semibold uppercase',
                                                                                     isRead
                                                                                         ? 'border-blue-200 text-blue-700 dark:border-blue-800 dark:text-blue-300'
-                                                                                        : 'border-slate-200 text-slate-600',
+                                                                                        : 'border-slate-200 text-slate-500',
                                                                                 )}
                                                                             >
                                                                                 {action}
@@ -552,10 +549,14 @@ export default function SystemRoles() {
                                                                         <p className="mt-0.5 text-xs text-slate-500">
                                                                             {ACTION_HINTS[action]}
                                                                         </p>
-                                                                        {showSlugs && (
-                                                                            <p className="mt-1 font-mono text-[10px] text-slate-400">
-                                                                                {perm.slug}
+                                                                        {integrationNote && (
+                                                                            <p className="mt-0.5 flex items-center gap-1 text-xs text-primary/80">
+                                                                                <Plug className="size-2.5 shrink-0" />
+                                                                                {integrationNote}
                                                                             </p>
+                                                                        )}
+                                                                        {showSlugs && (
+                                                                            <p className="mt-1 font-mono text-[10px] text-slate-400">{perm.slug}</p>
                                                                         )}
                                                                     </div>
                                                                     {checked && (
