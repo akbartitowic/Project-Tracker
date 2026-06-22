@@ -1128,22 +1128,27 @@ export default function FinanceMonitoring() {
                         {/* ── Global Integration Card ── */}
                         <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                             <CardHeader className="pb-3">
-                                <div className="flex items-center gap-2">
-                                    <Plug className="size-4 text-primary" />
-                                    <CardTitle className="text-base">Integrasi API Global</CardTitle>
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <Plug className="size-4 text-primary" />
+                                        <CardTitle className="text-base">Integrasi API Global</CardTitle>
+                                    </div>
+                                    <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                                        Semua Project
+                                    </span>
                                 </div>
                                 <CardDescription>
-                                    Satu API key dan webhook untuk semua project sekaligus — cocok untuk sistem ERP / akuntansi.
+                                    Satu API key dan webhook yang mencakup seluruh project — cocok untuk ERP, akuntansi, atau sistem eksternal terpusat.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 {globalIntegrationLoading ? (
-                                    <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
-                                        <Loader2 className="size-4 animate-spin" /> Memuat konfigurasi global...
+                                    <div className="flex items-center gap-2 text-sm text-slate-400 py-6">
+                                        <Loader2 className="size-4 animate-spin" /> Memuat konfigurasi global…
                                     </div>
                                 ) : globalIntegrationError ? (
                                     <div className="flex items-center gap-2 text-sm text-rose-500 py-4">
-                                        <X className="size-4" /> {globalIntegrationError}
+                                        <X className="size-4 shrink-0" /> {globalIntegrationError}
                                         <Button variant="outline" size="sm" className="ml-2 h-7 text-xs" onClick={loadGlobalIntegration}>
                                             Coba lagi
                                         </Button>
@@ -1153,8 +1158,8 @@ export default function FinanceMonitoring() {
 
                                         {/* Status row */}
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <span className="text-sm text-slate-500">Status:</span>
-                                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${globalIntegration.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                            <span className="text-sm text-slate-500">Status integrasi:</span>
+                                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${globalIntegration.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
                                                 {globalIntegration.is_active ? 'Aktif' : 'Nonaktif'}
                                             </span>
                                             {canUpdate && (
@@ -1164,7 +1169,7 @@ export default function FinanceMonitoring() {
                                             )}
                                             {globalIntegration.webhook_last_status && (
                                                 <span className="text-xs text-slate-400 ml-2">
-                                                    Live:
+                                                    Live webhook:
                                                     <span className={`ml-1 font-medium ${globalIntegration.webhook_last_status === 'success' ? 'text-emerald-600' : 'text-rose-500'}`}>
                                                         {globalIntegration.webhook_last_status}
                                                     </span>
@@ -1185,10 +1190,11 @@ export default function FinanceMonitoring() {
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             {/* Left: Inbound */}
                                             <div className="space-y-4">
-                                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 border-b pb-1">
-                                                    Inbound — App lain → Semua Project
+                                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-1.5">
+                                                    Inbound — App lain → HubTask
                                                 </h4>
 
+                                                {/* Endpoint URL */}
                                                 <div className="space-y-1">
                                                     <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Endpoint URL</label>
                                                     <div className="flex items-center gap-2">
@@ -1200,11 +1206,14 @@ export default function FinanceMonitoring() {
                                                             {copiedGlobalKey === 'endpoint' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
                                                         </Button>
                                                     </div>
-                                                    <p className="text-xs text-amber-600 dark:text-amber-400">Sertakan <code className="bg-amber-50 dark:bg-amber-900/30 px-1 rounded">project_id</code> di body saat membuat allocation.</p>
+                                                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                                                        Saat POST, wajib sertakan <code className="bg-amber-50 dark:bg-amber-900/30 px-1 rounded">project_id</code> di body untuk menentukan project tujuan.
+                                                    </p>
                                                 </div>
 
+                                                {/* Global API Key */}
                                                 <div className="space-y-1">
-                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Global API Key</label>
+                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Global API Key (X-Api-Key header)</label>
                                                     <div className="flex items-center gap-2">
                                                         <code className="flex-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 truncate">
                                                             {showGlobalApiKey ? globalIntegration.inbound_api_key : '•'.repeat(24)}
@@ -1218,15 +1227,17 @@ export default function FinanceMonitoring() {
                                                         </Button>
                                                         {canUpdate && (
                                                             <Button size="icon" variant="outline" className="shrink-0 size-8"
-                                                                onClick={regenerateGlobalApiKey} disabled={regeneratingGlobal} title="Regenerate">
+                                                                onClick={regenerateGlobalApiKey} disabled={regeneratingGlobal} title="Regenerate API Key">
                                                                 <RefreshCw className={`size-3.5 ${regeneratingGlobal ? 'animate-spin' : ''}`} />
                                                             </Button>
                                                         )}
                                                     </div>
+                                                    <p className="text-xs text-slate-400">Kirim header: <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">X-Api-Key: {'{api_key}'}</code></p>
                                                 </div>
 
+                                                {/* Webhook Secret */}
                                                 <div className="space-y-1">
-                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Webhook Secret</label>
+                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Webhook Secret (HMAC-SHA256)</label>
                                                     <div className="flex items-center gap-2">
                                                         <code className="flex-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 truncate">
                                                             {showGlobalSecret ? globalIntegration.webhook_secret : '•'.repeat(20)}
@@ -1239,13 +1250,14 @@ export default function FinanceMonitoring() {
                                                             {copiedGlobalKey === 'secret' ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
                                                         </Button>
                                                     </div>
+                                                    <p className="text-xs text-slate-400">Verifikasi header <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">X-Webhook-Signature</code> dari HubTask.</p>
                                                 </div>
                                             </div>
 
                                             {/* Right: Outbound */}
                                             <div className="space-y-4">
-                                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 border-b pb-1">
-                                                    Outbound — Semua perubahan → App lain
+                                                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-1.5">
+                                                    Outbound — HubTask → App lain
                                                 </h4>
 
                                                 <div className="space-y-1">
@@ -1264,11 +1276,13 @@ export default function FinanceMonitoring() {
                                                             </Button>
                                                         )}
                                                     </div>
-                                                    <p className="text-xs text-slate-400">Menerima events dari semua project. Payload menyertakan <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">project_id</code> untuk routing.</p>
+                                                    <p className="text-xs text-slate-400">
+                                                        HubTask akan POST ke URL ini setiap ada perubahan allocation di <strong>semua project</strong>. Payload menyertakan <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">project_id</code> untuk routing.
+                                                    </p>
                                                 </div>
 
                                                 <div className="space-y-1">
-                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Events</label>
+                                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Events yang dikirim</label>
                                                     <div className="flex flex-wrap gap-1.5">
                                                         {['allocation.created', 'allocation.updated', 'allocation.realized', 'allocation.paid', 'allocation.deleted'].map((e) => (
                                                             <span key={e} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-mono">{e}</span>
@@ -1294,16 +1308,31 @@ export default function FinanceMonitoring() {
                                             </div>
                                         </div>
 
+                                        {/* API Usage Examples */}
                                         <details className="text-xs">
                                             <summary className="cursor-pointer text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 select-none">
                                                 Contoh penggunaan API (Global Key)
                                             </summary>
-                                            <div className="mt-3 pl-2 border-l-2 border-slate-200 dark:border-slate-700">
-                                                <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Tambah allocation ke project tertentu (POST)</p>
-                                                <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl -X POST ${globalIntegration.inbound_endpoint} \\
+                                            <div className="mt-3 space-y-3 pl-2 border-l-2 border-slate-200 dark:border-slate-700">
+                                                <div>
+                                                    <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Tambah allocation ke project tertentu (POST)</p>
+                                                    <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl -X POST ${globalIntegration.inbound_endpoint} \\
   -H "X-Api-Key: YOUR_GLOBAL_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"project_id":1,"category":"Development","amount":5000000}'`}</pre>
+  -d '{"project_id":1,"category":"Development","amount":5000000,"description":"Sprint 1"}'`}</pre>
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Edit allocation (PUT)</p>
+                                                    <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl -X PUT ${globalIntegration.inbound_endpoint}/{id} \\
+  -H "X-Api-Key: YOUR_GLOBAL_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"realized_amount":4500000}'`}</pre>
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Lihat semua allocation (GET, opsional filter project)</p>
+                                                    <pre className="bg-slate-50 dark:bg-slate-800 rounded-md p-3 overflow-x-auto text-slate-700 dark:text-slate-300">{`curl "${globalIntegration.inbound_endpoint}?project_id=1" \\
+  -H "X-Api-Key: YOUR_GLOBAL_KEY"`}</pre>
+                                                </div>
                                             </div>
                                         </details>
                                     </div>
