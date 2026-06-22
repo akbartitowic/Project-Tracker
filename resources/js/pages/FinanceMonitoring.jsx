@@ -1142,16 +1142,18 @@ export default function FinanceMonitoring() {
                             </div>
                         )}
 
-                        {/* ── Section divider ── */}
-                        <div className="flex items-center gap-3 pt-1">
-                            <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">
-                                Konfigurasi Integrasi
-                            </span>
-                            <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-                        </div>
+                        {/* ── Section divider — hanya tampil untuk finance_monitoring.update ── */}
+                        {canUpdate && (
+                            <div className="flex items-center gap-3 pt-1">
+                                <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">
+                                    Konfigurasi Integrasi
+                                </span>
+                                <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                            </div>
+                        )}
 
-                        {/* ── Global Integration Card ── */}
-                        <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                        {/* ── Global Integration Card — hanya tampil untuk finance_monitoring.update ── */}
+                        {canUpdate && <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                             <CardHeader className="pb-3">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2">
@@ -1363,7 +1365,7 @@ export default function FinanceMonitoring() {
                                     </div>
                                 ) : null}
                             </CardContent>
-                        </Card>
+                        </Card>}
                     </div>
                 ) : (
                 <div className="flex flex-col gap-6">
@@ -2359,8 +2361,8 @@ export default function FinanceMonitoring() {
                 </DialogContent>
             </Dialog>
 
-            {/* ── Integrasi API Section ── */}
-            {selectedProject && (
+            {/* ── Integrasi API Section — hanya tampil untuk finance_monitoring.update ── */}
+            {selectedProject && canUpdate && (
                 <div className="mt-2">
                     <Card>
                         <CardHeader className="pb-3">
