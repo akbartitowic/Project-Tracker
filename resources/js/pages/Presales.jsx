@@ -614,7 +614,7 @@ export default function Presales() {
     <>
     <div className="flex h-[calc(100dvh-4.25rem)] min-h-0 flex-col overflow-hidden bg-slate-50/80 dark:bg-background-dark">
       <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 dark:border-slate-800 dark:bg-[#151b28]">
-        <div className="mx-auto flex max-w-[1400px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
               <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -637,8 +637,8 @@ export default function Presales() {
         </div>
       </div>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col gap-4 overflow-hidden p-4 sm:flex-row sm:p-5">
-        <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28] sm:w-80">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden px-4 py-4 sm:flex-row sm:px-6 sm:py-5">
+        <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28] max-h-[40vh] sm:max-h-none sm:w-80">
           <div className="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               Opportunity aktif ({visiblePresales.length})
