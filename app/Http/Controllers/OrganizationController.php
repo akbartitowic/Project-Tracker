@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Organization;
 use App\Models\OrganizationUser;
+use App\Models\Role;
+use App\Services\OrganizationProvisioner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,8 +41,14 @@ class OrganizationController extends Controller
                 'plan'     => 'free',
             ]);
 
-            // Owner gets the first role seeded for this org (Admin)
-            $adminRole = $org->roles()->where('name', 'Admin')->first();
+            // Seed default roles, finance categories, project roles for this org
+            app(OrganizationProvisioner::class)->provision($org);
+
+            // Owner joins as Admin
+            $adminRole = Role::withoutGlobalScopes()
+                ->where('organization_id', $org->id)
+                ->where('name', 'Admin')
+                ->first();
 
             OrganizationUser::create([
                 'organization_id' => $org->id,
@@ -83,5 +91,54 @@ class OrganizationController extends Controller
         $org->update($data);
 
         return response()->json($org);
+    }
+
+    /** List members of an organization */
+    public function members(Request $request, int $id): JsonResponse
+    {
+        $org = Organization::findOrFail($id);
+
+        $isMember = $org->organizationUsers()->where('user_id', $request->user()->id)->exists();
+        abort_unless($isMember, 403);
+
+        $members = $org->organizationUsers()
+            ->with(['user:id,name,email,status', 'role:id,name'])
+            ->get()
+            ->map(fn($ou) => [
+                'id'        => $ou->id,
+                'user'      => $ou->user,
+                'role'      => $ou->role,
+                'joined_at' => $ou->joined_at,
+            ]);
+
+        return response()->json($members);
+    }
+
+    /** Remove a member from an organization (owner only) */
+    public function removeMember(Request $request, int $id, int $userId): JsonResponse
+    {
+        $org = Organization::findOrFail($id);
+        abort_unless($org->owner_id === $request->user()->id, 403);
+        abort_if($userId === $org->owner_id, 422, 'Cannot remove the organization owner.');
+
+        $org->organizationUsers()->where('user_id', $userId)->delete();
+
+        return response()->json(['message' => 'Member removed.']);
+    }
+
+    /** List roles available in an organization */
+    public function roles(Request $request, int $id): JsonResponse
+    {
+        $org = Organization::findOrFail($id);
+
+        $isMember = $org->organizationUsers()->where('user_id', $request->user()->id)->exists();
+        abort_unless($isMember, 403);
+
+        $roles = Role::withoutGlobalScopes()
+            ->where('organization_id', $id)
+            ->select(['id', 'name'])
+            ->get();
+
+        return response()->json($roles);
     }
 }

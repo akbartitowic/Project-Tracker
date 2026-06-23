@@ -30,6 +30,9 @@ import TeamLoad from './pages/TeamLoad';
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
+import OrgSelect from './pages/Auth/OrgSelect';
+import OrgCreate from './pages/Auth/OrgCreate';
+import AcceptInvitation from './pages/Auth/AcceptInvitation';
 import { useAuth } from './context/AuthContext';
 import { getDefaultLandingPath, getRequiredPermissionForPath, hasPermission } from './utils/permissions';
 
@@ -70,6 +73,9 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/select-org" element={<OrgSelect />} />
+        <Route path="/create-org" element={<OrgCreate />} />
+        <Route path="/invitations/:token" element={<AcceptInvitation />} />
 
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />

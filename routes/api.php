@@ -32,12 +32,14 @@ use App\Http\Controllers\ReportScheduleController;
 use App\Http\Controllers\ExternalAllocationController;
 use App\Http\Controllers\ProjectIntegrationController;
 use App\Http\Controllers\GlobalIntegrationController;
+use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\OrganizationController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/signup', [AuthController::class, 'signup'])
     ->middleware(['throttle:5,1', 'signup.enabled']);
 Route::get('/branding', [SettingController::class, 'branding']);
+Route::get('/invitations/{token}', [InvitationController::class, 'show']);
 
 Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
@@ -49,6 +51,13 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::post('/organizations', [OrganizationController::class, 'store']);
     Route::get('/organizations/{id}', [OrganizationController::class, 'show']);
     Route::put('/organizations/{id}', [OrganizationController::class, 'update']);
+    Route::get('/organizations/{id}/members', [OrganizationController::class, 'members']);
+    Route::delete('/organizations/{id}/members/{userId}', [OrganizationController::class, 'removeMember']);
+    Route::get('/organizations/{id}/roles', [OrganizationController::class, 'roles']);
+    Route::get('/organizations/{id}/invitations', [InvitationController::class, 'index']);
+    Route::post('/organizations/{id}/invitations', [InvitationController::class, 'store']);
+    Route::delete('/organizations/{id}/invitations/{invitationId}', [InvitationController::class, 'destroy']);
+    Route::post('/invitations/{token}/accept', [InvitationController::class, 'accept']);
 
     // 1. Projects Routes
     Route::get('/projects', [ProjectController::class, 'index'])->middleware('permission:project_board.read');

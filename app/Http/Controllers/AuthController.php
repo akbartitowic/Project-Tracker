@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Invitation;
+use App\Models\OrganizationUser;
 use App\Models\User;
 use App\Models\Role;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Traits\LogActivity;
@@ -17,14 +20,24 @@ class AuthController extends Controller
 
     private function serializeUser(User $user): array
     {
-        $roleModel = $user->role()->with('permissions')->first();
+        // In tenant context, load the user's org-specific role
+        if (app()->bound('tenant')) {
+            $orgUser = $user->organizationUsers()
+                ->where('organization_id', app('tenant')->id)
+                ->with('role.permissions')
+                ->first();
+            $roleModel = $orgUser?->role;
+        } else {
+            $roleModel = $user->role()->with('permissions')->first();
+        }
+
         $data = $user->toArray();
         $data['role_name'] = $roleModel?->name ?? ($data['role'] ?? null);
         $data['role_permissions'] = $roleModel
             ? $roleModel->permissions->map(fn ($p) => [
-                'id' => $p->id,
-                'slug' => $p->slug,
-                'name' => $p->name,
+                'id'     => $p->id,
+                'slug'   => $p->slug,
+                'name'   => $p->name,
                 'module' => $p->module,
             ])->values()->all()
             : [];
@@ -45,32 +58,55 @@ class AuthController extends Controller
     public function signup(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
+            'name'             => 'required|string|max:255',
+            'email'            => 'required|string|email|max:255|unique:users',
+            'password'         => 'required|string|min:8|confirmed',
+            'invitation_token' => 'nullable|string',
         ]);
 
-        // Signup users default to board-only access.
-        $defaultRole = Role::firstOrCreate(['name' => 'Board Member']);
-        $this->ensureBoardOnlyPermissions($defaultRole);
+        $user = DB::transaction(function () use ($request) {
+            $user = User::create([
+                'name'     => $request->name,
+                'email'    => $request->email,
+                'password' => Hash::make($request->password),
+                'status'   => 'Active',
+                'timezone' => 'Asia/Jakarta',
+            ]);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role_id' => $defaultRole->id,
-            'role' => $defaultRole->name,
-            'status' => 'Active',
-            'timezone' => 'Asia/Jakarta',
-        ]);
+            // Auto-accept a pending invitation if token provided
+            if ($request->invitation_token) {
+                $invitation = Invitation::with('organization')
+                    ->where('token', $request->invitation_token)
+                    ->whereNull('accepted_at')
+                    ->where('expires_at', '>', now())
+                    ->first();
+
+                if ($invitation && strtolower($invitation->email) === strtolower($request->email)) {
+                    OrganizationUser::create([
+                        'organization_id' => $invitation->organization_id,
+                        'user_id'         => $user->id,
+                        'role_id'         => $invitation->role_id,
+                        'joined_at'       => now(),
+                    ]);
+                    $invitation->update(['accepted_at' => now()]);
+                }
+            }
+
+            return $user;
+        });
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        $organizations = $user->organizations()
+            ->select(['organizations.id', 'organizations.name', 'organizations.slug', 'organizations.plan'])
+            ->get();
+
         return response()->json([
-            'status' => 'success',
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $this->serializeUser($user),
+            'status'        => 'success',
+            'access_token'  => $token,
+            'token_type'    => 'Bearer',
+            'user'          => $this->serializeUser($user),
+            'organizations' => $organizations,
         ]);
     }
 
@@ -96,11 +132,16 @@ class AuthController extends Controller
 
         $this->log('Auth', 'User Login', "User logged in: {$user->email}");
 
+        $organizations = $user->organizations()
+            ->select(['organizations.id', 'organizations.name', 'organizations.slug', 'organizations.plan'])
+            ->get();
+
         return response()->json([
-            'status' => 'success',
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $this->serializeUser($user),
+            'status'        => 'success',
+            'access_token'  => $token,
+            'token_type'    => 'Bearer',
+            'user'          => $this->serializeUser($user),
+            'organizations' => $organizations,
         ]);
     }
 
@@ -116,9 +157,16 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
+        $user = $request->user();
+
+        $organizations = $user->organizations()
+            ->select(['organizations.id', 'organizations.name', 'organizations.slug', 'organizations.plan'])
+            ->get();
+
         return response()->json([
-            'status' => 'success',
-            'user' => $this->serializeUser($request->user())
+            'status'        => 'success',
+            'user'          => $this->serializeUser($user),
+            'organizations' => $organizations,
         ]);
     }
 

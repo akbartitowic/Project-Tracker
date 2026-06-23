@@ -9,7 +9,7 @@ import { getDefaultLandingPath } from '../../utils/permissions';
 import AppLogo from '../../components/AppLogo';
 
 export default function Login() {
-    const { login } = useAuth();
+    const { login, handleOrgRedirect, getCurrentTenantSlug } = useAuth();
     const navigate = useNavigate();
     const [credentials, setCredentials] = useState({ email: '', password: '' });
     const [error, setError] = useState('');
@@ -23,7 +23,12 @@ export default function Login() {
         try {
             const res = await login(credentials.email, credentials.password);
             if (res.success) {
-                navigate(getDefaultLandingPath(res.user));
+                if (getCurrentTenantSlug()) {
+                    // Already on a tenant subdomain — go to app
+                    navigate(getDefaultLandingPath(res.user));
+                } else {
+                    handleOrgRedirect(res.organizations);
+                }
             } else {
                 setError(res.message);
             }
