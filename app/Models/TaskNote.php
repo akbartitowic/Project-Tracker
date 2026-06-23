@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToTenant;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TaskNote extends Model
 {
+    use BelongsToTenant;
     protected $fillable = [
         'task_id',
         'user_id',

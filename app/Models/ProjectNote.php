@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToTenant;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProjectNote extends Model
 {
+    use BelongsToTenant;
     public const CATEGORY_WEEKLY = 'weekly';
 
     public const CATEGORY_DEVELOPMENT = 'development';

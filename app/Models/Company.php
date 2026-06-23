@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToTenant;
+
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Support\PublicStorageUrl;
@@ -9,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Company extends Model
 {
+    use BelongsToTenant;
     use HasFactory;
 
     protected $fillable = ['name', 'logo_path'];

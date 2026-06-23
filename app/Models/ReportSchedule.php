@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToTenant;
+
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ReportSchedule extends Model
 {
+    use BelongsToTenant;
     protected $fillable = [
         'project_id', 'created_by', 'frequency', 'day_of_week',
         'day_of_month', 'custom_date', 'send_time', 'timezone',

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToTenant;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -9,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SalesPitch extends Model
 {
+    use BelongsToTenant;
     public const STEP_NEW_PROSPECT = 'new_prospect';
 
     public const STEP_SENT_COMPRO = 'sent_compro';

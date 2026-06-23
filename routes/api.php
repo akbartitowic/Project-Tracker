@@ -32,6 +32,7 @@ use App\Http\Controllers\ReportScheduleController;
 use App\Http\Controllers\ExternalAllocationController;
 use App\Http\Controllers\ProjectIntegrationController;
 use App\Http\Controllers\GlobalIntegrationController;
+use App\Http\Controllers\OrganizationController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/signup', [AuthController::class, 'signup'])
@@ -42,6 +43,12 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profile', [AuthController::class, 'updateProfile'])->middleware('permission:profile.update');
+
+    // Organizations (SaaS)
+    Route::get('/organizations', [OrganizationController::class, 'index']);
+    Route::post('/organizations', [OrganizationController::class, 'store']);
+    Route::get('/organizations/{id}', [OrganizationController::class, 'show']);
+    Route::put('/organizations/{id}', [OrganizationController::class, 'update']);
 
     // 1. Projects Routes
     Route::get('/projects', [ProjectController::class, 'index'])->middleware('permission:project_board.read');

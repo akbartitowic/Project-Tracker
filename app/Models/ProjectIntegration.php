@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToTenant;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class ProjectIntegration extends Model
 {
+    use BelongsToTenant;
     protected $fillable = [
         'project_id',
         'inbound_api_key',

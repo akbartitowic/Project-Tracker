@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToTenant;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProjectAllocation extends Model
 {
+    use BelongsToTenant;
     protected $fillable = [
         'project_id',
         'category_id',

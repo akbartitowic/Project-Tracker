@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToTenant;
+
 use Illuminate\Database\Eloquent\Model;
 
 class Role extends Model
 {
+    use BelongsToTenant;
     protected $guarded = [];
 
     public function permissions()

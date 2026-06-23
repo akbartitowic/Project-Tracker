@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Concerns\BelongsToTenant;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class GlobalIntegration extends Model
 {
+    use BelongsToTenant;
     protected $fillable = [
         'inbound_api_key',
         'webhook_url',

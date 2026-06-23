@@ -5,6 +5,8 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Notifications\Notifiable;
@@ -55,20 +57,44 @@ class User extends Authenticatable
         ];
     }
 
-    public function role()
+    public function role(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Role::class);
     }
 
-    public function hasPermission($slug)
+    public function organizations(): BelongsToMany
+    {
+        return $this->belongsToMany(Organization::class, 'organization_users')
+            ->withPivot(['role_id', 'joined_at'])
+            ->withTimestamps();
+    }
+
+    public function organizationUsers(): HasMany
+    {
+        return $this->hasMany(OrganizationUser::class);
+    }
+
+    public function hasPermission($slug): bool
     {
         if (strtolower((string) $this->email) === 'tito@noohtify.com') {
             return true;
         }
-        $roleModel = $this->role()->first();
+
+        // In tenant context, use the user's role within the current organization
+        if (app()->bound('tenant')) {
+            $orgUser = $this->organizationUsers()
+                ->where('organization_id', app('tenant')->id)
+                ->with('role.permissions')
+                ->first();
+            $roleModel = $orgUser?->role;
+        } else {
+            $roleModel = $this->role()->first();
+        }
+
         if (!$roleModel) {
             return false;
         }
+
         return $roleModel->permissions()->where('slug', $slug)->exists();
     }
 }
