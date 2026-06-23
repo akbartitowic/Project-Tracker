@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
+use App\Services\PlanLimitService;
 use App\Support\ManhourBucketCalculator;
 use App\Support\TaskBillable;
 use App\Models\ProjectMember;
@@ -159,6 +160,17 @@ class ProjectController extends Controller
         $members = $validated['members'] ?? [];
         $roleQuotas = $validated['role_quotas'] ?? [];
         unset($validated['members'], $validated['role_quotas']);
+
+        // Enforce plan project limit when in tenant context
+        if (app()->bound('tenant')) {
+            $limiter = app(PlanLimitService::class);
+            if (!$limiter->canAddProject(app('tenant'))) {
+                $plan = app('tenant')->plan;
+                return response()->json([
+                    'message' => 'Batas maksimal project untuk plan ' . strtoupper($plan) . ' sudah tercapai. Upgrade plan untuk membuat project baru.',
+                ], 422);
+            }
+        }
 
         $actor = $request->user();
         if (!ProjectAccess::isPrivileged($actor)) {

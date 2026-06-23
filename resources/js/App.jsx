@@ -33,6 +33,7 @@ import Signup from './pages/Auth/Signup';
 import OrgSelect from './pages/Auth/OrgSelect';
 import OrgCreate from './pages/Auth/OrgCreate';
 import AcceptInvitation from './pages/Auth/AcceptInvitation';
+import OrgSettings from './pages/OrgSettings';
 import { useAuth } from './context/AuthContext';
 import { getDefaultLandingPath, getRequiredPermissionForPath, hasPermission } from './utils/permissions';
 
@@ -107,6 +108,7 @@ function App() {
           <Route path="finance-realization-report" element={<RealizationReport />} />
           <Route path="system-logs" element={<SystemLogs />} />
           <Route path="integrasi/projects" element={<IntegrationProjects />} />
+          <Route path="org-settings" element={<OrgSettings />} />
         </Route>
       </Routes>
     </Router>

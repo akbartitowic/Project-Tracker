@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
+import { useCurrentOrg } from '../../hooks/useCurrentOrg';
 import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, PieChart, ClipboardCheck, Building2, Handshake, Layers, Plug, Gauge } from "lucide-react";
 import AppLogo from '../AppLogo';
 import { hasPermission } from '../../utils/permissions';
@@ -10,6 +11,7 @@ import { MENU_NEW_PROJECT } from '../../constants/menuLabels';
 export default function Sidebar({ mobileOpen = false }) {
     const { toggleTheme } = useTheme();
     const { user, logout } = useAuth();
+    const currentOrg = useCurrentOrg();
     const can = (slug) => hasPermission(user, slug);
     const canSeeBisnisSection =
         can('sales.read')
@@ -146,6 +148,15 @@ export default function Sidebar({ mobileOpen = false }) {
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Plug className="size-5" />
                     <span className="text-sm">API Monitoring</span>
+                </NavLink>}
+
+                {currentOrg && <div className="pt-4 pb-2 px-3">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Organisasi</p>
+                </div>}
+                {currentOrg && <NavLink to="/org-settings"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <Building2 className="size-5" />
+                    <span className="text-sm">Pengaturan Org</span>
                 </NavLink>}
 
                 {canSeeUserManagementSection && <div className="pt-4 pb-2 px-3">

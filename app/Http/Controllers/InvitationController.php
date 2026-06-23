@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\InvitationMail;
 use App\Models\Invitation;
 use App\Models\Organization;
 use App\Models\OrganizationUser;
 use App\Models\Role;
+use App\Services\PlanLimitService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class InvitationController extends Controller
@@ -20,6 +23,14 @@ class InvitationController extends Controller
 
         $isMember = $org->organizationUsers()->where('user_id', $request->user()->id)->exists();
         abort_unless($isMember, 403);
+
+        // Plan limit check
+        $limiter = app(PlanLimitService::class);
+        if (!$limiter->canAddUser($org)) {
+            return response()->json([
+                'message' => 'Batas maksimal pengguna untuk plan ' . strtoupper($org->plan) . ' sudah tercapai. Upgrade plan untuk menambah lebih banyak anggota.',
+            ], 422);
+        }
 
         $data = $request->validate([
             'email'   => 'required|email',
@@ -46,10 +57,12 @@ class InvitationController extends Controller
             'expires_at'      => now()->addDays(7),
         ]);
 
-        // TODO: send email notification in Phase 3 (mail queue)
+        // Send invitation email via queue
+        $invitation->load(['organization', 'role', 'invitedBy']);
+        Mail::to($invitation->email)->queue(new InvitationMail($invitation));
 
         return response()->json([
-            'message'    => 'Invitation created.',
+            'message'    => 'Undangan berhasil dikirim ke ' . $invitation->email,
             'invitation' => $invitation->only(['id', 'email', 'token', 'expires_at']),
         ], 201);
     }

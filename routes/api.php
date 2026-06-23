@@ -34,17 +34,22 @@ use App\Http\Controllers\ProjectIntegrationController;
 use App\Http\Controllers\GlobalIntegrationController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\OrganizationController;
+use App\Http\Controllers\TenantController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/signup', [AuthController::class, 'signup'])
     ->middleware(['throttle:5,1', 'signup.enabled']);
 Route::get('/branding', [SettingController::class, 'branding']);
+Route::get('/tenant', [TenantController::class, 'current']);
 Route::get('/invitations/{token}', [InvitationController::class, 'show']);
 
 Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profile', [AuthController::class, 'updateProfile'])->middleware('permission:profile.update');
+
+    // Tenant context
+    Route::get('/tenant/limits', [TenantController::class, 'limits']);
 
     // Organizations (SaaS)
     Route::get('/organizations', [OrganizationController::class, 'index']);

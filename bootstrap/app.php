@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Resolve tenant from subdomain on every API request
+        $middleware->api(prepend: \App\Http\Middleware\ResolveTenant::class);
+
         $middleware->alias([
             'permission'     => \App\Http\Middleware\CheckPermission::class,
             'token.lifetime' => \App\Http\Middleware\ValidateSanctumTokenLifetime::class,

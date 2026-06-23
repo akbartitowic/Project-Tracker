@@ -33,6 +33,7 @@ export default function Layout() {
         if (pathname === '/finance-monitoring') return 'Finance - Monitoring';
         if (pathname.startsWith('/finance-monitoring/')) return 'Finance - Project Monitoring';
         if (pathname === '/integrasi/projects') return 'Integrasi - API Monitoring';
+        if (pathname === '/org-settings') return 'Pengaturan Organisasi';
         return 'Overview';
     };
 
