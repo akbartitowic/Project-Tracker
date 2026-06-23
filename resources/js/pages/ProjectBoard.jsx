@@ -1195,7 +1195,7 @@ export default function ProjectBoard() {
     if (!selectedProject) {
         return (
             <div className="min-h-full overflow-y-auto bg-slate-50/80 dark:bg-background-dark">
-                <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6 lg:p-8">
+                <div className="w-full space-y-5 px-4 py-5 sm:px-6 lg:px-8 pb-16">
                     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                         <div>
                             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Project Board</h1>

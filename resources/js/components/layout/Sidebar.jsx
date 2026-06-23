@@ -145,7 +145,7 @@ export default function Sidebar({ mobileOpen = false }) {
                 {can('integrasi.read') && <NavLink to="/integrasi/projects"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Plug className="size-5" />
-                    <span className="text-sm">Sales → Project</span>
+                    <span className="text-sm">API Monitoring</span>
                 </NavLink>}
 
                 {canSeeUserManagementSection && <div className="pt-4 pb-2 px-3">

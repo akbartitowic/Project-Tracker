@@ -38,4 +38,9 @@ class ProjectAllocation extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\FinanceCategory::class, 'category_id');
+    }
 }

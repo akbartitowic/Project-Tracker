@@ -267,7 +267,7 @@ export default function ProjectBoardBacklog() {
 
             {/* ── Top bar ── */}
             <div className="shrink-0 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3">
-                <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+                <div className="w-full flex items-center justify-between gap-4">
                     {/* Left: breadcrumb */}
                     <div className="flex items-center gap-3 min-w-0">
                         <button
@@ -312,7 +312,7 @@ export default function ProjectBoardBacklog() {
 
             {/* ── Body: two-column ── */}
             <div className="flex-1 min-h-0 overflow-y-auto">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+                <div className="w-full px-4 sm:px-6 py-6">
                     <div className="flex flex-col lg:flex-row gap-6 items-start">
 
                         {/* ── Left: add form (sticky on desktop) ── */}

@@ -1,0 +1,157 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\ProjectIntegration;
+use App\Support\ProjectAccess;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+
+class ProjectIntegrationController extends Controller
+{
+    /**
+     * GET /api/projects/{id}/integration
+     * Get or auto-create integration settings for a project.
+     */
+    public function show(Request $request, int $id)
+    {
+        ProjectAccess::assertCanAccessProject($request->user(), $id);
+
+        $integration = ProjectIntegration::firstOrCreate(
+            ['project_id' => $id],
+            [
+                'inbound_api_key' => ProjectIntegration::generateApiKey(),
+                'webhook_secret'  => ProjectIntegration::generateSecret(),
+                'is_active'       => true,
+            ]
+        );
+
+        return response()->json(['data' => $this->serialize($integration, $id)]);
+    }
+
+    /**
+     * PUT /api/projects/{id}/integration
+     * Update webhook URL or toggle active state.
+     */
+    public function update(Request $request, int $id)
+    {
+        ProjectAccess::assertCanAccessProject($request->user(), $id);
+
+        $validated = $request->validate([
+            'webhook_url' => 'nullable|url|max:2048',
+            'is_active'   => 'sometimes|boolean',
+        ]);
+
+        $integration = ProjectIntegration::firstOrCreate(
+            ['project_id' => $id],
+            [
+                'inbound_api_key' => ProjectIntegration::generateApiKey(),
+                'webhook_secret'  => ProjectIntegration::generateSecret(),
+                'is_active'       => true,
+            ]
+        );
+
+        if (array_key_exists('webhook_url', $validated)) {
+            $integration->webhook_url = $validated['webhook_url'];
+        }
+        if (array_key_exists('is_active', $validated)) {
+            $integration->is_active = $validated['is_active'];
+        }
+        $integration->save();
+
+        return response()->json(['data' => $this->serialize($integration, $id)]);
+    }
+
+    /**
+     * POST /api/projects/{id}/integration/regenerate-key
+     * Regenerate the inbound API key (invalidates the old one).
+     */
+    public function regenerateKey(Request $request, int $id)
+    {
+        ProjectAccess::assertCanAccessProject($request->user(), $id);
+
+        $integration = ProjectIntegration::firstOrCreate(
+            ['project_id' => $id],
+            [
+                'inbound_api_key' => ProjectIntegration::generateApiKey(),
+                'webhook_secret'  => ProjectIntegration::generateSecret(),
+                'is_active'       => true,
+            ]
+        );
+
+        $integration->inbound_api_key = ProjectIntegration::generateApiKey();
+        $integration->save();
+
+        return response()->json(['data' => $this->serialize($integration, $id)]);
+    }
+
+    /**
+     * POST /api/projects/{id}/integration/test
+     * Send a test ping to the configured webhook URL.
+     */
+    public function testWebhook(Request $request, int $id)
+    {
+        ProjectAccess::assertCanAccessProject($request->user(), $id);
+
+        $integration = ProjectIntegration::where('project_id', $id)->first();
+
+        if (!$integration || !$integration->webhook_url) {
+            return response()->json(['message' => 'Webhook URL belum dikonfigurasi.'], 422);
+        }
+
+        $payload = [
+            'event'      => 'test',
+            'project_id' => $id,
+            'timestamp'  => now()->toIso8601String(),
+            'message'    => 'Test webhook from HubTask',
+        ];
+
+        $body    = json_encode($payload);
+        $headers = ['Content-Type' => 'application/json', 'X-HubTask-Event' => 'test'];
+
+        if ($integration->webhook_secret) {
+            $headers['X-Webhook-Signature'] = 'sha256=' . hash_hmac('sha256', $body, $integration->webhook_secret);
+        }
+
+        try {
+            $response = Http::withHeaders($headers)->timeout(5)->post($integration->webhook_url, $payload);
+            $success  = $response->successful();
+            $status   = $success ? 'success' : 'failed';
+
+            $integration->webhook_test_sent_at = now();
+            $integration->webhook_test_status  = $status;
+            $integration->saveQuietly();
+
+            return response()->json([
+                'success'     => $success,
+                'status_code' => $response->status(),
+                'message'     => $success ? 'Webhook berhasil dikirim.' : 'Webhook dikirim tapi server tujuan merespons error.',
+            ]);
+        } catch (\Throwable $e) {
+            $integration->webhook_test_sent_at = now();
+            $integration->webhook_test_status  = 'failed';
+            $integration->saveQuietly();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengirim webhook: ' . $e->getMessage(),
+            ], 502);
+        }
+    }
+
+    private function serialize(ProjectIntegration $i, int $projectId): array
+    {
+        return [
+            'project_id'            => $projectId,
+            'inbound_api_key'       => $i->inbound_api_key,
+            'webhook_url'           => $i->webhook_url,
+            'webhook_secret'        => $i->webhook_secret,
+            'is_active'             => $i->is_active,
+            'webhook_last_sent_at'  => $i->webhook_last_sent_at?->toIso8601String(),
+            'webhook_last_status'   => $i->webhook_last_status,
+            'webhook_test_sent_at'  => $i->webhook_test_sent_at?->toIso8601String(),
+            'webhook_test_status'   => $i->webhook_test_status,
+            'inbound_endpoint'      => url('/api/external/allocations'),
+        ];
+    }
+}

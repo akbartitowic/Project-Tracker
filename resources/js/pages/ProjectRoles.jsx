@@ -77,7 +77,7 @@ export default function ProjectRoles() {
     };
 
     return (
-        <div className="mx-auto max-w-4xl p-4 pb-16 sm:p-6 sm:pb-20 lg:p-8">
+        <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
                 <div>

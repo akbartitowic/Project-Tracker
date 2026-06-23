@@ -70,7 +70,7 @@ export default function RealizationReport() {
     }, [rows, search]);
 
     return (
-        <div className="mx-auto max-w-[1450px] p-4 pb-16 sm:p-6 sm:pb-20 lg:p-8">
+        <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
             <div className="flex flex-col gap-2 mb-8">
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <TrendingUp className="size-7 text-primary" /> Realization Report

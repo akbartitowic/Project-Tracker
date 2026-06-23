@@ -436,7 +436,7 @@ export default function Reports() {
 
     return (
         <div className="flex-1 flex flex-col overflow-y-auto w-full">
-            <div className="mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8 space-y-8">
+            <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16 space-y-8">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">

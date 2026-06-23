@@ -195,8 +195,8 @@ export default function TeamUsers() {
 
     return (
         <div className="flex-1 flex flex-col overflow-y-auto w-full transition-colors duration-200 relative">
-            <div className="z-0 flex flex-1 justify-center py-4 sm:py-8">
-                <div className="flex w-full max-w-[1200px] flex-col gap-6 px-4 sm:gap-8 md:px-6">
+            <div className="z-0 flex flex-1 px-4 py-5 sm:px-6 lg:px-8 pb-16">
+                <div className="flex w-full flex-col gap-6 sm:gap-8">
                     {/* Page Title & Actions */}
                     <div className="flex flex-col md:flex-row justify-between gap-4 items-start md:items-center">
                         <div className="flex flex-col gap-1">

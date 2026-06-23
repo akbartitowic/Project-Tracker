@@ -214,14 +214,14 @@ export default function CreateProject() {
     };
 
     return (
-        <div className="mx-auto max-w-[960px] p-4 pb-10 sm:p-6 lg:p-8">
+        <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
             <div className="flex flex-col gap-2 mb-8">
                 <div className="flex items-center gap-2 text-slate-500 dark:text-text-secondary text-sm mb-1">
                     <span>Projects</span>
                     <ChevronRight className="size-4" />
                     <span className="text-primary font-medium">New Project</span>
                 </div>
-                <h1 className="text-slate-900 dark:text-white text-3xl font-bold tracking-tight">
+                <h1 className="text-slate-900 dark:text-white text-2xl sm:text-3xl font-bold tracking-tight">
                     {fromLead ? 'Initiate Project' : 'Create New Project'}
                 </h1>
                 <p className="text-slate-500 dark:text-text-secondary text-base">
@@ -355,7 +355,7 @@ export default function CreateProject() {
                                         </div>
                                         <div className="flex flex-col gap-3">
                                             {selectedRoles.map((roleObj, index) => (
-                                                <div key={roleObj.id} className="flex gap-4 items-end p-3 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-900/50">
+                                                <div key={roleObj.id} className="flex flex-col sm:flex-row sm:items-end gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-900/50">
                                                     <label className="flex-1 flex flex-col gap-2">
                                                         <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Project Role</span>
                                                         <select value={roleObj.project_role_id} onChange={(e) => handleRoleQuotaChange(index, 'project_role_id', e.target.value)}
@@ -364,17 +364,19 @@ export default function CreateProject() {
                                                             {projectRolesList.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                                                         </select>
                                                     </label>
-                                                    <label className="w-32 flex flex-col gap-2">
-                                                        <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Hours</span>
-                                                        <div className="relative">
-                                                            <Clock className="absolute left-3 top-3 text-slate-400 size-3.5" />
-                                                            <Input type="number" placeholder="0" min="0" value={roleObj.hours} onChange={(e) => handleRoleQuotaChange(index, 'hours', e.target.value)}
-                                                                className="bg-white dark:bg-slate-900 pl-9 h-10" required disabled={isLinkedFromPresales} />
-                                                        </div>
-                                                    </label>
-                                                    <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveRoleQuota(index)} className="h-10 w-10 text-slate-400 hover:text-red-500 shrink-0" disabled={isLinkedFromPresales}>
-                                                        <Trash2 className="size-5" />
-                                                    </Button>
+                                                    <div className="flex items-end gap-3 sm:gap-3">
+                                                        <label className="flex-1 sm:w-32 sm:flex-none flex flex-col gap-2">
+                                                            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Hours</span>
+                                                            <div className="relative">
+                                                                <Clock className="absolute left-3 top-3 text-slate-400 size-3.5" />
+                                                                <Input type="number" placeholder="0" min="0" value={roleObj.hours} onChange={(e) => handleRoleQuotaChange(index, 'hours', e.target.value)}
+                                                                    className="bg-white dark:bg-slate-900 pl-9 h-10" required disabled={isLinkedFromPresales} />
+                                                            </div>
+                                                        </label>
+                                                        <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveRoleQuota(index)} className="h-10 w-10 text-slate-400 hover:text-red-500 shrink-0" disabled={isLinkedFromPresales}>
+                                                            <Trash2 className="size-5" />
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             ))}
                                             <Button type="button" variant="outline" onClick={handleAddRoleQuota} className="w-full border-dashed py-5" disabled={isLinkedFromPresales}>
@@ -394,7 +396,7 @@ export default function CreateProject() {
                                 </>
                             )}
                             {methodology === 'Waterfall' && (
-                                <label className="flex flex-col gap-2 md:col-span-2 max-w-md">
+                                <label className="flex flex-col gap-2 md:col-span-2 w-full sm:max-w-md">
                                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Total Project Cost (IDR)</span>
                                     <div className="relative">
                                         <span className="absolute left-4 top-3.5 text-sm text-slate-400 font-medium">Rp</span>
@@ -450,7 +452,7 @@ export default function CreateProject() {
                     </CardContent>
                 </Card>
 
-                <div className="flex items-center justify-end gap-4 mt-4">
+                <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 mt-4">
                     <Button type="button" variant="outline" size="lg" onClick={() => navigate('/')}>Cancel</Button>
                     <Button type="submit" size="lg" className="shadow-lg shadow-primary/30 flex items-center gap-2 group">
                         <Plus className="size-5 group-hover:scale-110 transition-transform" />

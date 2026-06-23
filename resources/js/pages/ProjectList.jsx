@@ -123,9 +123,9 @@ export default function ProjectList() {
     const isFreelance = isFreelanceUser(user);
 
     return (
-        <div className="mx-auto max-w-[1400px] p-4 pb-16 sm:p-6 sm:pb-20 lg:p-8">
+        <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
             <div className="flex flex-col gap-2 mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">List Project</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">List Project</h1>
                 <p className="text-slate-500 dark:text-text-secondary">
                     Menampilkan project aktif dan done beserta ringkasan durasi, progress, dan statistik task.
                 </p>

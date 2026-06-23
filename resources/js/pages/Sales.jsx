@@ -1077,7 +1077,7 @@ export default function Sales() {
     }
 
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="w-full space-y-6 px-4 py-5 sm:px-6 lg:px-8 pb-16">
         <div className="flex items-center gap-3">
           <Button type="button" variant="ghost" size="sm" onClick={() => navigate('/sales')}>
             <ArrowLeft className="size-4 mr-1" />
@@ -1874,10 +1874,10 @@ export default function Sales() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="w-full space-y-5 px-4 py-5 sm:px-6 lg:px-8 pb-16">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Sales</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Sales</h1>
           <p className="text-slate-500 mt-1 text-sm">Pitching: lacak durasi dari lead hingga closed. Win / Lost dipisah per tab.</p>
         </div>
         {can('sales.create') && (
@@ -1915,12 +1915,12 @@ export default function Sales() {
                 <thead>
                   <tr className="border-b text-left text-slate-500">
                     <th className="py-2 pr-4">Nama Project</th>
-                    <th className="py-2 pr-4">Perusahaan</th>
-                    <th className="py-2 pr-4">Kat. co.</th>
-                    <th className="py-2 pr-4">Kat. proj.</th>
+                    <th className="py-2 pr-4 hidden sm:table-cell">Perusahaan</th>
+                    <th className="py-2 pr-4 hidden md:table-cell">Kat. co.</th>
+                    <th className="py-2 pr-4 hidden md:table-cell">Kat. proj.</th>
                     {tab === 'win' && <th className="py-2 pr-4">Status</th>}
-                    {tab !== 'win' && <th className="py-2 pr-4">Step</th>}
-                    <th className="py-2 pr-4">Durasi</th>
+                    {tab !== 'win' && <th className="py-2 pr-4 hidden sm:table-cell">Step</th>}
+                    <th className="py-2 pr-4 hidden sm:table-cell">Durasi</th>
                     <th className="py-2 text-right"></th>
                   </tr>
                 </thead>
@@ -1933,9 +1933,9 @@ export default function Sales() {
                           <span className="block text-[10px] font-normal text-slate-400">Dari Project Board</span>
                         )}
                       </td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{row.company_name || '—'}</td>
-                      <td className="py-2 pr-4 text-slate-600">{row.company_category_name || '—'}</td>
-                      <td className="py-2 pr-4 text-slate-600">{row.category_project_name || '—'}</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300 hidden sm:table-cell">{row.company_name || '—'}</td>
+                      <td className="py-2 pr-4 text-slate-600 hidden md:table-cell">{row.company_category_name || '—'}</td>
+                      <td className="py-2 pr-4 text-slate-600 hidden md:table-cell">{row.category_project_name || '—'}</td>
                       {tab === 'win' && (
                         <td className="py-2 pr-4">
                           {row.is_data_complete ? (
@@ -1948,11 +1948,11 @@ export default function Sales() {
                         </td>
                       )}
                       {tab !== 'win' && (
-                        <td className="py-2 pr-4">
+                        <td className="py-2 pr-4 hidden sm:table-cell">
                           <Badge variant="outline">{STEPS.find((s) => s.key === row.current_step)?.label || row.current_step}</Badge>
                         </td>
                       )}
-                      <td className="py-2 pr-4 text-slate-600">
+                      <td className="py-2 pr-4 text-slate-600 hidden sm:table-cell">
                         {row.outcome
                           ? formatDurationSeconds(row.duration_seconds_closed)
                           : formatDurationSeconds(row.duration_seconds_open)}
