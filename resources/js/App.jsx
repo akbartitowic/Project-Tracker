@@ -26,6 +26,8 @@ import ProjectCategoryMaster from './pages/ProjectCategoryMaster';
 import SalesCategoryProjectMaster from './pages/SalesCategoryProjectMaster';
 import Sales from './pages/Sales';
 import IntegrationProjects from './pages/IntegrationProjects';
+import IntegrasiMonitoring from './pages/IntegrasiMonitoring';
+import ConnectorMonitoring from './pages/ConnectorMonitoring';
 import TeamLoad from './pages/TeamLoad';
 
 import Login from './pages/Auth/Login';
@@ -100,7 +102,8 @@ function App() {
           <Route path="finance-report" element={<FinanceReport />} />
           <Route path="finance-realization-report" element={<RealizationReport />} />
           <Route path="system-logs" element={<SystemLogs />} />
-          <Route path="integrasi/projects" element={<IntegrationProjects />} />
+          <Route path="integrasi/projects" element={<IntegrasiMonitoring />} />
+          <Route path="integrasi/connector" element={<ConnectorMonitoring />} />
         </Route>
       </Routes>
     </Router>
