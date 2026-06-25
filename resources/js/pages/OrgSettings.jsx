@@ -40,7 +40,7 @@ export default function OrgSettings() {
                 fetchAPI(`/organizations/${org.id}/members`),
                 fetchAPI(`/organizations/${org.id}/invitations`),
                 fetchAPI(`/organizations/${org.id}/roles`),
-                fetchAPI('/tenant/limits'),
+                fetchAPI(`/tenant/limits?org_id=${org.id}`),
             ]);
             setMembers(m);
             setInvitations(i);

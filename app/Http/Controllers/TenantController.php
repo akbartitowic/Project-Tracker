@@ -23,11 +23,21 @@ class TenantController extends Controller
     /** Returns plan usage limits for the current tenant */
     public function limits(Request $request): JsonResponse
     {
-        if (!app()->bound('tenant')) {
-            return response()->json(null, 404);
+        if (app()->bound('tenant')) {
+            $org = app('tenant');
+        } else {
+            // Fallback for local dev (no subdomain): resolve by org_id query param
+            $orgId = $request->query('org_id');
+            if (!$orgId) {
+                return response()->json(null, 404);
+            }
+            $org = \App\Models\Organization::find($orgId);
+            if (!$org) {
+                return response()->json(null, 404);
+            }
         }
 
-        $limits = app(PlanLimitService::class)->limitsFor(app('tenant'));
+        $limits = app(PlanLimitService::class)->limitsFor($org);
 
         return response()->json($limits);
     }

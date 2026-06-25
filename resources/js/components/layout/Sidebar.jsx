@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrentOrg } from '../../hooks/useCurrentOrg';
-import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, PieChart, ClipboardCheck, Building2, Handshake, Layers, Plug, Gauge } from "lucide-react";
+import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, PieChart, ClipboardCheck, Building2, Handshake, Layers, Plug, Cable, Gauge } from "lucide-react";
 import AppLogo from '../AppLogo';
 import { hasPermission } from '../../utils/permissions';
 import { cn } from '@/lib/utils';
@@ -142,12 +142,17 @@ export default function Sidebar({ mobileOpen = false }) {
                 </NavLink>}
 
                 {canSeeIntegrasiSection && <div className="pt-4 pb-2 px-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Integrasi</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">API Monitoring</p>
                 </div>}
                 {can('integrasi.read') && <NavLink to="/integrasi/projects"
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Plug className="size-5" />
-                    <span className="text-sm">API Monitoring</span>
+                    <span className="text-sm">Integrasi Monitoring</span>
+                </NavLink>}
+                {can('integrasi.read') && <NavLink to="/integrasi/connector"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <Cable className="size-5" />
+                    <span className="text-sm">Connector Monitoring</span>
                 </NavLink>}
 
                 {currentOrg && <div className="pt-4 pb-2 px-3">
