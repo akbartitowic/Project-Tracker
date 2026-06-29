@@ -79,6 +79,14 @@ class ReviewController extends Controller
             'weight'      => 'required|numeric|min:0|max:100',
         ]);
 
+        $currentTotal = (float) $eval->questions()->sum('weight');
+        if ($currentTotal + $validated['weight'] > 100) {
+            return response()->json([
+                'message' => 'Total bobot pertanyaan tidak boleh melebihi 100%.',
+                'errors'  => ['weight' => ['Sisa bobot yang tersedia: ' . round(100 - $currentTotal, 2) . '%']],
+            ], 422);
+        }
+
         $order    = $eval->questions()->max('order') + 1;
         $question = ReviewQuestion::create([...$validated, 'evaluation_id' => $eval->id, 'order' => $order]);
 
@@ -95,6 +103,19 @@ class ReviewController extends Controller
             'weight'      => 'sometimes|numeric|min:0|max:100',
             'order'       => 'sometimes|integer|min:0',
         ]);
+
+        if (isset($validated['weight'])) {
+            $otherTotal = (float) ReviewQuestion::where('evaluation_id', $question->evaluation_id)
+                ->where('id', '!=', $question->id)
+                ->sum('weight');
+            if ($otherTotal + $validated['weight'] > 100) {
+                return response()->json([
+                    'message' => 'Total bobot pertanyaan tidak boleh melebihi 100%.',
+                    'errors'  => ['weight' => ['Sisa bobot yang tersedia: ' . round(100 - $otherTotal, 2) . '%']],
+                ], 422);
+            }
+        }
+
         $question->update($validated);
         return response()->json(['data' => $question]);
     }

@@ -296,12 +296,15 @@ function ScoreBar({ score, maxScore = 5 }) {
 }
 
 /* ── Add / Edit question form ── */
-function QuestionForm({ initial, onSave, onCancel, saving }) {
+function QuestionForm({ initial, onSave, onCancel, saving, maxWeight }) {
     const [question,    setQuestion]    = useState(initial?.question    ?? '');
     const [description, setDescription] = useState(initial?.description ?? '');
     const [weight,      setWeight]      = useState(initial?.weight      ?? '');
 
-    const valid = question.trim() && weight !== '' && Number(weight) >= 0 && Number(weight) <= 100;
+    const limit = maxWeight ?? 100;
+    const weightNum = weight !== '' ? Number(weight) : null;
+    const overLimit = weightNum !== null && weightNum > limit;
+    const valid = question.trim() && weightNum !== null && weightNum >= 0 && !overLimit;
 
     return (
         <div className="rounded-lg border border-primary/30 bg-primary/[0.02] dark:bg-primary/[0.04] p-4 space-y-3">
@@ -335,15 +338,22 @@ function QuestionForm({ initial, onSave, onCancel, saving }) {
                     <Input
                         type="number"
                         min={0}
-                        max={100}
+                        max={limit}
                         step={0.01}
                         value={weight}
                         onChange={e => setWeight(e.target.value)}
-                        placeholder="0–100"
-                        className="text-sm h-9 w-32"
+                        placeholder={`0–${limit}`}
+                        className={cn('text-sm h-9 w-32', overLimit && 'border-rose-400 focus-visible:ring-rose-400')}
                     />
-                    <span className="text-xs text-slate-400">% dari total skor evaluasi ini</span>
+                    <span className="text-xs text-slate-400">
+                        % · sisa {limit.toFixed(2).replace(/\.?0+$/, '')}%
+                    </span>
                 </div>
+                {overLimit && (
+                    <p className="text-xs text-rose-500">
+                        Melebihi sisa bobot ({limit.toFixed(2).replace(/\.?0+$/, '')}%). Kurangi bobot pertanyaan lain terlebih dahulu.
+                    </p>
+                )}
             </div>
             <div className="flex items-center gap-2 pt-1">
                 <Button size="sm" className="h-8 gap-1.5" onClick={() => onSave({ question: question.trim(), description: description.trim() || null, weight: Number(weight) })} disabled={!valid || saving}>
@@ -797,14 +807,16 @@ function EvaluationBlock({ evaluation, canConfig, onDeleted }) {
                             )}
                         </div>
 
-                        {questions.map((q, idx) => (
-                            editingQ?.id === q.id ? (
+                        {questions.map((q, idx) => {
+                            const otherTotal = questions.filter(x => x.id !== q.id).reduce((s, x) => s + Number(x.weight), 0);
+                            return editingQ?.id === q.id ? (
                                 <QuestionForm
                                     key={q.id}
                                     initial={q}
                                     onSave={handleEditQuestion}
                                     onCancel={() => setEditingQ(null)}
                                     saving={savingQ}
+                                    maxWeight={Math.max(0, 100 - otherTotal)}
                                 />
                             ) : (
                                 <QuestionRow
@@ -815,14 +827,15 @@ function EvaluationBlock({ evaluation, canConfig, onDeleted }) {
                                     onEdit={(q) => { setShowAdd(false); setEditingQ(q); }}
                                     onDelete={handleDeleteQuestion}
                                 />
-                            )
-                        ))}
+                            );
+                        })}
 
                         {showAdd && (
                             <QuestionForm
                                 onSave={handleAddQuestion}
                                 onCancel={() => setShowAdd(false)}
                                 saving={savingQ}
+                                maxWeight={Math.max(0, 100 - totalWeight)}
                             />
                         )}
 
