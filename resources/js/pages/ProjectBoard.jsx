@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
-import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star, Inbox } from 'lucide-react';
+import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star, Inbox, ChevronDown } from 'lucide-react';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../utils/taskDates';
 import { hasPermission } from '../utils/permissions';
 import { Card, CardContent } from "@/components/ui/card";
@@ -79,7 +79,10 @@ function normalizeSubtaskStatus(status) {
     return 'To Do';
 }
 
-function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours }) {
+function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours, onMoveToBacklog }) {
+    const [expanded, setExpanded] = useState(false);
+
+
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: task.id,
         data: { task }
@@ -109,75 +112,116 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
           ? `${formatHours(leafLoadH)}h`
           : null;
 
+    const createdLabel = task.created_at
+        ? new Date(task.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+        : null;
+
     return (
         <div ref={setNodeRef} style={style} className="relative group touch-none" {...attributes} {...listeners}>
             <Card
-                className="cursor-pointer border-slate-200/90 p-3 shadow-sm transition-colors hover:border-primary/40 dark:border-slate-700/80"
+                className="cursor-pointer border-slate-200/90 shadow-sm transition-colors hover:border-primary/40 dark:border-slate-700/80"
                 onClick={() => onClick(task)}
             >
-                <div className="mb-2 flex flex-wrap items-center gap-1">
-                    <span className={`${pClass} rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide`}>
-                        {task.priority}
-                    </span>
-                    {!isFreelance && <TaskBillingBadges task={task} />}
-                    {task.rush_hour && (
-                        <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-                            Rush
+                <div className="p-3">
+                    {/* Top badges row */}
+                    <div className="mb-1.5 flex flex-wrap items-center gap-1">
+                        <span className={`${pClass} rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide`}>
+                            {task.priority}
                         </span>
-                    )}
-                    {!isFreelance && hoursLabel && (
-                        <span className="ml-auto flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-slate-500 dark:text-slate-400">
-                            <Clock className="size-3 shrink-0" />
-                            {hoursLabel}
-                        </span>
-                    )}
-                </div>
-
-                {(task.feature_title || task.category) && (
-                    <div className="mb-1 flex flex-wrap items-center gap-1">
-                        {task.feature_title && (
-                            <span className="text-[10px] font-bold uppercase tracking-wide text-primary">{task.feature_title}</span>
-                        )}
-                        {task.category && (
-                            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tight text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                                {task.category}
+                        {!isFreelance && <TaskBillingBadges task={task} />}
+                        {task.rush_hour && (
+                            <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                                Rush
                             </span>
                         )}
+                        {!isFreelance && hoursLabel && (
+                            <span className="flex items-center gap-0.5 text-[10px] font-semibold tabular-nums text-slate-500 dark:text-slate-400">
+                                <Clock className="size-3 shrink-0" />
+                                {hoursLabel}
+                            </span>
+                        )}
+                        <button
+                            type="button"
+                            className="ml-auto flex size-5 shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                            onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+                        >
+                            <ChevronDown className={cn('size-3.5 transition-transform duration-200', expanded && 'rotate-180')} />
+                        </button>
                     </div>
-                )}
 
-                <h4 className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-100">{task.title}</h4>
-
-                {formatTaskDateRange(task.start_date, task.due_date) && (
-                    <p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
-                        <CalendarRange className="size-3 shrink-0" />
-                        {formatTaskDateRange(task.start_date, task.due_date)}
-                    </p>
-                )}
-
-                {task.subtasks?.length > 0 && (() => {
-                    const WEIGHTS = { 'Done': 100, 'Review': 75, 'In Progress': 50, 'Re-open': 25, 'To Do': 0 };
-                    const total = task.subtasks.length;
-                    const pct = Math.round(task.subtasks.reduce((sum, s) => sum + (WEIGHTS[normalizeSubtaskStatus(s.status)] ?? 0), 0) / total);
-                    return (
-                        <div className="mt-1.5 flex items-center gap-1.5">
-                            <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 shrink-0">{total} sub</span>
-                            <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                                <span
-                                    className="absolute inset-y-0 left-0 rounded-full bg-slate-400 dark:bg-slate-500 transition-all"
-                                    style={{ width: `${pct}%` }}
-                                />
-                            </span>
-                            <span className="text-[9px] font-semibold tabular-nums text-slate-500 dark:text-slate-400 shrink-0">{pct}%</span>
+                    {(task.feature_title || task.category) && (
+                        <div className="mb-1 flex flex-wrap items-center gap-1">
+                            {task.feature_title && (
+                                <span className="text-[10px] font-bold uppercase tracking-wide text-primary">{task.feature_title}</span>
+                            )}
+                            {task.category && (
+                                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-tight text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                    {task.category}
+                                </span>
+                            )}
                         </div>
-                    );
-                })()}
+                    )}
 
-                <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
-                    <span className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400" title={assigneeLabel}>
-                        {assigneeLabel}
-                    </span>
-                    {task.description && <FileText className="size-3.5 shrink-0 text-slate-400" aria-label="Has description" />}
+                    <h4 className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-100">{task.title}</h4>
+
+                    {/* Expandable details */}
+                    {expanded && (
+                        <>
+                            {formatTaskDateRange(task.start_date, task.due_date) && (
+                                <p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                    <CalendarRange className="size-3 shrink-0" />
+                                    {formatTaskDateRange(task.start_date, task.due_date)}
+                                </p>
+                            )}
+
+                            {task.subtasks?.length > 0 && (() => {
+                                const WEIGHTS = { 'Done': 100, 'Review': 75, 'In Progress': 50, 'Re-open': 25, 'To Do': 0 };
+                                const total = task.subtasks.length;
+                                const pct = Math.round(task.subtasks.reduce((sum, s) => sum + (WEIGHTS[normalizeSubtaskStatus(s.status)] ?? 0), 0) / total);
+                                return (
+                                    <div className="mt-1.5 flex items-center gap-1.5">
+                                        <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 shrink-0">{total} sub</span>
+                                        <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                                            <span
+                                                className="absolute inset-y-0 left-0 rounded-full bg-slate-400 dark:bg-slate-500 transition-all"
+                                                style={{ width: `${pct}%` }}
+                                            />
+                                        </span>
+                                        <span className="text-[9px] font-semibold tabular-nums text-slate-500 dark:text-slate-400 shrink-0">{pct}%</span>
+                                    </div>
+                                );
+                            })()}
+
+                            {createdLabel && (
+                                <p className="mt-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+                                    Dibuat: {createdLabel}
+                                </p>
+                            )}
+                        </>
+                    )}
+
+                    <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                        <span className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400" title={assigneeLabel}>
+                            {assigneeLabel}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                            {task.description && <FileText className="size-3.5 text-slate-400" aria-label="Has description" />}
+                            {task.status === 'To Do' && onMoveToBacklog && (
+                                <button
+                                    type="button"
+                                    title="Kembalikan ke Backlog"
+                                    className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-950/30 dark:hover:text-amber-400"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onMoveToBacklog(task.id);
+                                    }}
+                                >
+                                    <Inbox className="size-3" />
+                                    Backlog
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </Card>
         </div>
@@ -192,7 +236,7 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
         <div
             ref={setNodeRef}
             className={cn(
-                'flex w-[min(18rem,88vw)] shrink-0 snap-start flex-col rounded-xl border bg-slate-50/90 transition-colors duration-200 dark:bg-[#151b28]/60 sm:w-72 sm:h-full sm:max-h-full',
+                'flex w-[min(18rem,88vw)] shrink-0 snap-start flex-col rounded-xl border bg-slate-50/90 transition-colors duration-200 dark:bg-[#151b28]/60 sm:w-72',
                 isOver
                     ? 'border-primary/40 bg-primary/5 shadow-sm dark:bg-primary/5'
                     : 'border-slate-200/80 dark:border-slate-800/60',
@@ -206,7 +250,7 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
                     <span className="shrink-0 text-[10px] font-semibold text-slate-400">{perc}%</span>
                 </div>
             </div>
-            <div className="board-column-scroll relative flex flex-col gap-2.5 p-2.5 sm:min-h-0 sm:flex-1 sm:overflow-y-auto">
+            <div className="relative flex flex-col gap-2.5 p-2.5">
                 {children}
                 {count === 0 && (
                     <p className="pointer-events-none py-6 text-center text-xs text-slate-400 dark:text-slate-500">
@@ -306,9 +350,14 @@ export default function ProjectBoard() {
     const [isUpdatingProjectStatus, setIsUpdatingProjectStatus] = useState(false);
     const [isDeletingTask, setIsDeletingTask] = useState(false);
     const [confirmDeleteTaskOpen, setConfirmDeleteTaskOpen] = useState(false);
+    const [backlogConfirmTask, setBacklogConfirmTask] = useState(null);
+    const [isMovingToBacklog, setIsMovingToBacklog] = useState(false);
 
     const isFreelance = isFreelanceUser(user);
     const canUpdateBoard = hasPermission(user, 'project_board.update');
+    const [showMetrics, setShowMetrics] = useState(() => {
+        try { return localStorage.getItem('boardShowMetrics') === 'true'; } catch { return false; }
+    });
 
     useEffect(() => {
         localStorage.setItem('projectBoardPinnedIds', JSON.stringify(pinnedProjectIds));
@@ -1042,6 +1091,25 @@ export default function ProjectBoard() {
         }
     };
 
+    const handleMoveToBacklog = (taskId) => {
+        const task = tasks.find((t) => Number(t.id) === Number(taskId));
+        if (task) setBacklogConfirmTask(task);
+    };
+
+    const confirmMoveToBacklog = async () => {
+        if (!backlogConfirmTask) return;
+        setIsMovingToBacklog(true);
+        try {
+            await fetchAPI(`/tasks/${backlogConfirmTask.id}/send-to-backlog`, { method: 'POST' });
+            setTasks((prev) => prev.filter((t) => Number(t.id) !== Number(backlogConfirmTask.id)));
+            setBacklogConfirmTask(null);
+        } catch (err) {
+            alert(err.message || 'Gagal memindahkan task ke backlog.');
+        } finally {
+            setIsMovingToBacklog(false);
+        }
+    };
+
     const COLUMNS = [
         { title: 'To Do', color: 'bg-slate-400' },
         { title: 'In Progress', color: 'bg-primary' },
@@ -1718,9 +1786,9 @@ export default function ProjectBoard() {
     };
 
     return (
-        <div className="flex flex-col bg-background-light dark:bg-background-dark transition-colors duration-200 overflow-y-auto sm:h-[calc(100dvh-4.25rem)] sm:overflow-hidden sm:min-h-0">
+        <div className="flex flex-col bg-background-light dark:bg-background-dark transition-colors duration-200">
             {/* Project Header & Stats */}
-            <div className="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
+            <div className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
                 <div className="flex flex-col gap-3 p-4 sm:p-5">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0 flex-1">
@@ -1962,88 +2030,105 @@ export default function ProjectBoard() {
                     </div>
                     </div>
 
-                    {/* Metrics */}
-                    {selectedProject?.methodology === 'Waterfall' ? (
-                        <div className="board-metrics-scroll -mx-1 border-t border-slate-100 px-1 pt-3 dark:border-slate-800">
-                            <div className="flex w-max min-w-full snap-x snap-proximity gap-2 pb-1">
-                                {waterfallProgressCards.map((item) => (
-                                    <div
-                                        key={item.status}
-                                        className="w-[148px] shrink-0 snap-start rounded-lg border border-slate-200/80 bg-white px-3 py-2 dark:border-slate-700/80 dark:bg-slate-900/40"
-                                    >
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.status}</p>
-                                        <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{item.percentage}%</p>
-                                        <p className="text-[10px] text-slate-500">{item.count} task</p>
-                                        <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                                            <div className="h-full rounded-full bg-primary" style={{ width: `${item.percentage}%` }} />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-                            {!isFreelance && headerTotalManhours != null && Number(headerTotalManhours) > 0 && (
-                                <div className="rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700/80 dark:bg-slate-800/30">
-                                    <div className="mb-2 grid grid-cols-[1fr_auto_1fr] items-end gap-2">
-                                        <div>
-                                            <p className="tabular-nums text-base font-bold text-slate-900 dark:text-white">
-                                                {formatHours(headerUsedManhours)} <span className="text-xs font-medium text-slate-500">hrs</span>
-                                            </p>
-                                            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Terpakai</p>
-                                        </div>
-                                        <div className="px-1 text-center">
-                                            <p className="flex items-center justify-center gap-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                                                <Clock className="size-3 shrink-0" />
-                                                Total
-                                            </p>
-                                            <p className="tabular-nums text-xs font-semibold text-slate-700 dark:text-slate-200">
-                                                {formatHours(headerTotalManhours)} hrs
-                                            </p>
-                                            <p className="tabular-nums text-[10px] text-slate-500">{headerUsagePercent}%</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className={cn(
-                                                'tabular-nums text-base font-bold',
-                                                headerRemainingManhours <= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white',
-                                            )}>
-                                                {formatHours(headerRemainingManhours)} <span className="text-xs font-medium text-slate-500">hrs</span>
-                                            </p>
-                                            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Sisa</p>
-                                        </div>
-                                    </div>
-                                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                                        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${headerUsagePercent}%` }} />
-                                    </div>
-                                </div>
-                            )}
-                            {!isFreelance && hasQuotaSummary && (
-                                <div className="board-metrics-scroll -mx-1 px-1">
+                    {/* Metrics — collapsible */}
+                    <div className="border-t border-slate-100 pt-2 dark:border-slate-800">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const next = !showMetrics;
+                                setShowMetrics(next);
+                                try { localStorage.setItem('boardShowMetrics', String(next)); } catch {}
+                            }}
+                            className="flex w-full items-center justify-between py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
+                        >
+                            <span>Statistik</span>
+                            <ChevronDown className={cn('size-3.5 transition-transform duration-200', showMetrics && 'rotate-180')} />
+                        </button>
+
+                        {showMetrics && (
+                            selectedProject?.methodology === 'Waterfall' ? (
+                                <div className="board-metrics-scroll -mx-1 mt-2 px-1">
                                     <div className="flex w-max min-w-full snap-x snap-proximity gap-2 pb-1">
-                                        {visibleRoleQuotas.map((quota) => {
-                                            const alloc = Number(quota.allocated_hours) || 0;
-                                            const qh = Number(quota.quota_hours) || 0;
-                                            const realP = qh > 0 ? Math.round((alloc / qh) * 100) : 0;
-                                            return renderQuotaMiniCard(quota.id, quota.role_name, alloc, qh, realP);
-                                        })}
-                                        {showGeneralQuotaCard && renderQuotaMiniCard(
-                                            'general-quota',
-                                            'General',
-                                            generalAllocatedHours,
-                                            generalQuotaFromPresales,
-                                            Math.round((generalAllocatedHours / generalQuotaFromPresales) * 100),
-                                        )}
+                                        {waterfallProgressCards.map((item) => (
+                                            <div
+                                                key={item.status}
+                                                className="w-[148px] shrink-0 snap-start rounded-lg border border-slate-200/80 bg-white px-3 py-2 dark:border-slate-700/80 dark:bg-slate-900/40"
+                                            >
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.status}</p>
+                                                <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{item.percentage}%</p>
+                                                <p className="text-[10px] text-slate-500">{item.count} task</p>
+                                                <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                                                    <div className="h-full rounded-full bg-primary" style={{ width: `${item.percentage}%` }} />
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-                            )}
-                        </div>
-                    )}
+                            ) : (
+                                <div className="mt-2 space-y-2">
+                                    {!isFreelance && headerTotalManhours != null && Number(headerTotalManhours) > 0 && (
+                                        <div className="rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700/80 dark:bg-slate-800/30">
+                                            <div className="mb-2 grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+                                                <div>
+                                                    <p className="tabular-nums text-base font-bold text-slate-900 dark:text-white">
+                                                        {formatHours(headerUsedManhours)} <span className="text-xs font-medium text-slate-500">hrs</span>
+                                                    </p>
+                                                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Terpakai</p>
+                                                </div>
+                                                <div className="px-1 text-center">
+                                                    <p className="flex items-center justify-center gap-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                                                        <Clock className="size-3 shrink-0" />
+                                                        Total
+                                                    </p>
+                                                    <p className="tabular-nums text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                                        {formatHours(headerTotalManhours)} hrs
+                                                    </p>
+                                                    <p className="tabular-nums text-[10px] text-slate-500">{headerUsagePercent}%</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className={cn(
+                                                        'tabular-nums text-base font-bold',
+                                                        headerRemainingManhours <= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white',
+                                                    )}>
+                                                        {formatHours(headerRemainingManhours)} <span className="text-xs font-medium text-slate-500">hrs</span>
+                                                    </p>
+                                                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Sisa</p>
+                                                </div>
+                                            </div>
+                                            <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                                                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${headerUsagePercent}%` }} />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {!isFreelance && hasQuotaSummary && (
+                                        <div className="board-metrics-scroll -mx-1 px-1">
+                                            <div className="flex w-max min-w-full snap-x snap-proximity gap-2 pb-1">
+                                                {visibleRoleQuotas.map((quota) => {
+                                                    const alloc = Number(quota.allocated_hours) || 0;
+                                                    const qh = Number(quota.quota_hours) || 0;
+                                                    const realP = qh > 0 ? Math.round((alloc / qh) * 100) : 0;
+                                                    return renderQuotaMiniCard(quota.id, quota.role_name, alloc, qh, realP);
+                                                })}
+                                                {showGeneralQuotaCard && renderQuotaMiniCard(
+                                                    'general-quota',
+                                                    'General',
+                                                    generalAllocatedHours,
+                                                    generalQuotaFromPresales,
+                                                    Math.round((generalAllocatedHours / generalQuotaFromPresales) * 100),
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* Board / List View */}
             {viewMode === 'kanban' ? (
-                <div className="flex flex-col sm:flex-1 sm:min-h-0 min-h-[calc(100dvh-10rem)]">
+                <div className="flex flex-col">
                     {/* Mobile: status tab bar */}
                     <div className="sm:hidden flex overflow-x-auto border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28] shrink-0 scrollbar-none">
                         {COLUMNS.map((col, idx) => {
@@ -2084,7 +2169,7 @@ export default function ProjectBoard() {
                     {/* Kanban scroll area */}
                     <div
                         ref={kanbanScrollRef}
-                        className="board-scroll-x relative overflow-x-auto overflow-y-hidden bg-slate-100/50 p-3 sm:p-4 dark:bg-[#0d1118]/50 sm:flex-1 sm:min-h-0 min-h-[calc(100dvh-12rem)]"
+                        className="board-scroll-x relative overflow-x-auto bg-slate-100/50 p-3 sm:p-4 dark:bg-[#0d1118]/50"
                         onScroll={(e) => {
                             // Update active tab based on scroll position (mobile only)
                             if (window.innerWidth >= 640) return;
@@ -2097,7 +2182,7 @@ export default function ProjectBoard() {
                         }}
                     >
                         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-                            <div className="flex h-full min-w-min gap-3 sm:gap-4">
+                            <div className="flex min-w-min gap-3 sm:gap-4 items-start">
                                 {COLUMNS.map(col => (
                                     <BoardColumn
                                         key={col.title}
@@ -2115,6 +2200,7 @@ export default function ProjectBoard() {
                                                 formatHours={formatHours}
                                                 assigneeName={task.assignee_id ? assigneeNameById[task.assignee_id] : null}
                                                 onClick={(t) => handleOpenModal(t.status, t)}
+                                                onMoveToBacklog={canUpdateBoard ? handleMoveToBacklog : null}
                                             />
                                         ))}
                                     </BoardColumn>
@@ -2124,7 +2210,7 @@ export default function ProjectBoard() {
                     </div>
                 </div>
             ) : (
-                <div className="board-column-scroll flex-1 min-h-0 overflow-auto p-3 sm:p-4">
+                <div className="p-3 sm:p-4">
 
                     {/* ── Mobile: card list ── */}
                     <div className="sm:hidden space-y-2">
@@ -2657,6 +2743,59 @@ export default function ProjectBoard() {
                         <Button type="button" variant="destructive" onClick={handleDeleteTask} disabled={isDeletingTask}>
                             {isDeletingTask && <Loader2 className="mr-2 size-4 animate-spin" />}
                             Ya, Hapus
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Confirm Move to Backlog */}
+            <Dialog open={!!backlogConfirmTask} onOpenChange={(open) => { if (!open) setBacklogConfirmTask(null); }}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                            <Inbox className="size-4" />
+                            Kembalikan ke Backlog?
+                        </DialogTitle>
+                        <DialogDescription className="sr-only">Konfirmasi memindahkan task ke backlog</DialogDescription>
+                    </DialogHeader>
+
+                    {backlogConfirmTask && (
+                        <div className="space-y-3">
+                            <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 space-y-1">
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white leading-snug">
+                                    {backlogConfirmTask.title}
+                                </p>
+                                {backlogConfirmTask.feature_title && backlogConfirmTask.feature_title !== backlogConfirmTask.title && (
+                                    <p className="text-xs text-slate-500">{backlogConfirmTask.feature_title}</p>
+                                )}
+                            </div>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                Task ini akan dipindahkan kembali ke Backlog dan tidak lagi terlihat di Board. Kamu bisa memindahkannya lagi ke Board kapan saja.
+                            </p>
+                        </div>
+                    )}
+
+                    <DialogFooter className="mt-1 gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setBacklogConfirmTask(null)}
+                            disabled={isMovingToBacklog}
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            className="gap-1.5 bg-amber-500 hover:bg-amber-600 text-white border-0"
+                            onClick={confirmMoveToBacklog}
+                            disabled={isMovingToBacklog}
+                        >
+                            {isMovingToBacklog
+                                ? <Loader2 className="size-3.5 animate-spin" />
+                                : <Inbox className="size-3.5" />}
+                            Ya, Pindahkan ke Backlog
                         </Button>
                     </DialogFooter>
                 </DialogContent>

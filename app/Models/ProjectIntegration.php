@@ -10,10 +10,12 @@ class ProjectIntegration extends Model
 {
     protected $fillable = [
         'project_id',
+        'connection_name',
         'inbound_api_key',
         'webhook_url',
         'webhook_secret',
         'is_active',
+        'last_used_at',
         'webhook_last_sent_at',
         'webhook_last_status',
         'webhook_test_sent_at',
@@ -22,6 +24,7 @@ class ProjectIntegration extends Model
 
     protected $casts = [
         'is_active'            => 'boolean',
+        'last_used_at'         => 'datetime',
         'webhook_last_sent_at' => 'datetime',
         'webhook_test_sent_at' => 'datetime',
     ];

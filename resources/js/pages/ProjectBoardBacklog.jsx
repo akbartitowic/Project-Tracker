@@ -107,6 +107,69 @@ export default function ProjectBoardBacklog() {
     const [editMh,             setEditMh]             = useState('');
     const [isSavingEdit,       setIsSavingEdit]       = useState(false);
 
+    // Add dialog
+    const [showAddDialog,    setShowAddDialog]    = useState(false);
+
+    // Multi-select
+    const [selectedIds,           setSelectedIds]           = useState(new Set());
+    const [showBulkPromoteDialog, setShowBulkPromoteDialog] = useState(false);
+    const [bulkAsSubtask,         setBulkAsSubtask]         = useState(false);
+    const [bulkParentId,          setBulkParentId]          = useState('');
+    const [isPromotingBulk,       setIsPromotingBulk]       = useState(false);
+
+    const allSelected  = backlogItems.length > 0 && selectedIds.size === backlogItems.length;
+    const someSelected = selectedIds.size > 0 && selectedIds.size < backlogItems.length;
+
+    const handleToggleSelect = (id) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleSelectAll = () => {
+        if (allSelected) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(backlogItems.map((i) => i.id)));
+        }
+    };
+
+    const openBulkPromoteDialog = () => {
+        setBulkAsSubtask(false);
+        setBulkParentId('');
+        setShowBulkPromoteDialog(true);
+    };
+
+    const confirmBulkPromote = async () => {
+        if (selectedIds.size === 0 || !canUpdate) return;
+        setIsPromotingBulk(true);
+        try {
+            const body = bulkAsSubtask && bulkParentId
+                ? { parent_task_id: Number(bulkParentId) }
+                : {};
+            await Promise.all(
+                [...selectedIds].map((id) =>
+                    fetchAPI(`/tasks/${id}/promote`, { method: 'POST', body: JSON.stringify(body) })
+                )
+            );
+            setSelectedIds(new Set());
+            setShowBulkPromoteDialog(false);
+            const [backlogRes, tasksRes] = await Promise.all([
+                fetchAPI(`/tasks/backlog?project_id=${projectId}`),
+                fetchAPI(`/tasks?project_id=${projectId}`),
+            ]);
+            setBacklogItems(backlogRes.data || []);
+            setBoardTasks(tasksRes.data || []);
+        } catch (err) {
+            alert(err.message || 'Gagal memindahkan task ke board.');
+        } finally {
+            setIsPromotingBulk(false);
+        }
+    };
+
     const startEdit = (item) => {
         setEditingId(item.id);
         setEditTitle(item.title);
@@ -205,6 +268,7 @@ export default function ProjectBoardBacklog() {
             setAddDescription('');
             setAddPriority('Medium');
             setAddMh('');
+            setShowAddDialog(false);
             await loadBacklog();
         } catch (err) {
             alert(err.message || 'Gagal menambah backlog.');
@@ -306,202 +370,118 @@ export default function ProjectBoardBacklog() {
                             <LayoutGrid className="size-3.5" />
                             <span className="hidden sm:inline">Buka Board</span>
                         </Button>
+                        {canUpdate && (
+                            <Button
+                                size="sm"
+                                className="h-8 gap-1.5"
+                                onClick={() => setShowAddDialog(true)}
+                            >
+                                <Plus className="size-3.5" />
+                                <span className="hidden sm:inline">Tambah</span>
+                            </Button>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* ── Body: two-column ── */}
+            {/* ── Body ── */}
             <div className="flex-1 min-h-0 overflow-y-auto">
-                <div className="w-full px-4 sm:px-6 py-6">
-                    <div className="flex flex-col lg:flex-row gap-6 items-start">
+                <div className="w-full px-4 sm:px-6 py-5 space-y-3">
 
-                        {/* ── Left: add form (sticky on desktop) ── */}
-                        {canUpdate && (
-                            <div className="w-full lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-6">
-                                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                                    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
-                                        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                                            <Plus className="size-4 text-primary" />
-                                            Tambah ke Backlog
-                                        </h2>
-                                    </div>
-
-                                    <div className="p-4 space-y-3">
-                                        {/* Title */}
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                                Judul <span className="text-rose-400">*</span>
-                                            </label>
-                                            <Input
-                                                placeholder="Nama task..."
-                                                value={addTitle}
-                                                onChange={(e) => setAddTitle(e.target.value)}
-                                                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAdd()}
-                                                className="h-9 text-sm"
-                                            />
-                                        </div>
-
-                                        {/* Feature / Modul */}
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                                Feature / Modul
-                                            </label>
-                                            <Input
-                                                placeholder="Opsional..."
-                                                value={addFeatureTitle}
-                                                onChange={(e) => setAddFeatureTitle(e.target.value)}
-                                                className="h-9 text-sm"
-                                            />
-                                        </div>
-
-                                        {/* Description */}
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                                Deskripsi
-                                            </label>
-                                            <Textarea
-                                                placeholder="Detail atau catatan tambahan..."
-                                                value={addDescription}
-                                                onChange={(e) => setAddDescription(e.target.value)}
-                                                rows={3}
-                                                className="text-sm resize-none"
-                                            />
-                                        </div>
-
-                                        {/* Priority + MH */}
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                                    Prioritas
-                                                </label>
-                                                <Select value={addPriority} onValueChange={setAddPriority}>
-                                                    <SelectTrigger className="h-9 text-sm">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="High">High</SelectItem>
-                                                        <SelectItem value="Medium">Medium</SelectItem>
-                                                        <SelectItem value="Low">Low</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                                    Estimasi MH
-                                                </label>
-                                                <div className="relative">
-                                                    <Input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.5"
-                                                        placeholder="0"
-                                                        value={addMh}
-                                                        onChange={(e) => setAddMh(e.target.value)}
-                                                        className="h-9 text-sm pr-9"
-                                                    />
-                                                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-400 pointer-events-none">
-                                                        MH
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <Button
-                                            className="w-full gap-2 mt-1"
-                                            disabled={!addTitle.trim() || isAdding}
-                                            onClick={handleAdd}
-                                        >
-                                            {isAdding
-                                                ? <Loader2 className="size-4 animate-spin" />
-                                                : <Plus className="size-4" />}
-                                            Tambah ke Backlog
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ── Right: backlog list ── */}
-                        <div className="flex-1 min-w-0 space-y-3">
-                            {/* List header */}
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                                    <Inbox className="size-4 text-slate-400" />
-                                    Daftar Backlog
-                                    {backlogItems.length > 0 && (
-                                        <span className="inline-flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold px-1.5 min-w-[18px] h-[18px]">
-                                            {backlogItems.length}
-                                        </span>
-                                    )}
-                                </h2>
-                                {backlogLoading && (
-                                    <Loader2 className="size-4 animate-spin text-slate-400" />
-                                )}
-                            </div>
-
-                            {/* Empty state */}
-                            {!backlogLoading && backlogItems.length === 0 && (
-                                <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900/50">
-                                    <Inbox className="size-12 mb-3 opacity-20" />
-                                    <p className="text-sm font-medium">Backlog masih kosong</p>
-                                    <p className="text-xs mt-1 text-slate-400">
-                                        {canUpdate
-                                            ? 'Gunakan form di samping untuk menambahkan item'
-                                            : 'Belum ada item backlog untuk project ini'}
-                                    </p>
-                                </div>
+                    {/* List header */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm">
+                            <Inbox className="size-4 text-slate-400 shrink-0" />
+                            <span className="font-semibold text-slate-700 dark:text-slate-200">Daftar Backlog</span>
+                            {backlogItems.length > 0 && (
+                                <>
+                                    <span className="text-slate-300 dark:text-slate-600">·</span>
+                                    <span className="text-slate-500 dark:text-slate-400">{backlogItems.length} task</span>
+                                </>
                             )}
+                            {selectedIds.size > 0 && (
+                                <>
+                                    <span className="text-slate-300 dark:text-slate-600">·</span>
+                                    <span className="font-semibold text-primary">{selectedIds.size} dipilih</span>
+                                </>
+                            )}
+                        </div>
+                        {backlogLoading && <Loader2 className="size-4 animate-spin text-slate-400" />}
+                    </div>
 
-                            {/* Items */}
-                            {backlogItems.map((item) => {
+                    {/* Empty state */}
+                    {!backlogLoading && backlogItems.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900/50">
+                            <Inbox className="size-12 mb-3 opacity-20" />
+                            <p className="text-sm font-medium">Backlog masih kosong</p>
+                            <p className="text-xs mt-1 text-slate-400">
+                                {canUpdate
+                                    ? 'Klik tombol "Tambah" di kanan atas untuk menambahkan item'
+                                    : 'Belum ada item backlog untuk project ini'}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Table */}
+                    {backlogItems.length > 0 && (
+                        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+
+                            {/* Table header row */}
+                            <div className="grid items-center gap-0 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-4 py-2"
+                                style={{ gridTemplateColumns: canUpdate ? '36px 1fr 100px 80px 100px' : '1fr 100px 80px' }}>
+                                {canUpdate && (
+                                    <div className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            className="size-4 rounded cursor-pointer accent-primary"
+                                            checked={allSelected}
+                                            ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                                            onChange={handleSelectAll}
+                                            title={allSelected ? 'Batal pilih semua' : 'Pilih semua'}
+                                        />
+                                    </div>
+                                )}
+                                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 pl-1">Task</div>
+                                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Prioritas</div>
+                                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">MH</div>
+                                {canUpdate && <div />}
+                            </div>
+
+                            {/* Rows */}
+                            {backlogItems.map((item, index) => {
                                 const isEditing = editingId === item.id;
+                                const isChecked = selectedIds.has(item.id);
                                 return (
                                     <div
                                         key={item.id}
                                         className={cn(
-                                            'bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 border-l-4 shadow-sm transition-shadow',
-                                            isEditing ? 'shadow-md ring-2 ring-primary/20' : 'hover:shadow-md',
-                                            PRIORITY_BORDER[isEditing ? editPriority : item.priority] ?? 'border-l-slate-300',
+                                            index > 0 && 'border-t border-slate-100 dark:border-slate-800',
+                                            isEditing && 'ring-inset ring-2 ring-primary/20 bg-primary/5',
+                                            !isEditing && isChecked && 'bg-primary/[0.04] dark:bg-primary/10',
                                         )}
                                     >
                                         {isEditing ? (
-                                            /* ── Edit mode ── */
-                                            <div className="px-4 pt-3.5 pb-3 space-y-3">
-                                                <div className="space-y-1">
-                                                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Judul *</label>
-                                                    <Input
-                                                        autoFocus
-                                                        value={editTitle}
-                                                        onChange={(e) => setEditTitle(e.target.value)}
-                                                        className="h-8 text-sm"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Feature / Modul</label>
-                                                    <Input
-                                                        value={editFeatureTitle}
-                                                        onChange={(e) => setEditFeatureTitle(e.target.value)}
-                                                        className="h-8 text-sm"
-                                                        placeholder="Opsional..."
-                                                    />
+                                            /* ── Edit mode (full-width) ── */
+                                            <div className="px-4 py-4 space-y-3">
+                                                <div className="grid sm:grid-cols-2 gap-3">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Judul *</label>
+                                                        <Input autoFocus value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="h-8 text-sm" />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Feature / Modul</label>
+                                                        <Input value={editFeatureTitle} onChange={(e) => setEditFeatureTitle(e.target.value)} className="h-8 text-sm" placeholder="Opsional..." />
+                                                    </div>
                                                 </div>
                                                 <div className="space-y-1">
                                                     <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Deskripsi</label>
-                                                    <Textarea
-                                                        value={editDescription}
-                                                        onChange={(e) => setEditDescription(e.target.value)}
-                                                        rows={3}
-                                                        className="text-sm resize-none"
-                                                        placeholder="Opsional..."
-                                                    />
+                                                    <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2} className="text-sm resize-none" placeholder="Opsional..." />
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-2">
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
                                                     <div className="space-y-1">
                                                         <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Prioritas</label>
                                                         <Select value={editPriority} onValueChange={setEditPriority}>
-                                                            <SelectTrigger className="h-8 text-sm">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
+                                                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                                                             <SelectContent>
                                                                 <SelectItem value="High">High</SelectItem>
                                                                 <SelectItem value="Medium">Medium</SelectItem>
@@ -512,92 +492,94 @@ export default function ProjectBoardBacklog() {
                                                     <div className="space-y-1">
                                                         <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Estimasi MH</label>
                                                         <div className="relative">
-                                                            <Input
-                                                                type="number"
-                                                                min="0"
-                                                                step="0.5"
-                                                                placeholder="0"
-                                                                value={editMh}
-                                                                onChange={(e) => setEditMh(e.target.value)}
-                                                                className="h-8 text-sm pr-9"
-                                                            />
+                                                            <Input type="number" min="0" step="0.5" placeholder="0" value={editMh} onChange={(e) => setEditMh(e.target.value)} className="h-8 text-sm pr-9" />
                                                             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-400 pointer-events-none">MH</span>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-                                                    <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={cancelEdit} disabled={isSavingEdit}>
-                                                        <X className="size-3" /> Batal
-                                                    </Button>
-                                                    <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={() => handleSaveEdit(item)} disabled={!editTitle.trim() || isSavingEdit}>
-                                                        {isSavingEdit ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
-                                                        Simpan
-                                                    </Button>
+                                                    <div className="sm:col-span-2 flex items-center justify-end gap-2">
+                                                        <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={cancelEdit} disabled={isSavingEdit}>
+                                                            <X className="size-3" /> Batal
+                                                        </Button>
+                                                        <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => handleSaveEdit(item)} disabled={!editTitle.trim() || isSavingEdit}>
+                                                            {isSavingEdit ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+                                                            Simpan
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ) : (
-                                            /* ── View mode ── */
-                                            <div className="px-4 pt-3.5 pb-3">
-                                                <div className="flex items-start gap-3">
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-semibold text-slate-900 dark:text-white leading-snug">
-                                                            {item.title}
-                                                        </p>
-                                                        {item.feature_title && item.feature_title !== item.title && (
-                                                            <p className="text-xs text-slate-500 mt-0.5 truncate">{item.feature_title}</p>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                                                        <Badge variant="outline" className={cn('text-[10px] h-5 px-1.5', PRIORITY_BADGE[item.priority])}>
-                                                            {item.priority}
-                                                        </Badge>
-                                                        {Number(item.estimated_hours) > 0 && (
-                                                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-full px-2 h-5">
-                                                                <Clock className="size-2.5" />
-                                                                {formatMh(item.estimated_hours)} MH
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {item.description && (
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed line-clamp-3 whitespace-pre-wrap">
-                                                        {item.description}
-                                                    </p>
-                                                )}
-
+                                            /* ── View row ── */
+                                            <div
+                                                className="grid items-center gap-0 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
+                                                style={{ gridTemplateColumns: canUpdate ? '36px 1fr 100px 80px 100px' : '1fr 100px 80px' }}
+                                            >
                                                 {canUpdate && (
-                                                    <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
-                                                        <Button
-                                                            size="sm"
-                                                            className="h-7 text-xs gap-1.5 shadow-sm shadow-primary/20"
-                                                            onClick={() => {
-                                                                setPromoteItem(item);
-                                                                setPromoteAsSubtask(false);
-                                                                setPromoteParentId('');
-                                                            }}
+                                                    <div className="flex items-center shrink-0">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="size-4 rounded cursor-pointer accent-primary"
+                                                            checked={isChecked}
+                                                            onChange={() => handleToggleSelect(item.id)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    </div>
+                                                )}
+                                                {/* Title */}
+                                                <div className="min-w-0 pl-1">
+                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white leading-snug truncate">
+                                                        {item.title}
+                                                    </p>
+                                                    {item.feature_title && item.feature_title !== item.title && (
+                                                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">{item.feature_title}</p>
+                                                    )}
+                                                    {item.description && (
+                                                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 line-clamp-1">{item.description}</p>
+                                                    )}
+                                                </div>
+                                                {/* Priority */}
+                                                <div>
+                                                    <Badge variant="outline" className={cn('text-[10px] h-5 px-1.5', PRIORITY_BADGE[item.priority])}>
+                                                        {item.priority}
+                                                    </Badge>
+                                                </div>
+                                                {/* MH */}
+                                                <div>
+                                                    {Number(item.estimated_hours) > 0 ? (
+                                                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-full px-2 h-5">
+                                                            <Clock className="size-2.5" />
+                                                            {formatMh(item.estimated_hours)}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[11px] text-slate-300 dark:text-slate-700">—</span>
+                                                    )}
+                                                </div>
+                                                {/* Actions */}
+                                                {canUpdate && (
+                                                    <div className="flex items-center justify-end gap-0.5">
+                                                        <button
+                                                            type="button"
+                                                            title="Pindah ke Board"
+                                                            onClick={() => { setPromoteItem(item); setPromoteAsSubtask(false); setPromoteParentId(''); }}
+                                                            className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors"
                                                         >
-                                                            <ArrowRight className="size-3" />
-                                                            Pindah ke Board
-                                                        </Button>
-                                                        <div className="flex items-center gap-1">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => startEdit(item)}
-                                                                className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors"
-                                                                title="Edit"
-                                                            >
-                                                                <Pencil className="size-3.5" />
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleDelete(item.id)}
-                                                                className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                                                                title="Hapus"
-                                                            >
-                                                                <Trash2 className="size-3.5" />
-                                                            </button>
-                                                        </div>
+                                                            <ArrowRight className="size-3.5" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            title="Edit"
+                                                            onClick={() => startEdit(item)}
+                                                            className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors"
+                                                        >
+                                                            <Pencil className="size-3.5" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            title="Hapus"
+                                                            onClick={() => handleDelete(item.id)}
+                                                            className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                                                        >
+                                                            <Trash2 className="size-3.5" />
+                                                        </button>
                                                     </div>
                                                 )}
                                             </div>
@@ -606,9 +588,248 @@ export default function ProjectBoardBacklog() {
                                 );
                             })}
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
+
+            {/* ── Bulk action bar ── */}
+            {canUpdate && selectedIds.size > 0 && (
+                <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] px-4 sm:px-6 py-3 animate-in slide-in-from-bottom-4 duration-200">
+                    <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2.5">
+                            <span className="inline-flex items-center justify-center rounded-full bg-primary text-white text-[11px] font-bold px-2 h-5 min-w-[20px]">
+                                {selectedIds.size}
+                            </span>
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                task dipilih
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => setSelectedIds(new Set())}
+                                disabled={isPromotingBulk}
+                            >
+                                Batalkan
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs shadow-sm shadow-primary/20"
+                                onClick={openBulkPromoteDialog}
+                                disabled={isPromotingBulk}
+                            >
+                                <ArrowRight className="size-3.5" />
+                                Pindah {selectedIds.size} Task ke Board
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Add dialog ── */}
+            <Dialog open={showAddDialog} onOpenChange={(open) => {
+                setShowAddDialog(open);
+                if (!open) { setAddTitle(''); setAddFeatureTitle(''); setAddDescription(''); setAddPriority('Medium'); setAddMh(''); }
+            }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Plus className="size-4 text-primary" />
+                            Tambah ke Backlog
+                        </DialogTitle>
+                        <DialogDescription>
+                            Isi detail task yang akan ditambahkan ke backlog.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3 py-1">
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                Judul <span className="text-rose-400">*</span>
+                            </label>
+                            <Input
+                                autoFocus
+                                placeholder="Nama task..."
+                                value={addTitle}
+                                onChange={(e) => setAddTitle(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAdd()}
+                                className="h-9 text-sm"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                Feature / Modul
+                            </label>
+                            <Input
+                                placeholder="Opsional..."
+                                value={addFeatureTitle}
+                                onChange={(e) => setAddFeatureTitle(e.target.value)}
+                                className="h-9 text-sm"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                Deskripsi
+                            </label>
+                            <Textarea
+                                placeholder="Detail atau catatan tambahan..."
+                                value={addDescription}
+                                onChange={(e) => setAddDescription(e.target.value)}
+                                rows={3}
+                                className="text-sm resize-none"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                    Prioritas
+                                </label>
+                                <Select value={addPriority} onValueChange={setAddPriority}>
+                                    <SelectTrigger className="h-9 text-sm">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="High">High</SelectItem>
+                                        <SelectItem value="Medium">Medium</SelectItem>
+                                        <SelectItem value="Low">Low</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                    Estimasi MH
+                                </label>
+                                <div className="relative">
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        placeholder="0"
+                                        value={addMh}
+                                        onChange={(e) => setAddMh(e.target.value)}
+                                        className="h-9 text-sm pr-9"
+                                    />
+                                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-400 pointer-events-none">
+                                        MH
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => setShowAddDialog(false)} disabled={isAdding}>
+                            Batal
+                        </Button>
+                        <Button
+                            size="sm"
+                            disabled={!addTitle.trim() || isAdding}
+                            onClick={handleAdd}
+                            className="gap-1.5"
+                        >
+                            {isAdding
+                                ? <Loader2 className="size-3.5 animate-spin" />
+                                : <Plus className="size-3.5" />}
+                            Tambah ke Backlog
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Bulk promote dialog ── */}
+            <Dialog open={showBulkPromoteDialog} onOpenChange={(open) => { if (!open) setShowBulkPromoteDialog(false); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <ArrowRight className="size-4 text-primary" />
+                            Pindah {selectedIds.size} Task ke Board
+                        </DialogTitle>
+                        <DialogDescription>
+                            Pilih cara memindahkan <span className="font-semibold text-slate-700 dark:text-slate-200">{selectedIds.size} task</span> yang dipilih ke board.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-2 py-1">
+                        <label className={cn(
+                            'flex items-start gap-3 rounded-lg border-2 p-3.5 cursor-pointer transition-colors',
+                            !bulkAsSubtask
+                                ? 'border-primary bg-primary/5'
+                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                        )}>
+                            <input
+                                type="radio"
+                                name="bulk_promote_type"
+                                className="mt-0.5 accent-primary"
+                                checked={!bulkAsSubtask}
+                                onChange={() => { setBulkAsSubtask(false); setBulkParentId(''); }}
+                            />
+                            <div>
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white">Sebagai Task baru</p>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    Semua task masuk ke kolom "To Do" sebagai task mandiri
+                                </p>
+                            </div>
+                        </label>
+
+                        <label className={cn(
+                            'flex items-start gap-3 rounded-lg border-2 p-3.5 cursor-pointer transition-colors',
+                            bulkAsSubtask
+                                ? 'border-primary bg-primary/5'
+                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                        )}>
+                            <input
+                                type="radio"
+                                name="bulk_promote_type"
+                                className="mt-0.5 accent-primary"
+                                checked={bulkAsSubtask}
+                                onChange={() => setBulkAsSubtask(true)}
+                            />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white">Sebagai Subtask</p>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    Jadikan semua task sebagai subtask dari satu task di board
+                                </p>
+                                {bulkAsSubtask && (
+                                    <Select value={bulkParentId} onValueChange={setBulkParentId}>
+                                        <SelectTrigger className="mt-2.5 h-9 text-sm">
+                                            <SelectValue placeholder="Pilih parent task..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {boardTasks.map((t) => (
+                                                <SelectItem key={t.id} value={String(t.id)}>
+                                                    {t.feature_title ? `[${t.feature_title}] ` : ''}{t.title}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            </div>
+                        </label>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => setShowBulkPromoteDialog(false)} disabled={isPromotingBulk}>
+                            Batal
+                        </Button>
+                        <Button
+                            size="sm"
+                            disabled={isPromotingBulk || (bulkAsSubtask && !bulkParentId)}
+                            onClick={confirmBulkPromote}
+                            className="gap-1.5"
+                        >
+                            {isPromotingBulk
+                                ? <Loader2 className="size-3.5 animate-spin" />
+                                : <ArrowRight className="size-3.5" />}
+                            Pindah ke Board
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* ── Promote dialog ── */}
             <Dialog open={!!promoteItem} onOpenChange={(open) => { if (!open) setPromoteItem(null); }}>
@@ -618,14 +839,43 @@ export default function ProjectBoardBacklog() {
                             <ArrowRight className="size-4 text-primary" />
                             Pindah ke Board
                         </DialogTitle>
-                        <DialogDescription>
-                            Pilih cara memindahkan{' '}
-                            <span className="font-semibold text-slate-700 dark:text-slate-200">
-                                "{promoteItem?.title}"
-                            </span>{' '}
-                            ke board.
+                        <DialogDescription className="sr-only">
+                            Pilih cara memindahkan task ke board.
                         </DialogDescription>
                     </DialogHeader>
+
+                    {/* Task info card */}
+                    {promoteItem && (
+                        <div className={cn(
+                            'rounded-lg border-l-4 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-3 space-y-1.5',
+                            PRIORITY_BORDER[promoteItem.priority] ?? 'border-l-slate-300',
+                        )}>
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white leading-snug">
+                                        {promoteItem.title}
+                                    </p>
+                                    {promoteItem.feature_title && promoteItem.feature_title !== promoteItem.title && (
+                                        <p className="text-xs text-slate-500 mt-0.5">{promoteItem.feature_title}</p>
+                                    )}
+                                </div>
+                                <Badge variant="outline" className={cn('text-[10px] h-5 px-1.5 shrink-0 mt-0.5', PRIORITY_BADGE[promoteItem.priority])}>
+                                    {promoteItem.priority}
+                                </Badge>
+                            </div>
+                            {promoteItem.description && (
+                                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-3 whitespace-pre-wrap">
+                                    {promoteItem.description}
+                                </p>
+                            )}
+                            {Number(promoteItem.estimated_hours) > 0 && (
+                                <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                                    <Clock className="size-3" />
+                                    Estimasi {formatMh(promoteItem.estimated_hours)} MH
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div className="space-y-2 py-1">
                         <label className={cn(
