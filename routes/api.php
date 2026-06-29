@@ -35,6 +35,16 @@ use App\Http\Controllers\GlobalIntegrationController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\TenantController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\ProjectReviewController;
+use App\Http\Controllers\ReviewTokenController;
+use App\Http\Controllers\PublicReviewController;
+
+// Public review submission — no auth required
+Route::middleware('throttle:30,1')->prefix('public')->group(function () {
+    Route::get('/review/{token}', [PublicReviewController::class, 'show']);
+    Route::post('/review/{token}/submit', [PublicReviewController::class, 'submit']);
+});
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('/signup', [AuthController::class, 'signup'])
@@ -124,6 +134,7 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::delete('/tasks/{id}', [TaskController::class, 'destroy'])->middleware('permission:project_board.update');
     Route::put('/tasks/{id}/status', [TaskController::class, 'updateStatus'])->middleware('permission:project_board.update');
     Route::post('/tasks/{id}/promote', [TaskController::class, 'promote'])->middleware('permission:project_board.update');
+    Route::post('/tasks/{id}/send-to-backlog', [TaskController::class, 'sendToBacklog'])->middleware('permission:project_board.update');
 
     // 4. Manhours Routes
     Route::get('/manhours', [ManhourController::class, 'index'])->middleware('permission:project_board.read');
@@ -246,15 +257,42 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
 
     // 12. Project Integration Settings
     Route::get('/projects/{id}/integration', [ProjectIntegrationController::class, 'show'])->middleware('permission:finance_monitoring.read');
-    Route::put('/projects/{id}/integration', [ProjectIntegrationController::class, 'update'])->middleware('permission:finance_monitoring.update');
-    Route::post('/projects/{id}/integration/regenerate-key', [ProjectIntegrationController::class, 'regenerateKey'])->middleware('permission:finance_monitoring.update');
-    Route::post('/projects/{id}/integration/test', [ProjectIntegrationController::class, 'testWebhook'])->middleware('permission:finance_monitoring.update');
+    Route::get('/projects/{id}/integrations', [ProjectIntegrationController::class, 'index'])->middleware('permission:finance_monitoring.read');
+    Route::post('/projects/{id}/integrations', [ProjectIntegrationController::class, 'store'])->middleware('permission:finance_monitoring.update');
+    Route::put('/projects/{id}/integrations/{cid}', [ProjectIntegrationController::class, 'update'])->middleware('permission:finance_monitoring.update');
+    Route::delete('/projects/{id}/integrations/{cid}', [ProjectIntegrationController::class, 'destroy'])->middleware('permission:finance_monitoring.update');
+    Route::post('/projects/{id}/integrations/{cid}/regenerate-key', [ProjectIntegrationController::class, 'regenerateKey'])->middleware('permission:finance_monitoring.update');
+    Route::post('/projects/{id}/integrations/{cid}/test', [ProjectIntegrationController::class, 'testWebhook'])->middleware('permission:finance_monitoring.update');
+
+    // 14. Review — evaluations & questions configuration
+    Route::get('/review/evaluations', [ReviewController::class, 'evaluations'])->middleware('permission:review.read');
+    Route::post('/review/evaluations', [ReviewController::class, 'store'])->middleware('permission:review.create');
+    Route::put('/review/evaluations/{id}', [ReviewController::class, 'updateEvaluation'])->middleware('permission:review.update');
+    Route::delete('/review/evaluations/{id}', [ReviewController::class, 'destroyEvaluation'])->middleware('permission:review.delete');
+    Route::post('/review/evaluations/{id}/questions', [ReviewController::class, 'storeQuestion'])->middleware('permission:review.update');
+    Route::put('/review/questions/{id}', [ReviewController::class, 'updateQuestion'])->middleware('permission:review.update');
+    Route::delete('/review/questions/{id}', [ReviewController::class, 'deleteQuestion'])->middleware('permission:review.delete');
+
+    // 15. Project Review Submissions
+    Route::get('/projects/{id}/reviews/summary', [ProjectReviewController::class, 'summary'])->middleware('permission:review.read');
+    Route::get('/projects/{id}/reviews/trigger-status', [ProjectReviewController::class, 'triggerStatus'])->middleware('permission:review.read');
+    Route::get('/projects/{id}/reviews', [ProjectReviewController::class, 'index'])->middleware('permission:review.read');
+    Route::get('/projects/{id}/reviews/{reviewId}', [ProjectReviewController::class, 'show'])->middleware('permission:review.read');
+    Route::post('/projects/{id}/evaluations/{evalId}/reviews', [ProjectReviewController::class, 'store'])->middleware('permission:review.create');
+
+    // 16. Review Tokens (shareable links)
+    Route::get('/projects/{projectId}/evaluations/{evalId}/tokens', [ReviewTokenController::class, 'index'])->middleware('permission:review.update');
+    Route::post('/projects/{projectId}/evaluations/{evalId}/tokens', [ReviewTokenController::class, 'store'])->middleware('permission:review.update');
+    Route::delete('/review/tokens/{id}', [ReviewTokenController::class, 'destroy'])->middleware('permission:review.update');
 
     // 13. Global Integration Settings
     Route::get('/global-integration', [GlobalIntegrationController::class, 'show'])->middleware('permission:finance_monitoring.read');
-    Route::put('/global-integration', [GlobalIntegrationController::class, 'update'])->middleware('permission:finance_monitoring.update');
-    Route::post('/global-integration/regenerate-key', [GlobalIntegrationController::class, 'regenerateKey'])->middleware('permission:finance_monitoring.update');
-    Route::post('/global-integration/test', [GlobalIntegrationController::class, 'testWebhook'])->middleware('permission:finance_monitoring.update');
+    Route::get('/global-integrations', [GlobalIntegrationController::class, 'index'])->middleware('permission:finance_monitoring.read');
+    Route::post('/global-integrations', [GlobalIntegrationController::class, 'store'])->middleware('permission:finance_monitoring.update');
+    Route::put('/global-integrations/{id}', [GlobalIntegrationController::class, 'update'])->middleware('permission:finance_monitoring.update');
+    Route::delete('/global-integrations/{id}', [GlobalIntegrationController::class, 'destroy'])->middleware('permission:finance_monitoring.update');
+    Route::post('/global-integrations/{id}/regenerate-key', [GlobalIntegrationController::class, 'regenerateKey'])->middleware('permission:finance_monitoring.update');
+    Route::post('/global-integrations/{id}/test', [GlobalIntegrationController::class, 'testWebhook'])->middleware('permission:finance_monitoring.update');
 });
 
 // External API — authenticated via X-Api-Key header (no Sanctum user session needed)

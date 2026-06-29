@@ -941,4 +941,24 @@ class TaskController extends Controller
 
         return response()->json(['message' => "Successfully updated $changes tasks.", 'changes' => $changes]);
     }
+
+    public function sendToBacklog(Request $request, $id)
+    {
+        $user = $request->user();
+        $task = Task::findOrFail($id);
+
+        if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        if ($task->status !== 'To Do') {
+            return response()->json(['error' => 'Hanya task dengan status To Do yang bisa dikembalikan ke backlog.'], 422);
+        }
+
+        $task->update(['is_backlog' => true]);
+
+        $this->log('Project', 'Send Task to Backlog', "Task #{$task->id} dikembalikan ke backlog.");
+
+        return response()->json(['message' => 'Task berhasil dikembalikan ke backlog.']);
+    }
 }

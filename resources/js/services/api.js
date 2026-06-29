@@ -47,7 +47,7 @@ export async function fetchAPI(endpoint, options = {}) {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            let message = errorData.message;
+            let message = errorData.message ?? errorData.error;
             if (message != null && typeof message === 'object') {
                 message = JSON.stringify(message);
             }

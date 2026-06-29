@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrentOrg } from '../../hooks/useCurrentOrg';
-import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, PieChart, ClipboardCheck, Building2, Handshake, Layers, Plug, Cable, Gauge } from "lucide-react";
+import { LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, Clock, BarChart3, Settings, Moon, Sun, Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, PieChart, ClipboardCheck, Building2, Handshake, Layers, Plug, Cable, Gauge, Star } from "lucide-react";
 import AppLogo from '../AppLogo';
 import { hasPermission } from '../../utils/permissions';
 import { cn } from '@/lib/utils';
@@ -19,7 +19,7 @@ export default function Sidebar({ mobileOpen = false }) {
         || can('category_project.read')
         || can('sales_category_project.read');
     const canSeeOperationSection =
-        can('presales.read') || can('list_project.read') || can('project_board.read') || can('load.read');
+        can('presales.read') || can('list_project.read') || can('project_board.read') || can('load.read') || can('review.read');
     const canSeeReportSection =
         can('reports.read') || can('generate_report.read') || can('finance_report.read') || can('realization_report.read');
     const canSeeFinanceSection = can('finance_monitoring.read') || can('finance_categories.read');
@@ -101,6 +101,11 @@ export default function Sidebar({ mobileOpen = false }) {
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <Gauge className="size-5" />
                     <span className="text-sm">Load</span>
+                </NavLink>}
+                {can('review.read') && <NavLink to="/review"
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                    <Star className="size-5" />
+                    <span className="text-sm">Review</span>
                 </NavLink>}
 
                 {canSeeReportSection && <div className="pt-4 pb-2 px-3">

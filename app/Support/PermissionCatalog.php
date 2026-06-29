@@ -24,6 +24,7 @@ class PermissionCatalog
             'List Project' => ['create', 'read', 'update', 'delete'],
             'Project Board' => ['create', 'read', 'update'],
             'Load' => ['read'],
+            'Review' => ['create', 'read', 'update', 'delete'],
             'Reports' => ['read'],
             'Generate Report' => ['create', 'read'],
             'Finance Monitoring' => ['create', 'read', 'update', 'delete'],

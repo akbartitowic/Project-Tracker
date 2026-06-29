@@ -28,6 +28,9 @@ import Sales from './pages/Sales';
 import IntegrasiMonitoring from './pages/IntegrasiMonitoring';
 import ConnectorMonitoring from './pages/ConnectorMonitoring';
 import TeamLoad from './pages/TeamLoad';
+import Review from './pages/Review';
+import ReviewConfig from './pages/ReviewConfig';
+import PublicReview from './pages/PublicReview';
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
@@ -78,6 +81,7 @@ function App() {
         <Route path="/select-org" element={<OrgSelect />} />
         <Route path="/create-org" element={<OrgCreate />} />
         <Route path="/invitations/:token" element={<AcceptInvitation />} />
+        <Route path="/r/:token" element={<PublicReview />} />
 
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
@@ -95,6 +99,8 @@ function App() {
           <Route path="board/:projectId/notes" element={<ProjectBoardNotes />} />
           <Route path="board/:projectId?" element={<ProjectBoard />} />
           <Route path="team-load" element={<TeamLoad />} />
+          <Route path="review" element={<Review />} />
+          <Route path="review/config" element={<ReviewConfig />} />
           <Route path="users" element={<TeamUsers />} />
           <Route path="roles" element={<SystemRoles />} />
           <Route path="project-roles" element={<ProjectRoles />} />
@@ -108,7 +114,7 @@ function App() {
           <Route path="finance-report" element={<FinanceReport />} />
           <Route path="finance-realization-report" element={<RealizationReport />} />
           <Route path="system-logs" element={<SystemLogs />} />
-          <Route path="integrasi/projects" element={<IntegrasiMonitoring />} />
+          <Route path="integrasi/projects" element={<IntegrationProjects />} />
           <Route path="integrasi/connector" element={<ConnectorMonitoring />} />
           <Route path="org-settings" element={<OrgSettings />} />
         </Route>

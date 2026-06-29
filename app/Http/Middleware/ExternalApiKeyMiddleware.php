@@ -28,6 +28,8 @@ class ExternalApiKeyMiddleware
             ->first();
 
         if ($integration) {
+            $integration->last_used_at = now();
+            $integration->saveQuietly();
             $request->attributes->set('integration', $integration);
             $request->attributes->set('integration_project_id', $integration->project_id);
             $request->attributes->set('is_global_integration', false);
@@ -40,6 +42,8 @@ class ExternalApiKeyMiddleware
             ->first();
 
         if ($global) {
+            $global->last_used_at = now();
+            $global->saveQuietly();
             $request->attributes->set('integration', $global);
             $request->attributes->set('integration_project_id', null);
             $request->attributes->set('is_global_integration', true);
