@@ -122,10 +122,10 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                 className="cursor-pointer border-slate-200/90 shadow-sm transition-colors hover:border-primary/40 dark:border-slate-700/80 overflow-hidden"
                 onClick={() => onClick(task)}
             >
-                {cardPrefix && (
+                {cardPrefix && task.project_sequence != null && (
                     <div className="bg-primary/10 dark:bg-primary/20 px-3 py-1 border-b border-primary/10 dark:border-primary/20">
                         <span className="font-mono text-[10px] font-semibold text-primary dark:text-primary/80 tracking-wide">
-                            {cardPrefix}-{task.id}
+                            {cardPrefix}-{task.project_sequence}
                         </span>
                     </div>
                 )}
@@ -2241,9 +2241,9 @@ export default function ProjectBoard() {
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0 flex-1">
-                                        {selectedProject?.name && (
+                                        {selectedProject?.name && task.project_sequence != null && (
                                             <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
-                                                {selectedProject.name.slice(0, 2).toUpperCase()}-{task.id}
+                                                {selectedProject.name.slice(0, 2).toUpperCase()}-{task.project_sequence}
                                             </p>
                                         )}
                                         <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 leading-snug">

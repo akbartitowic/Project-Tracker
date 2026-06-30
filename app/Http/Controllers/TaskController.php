@@ -700,6 +700,8 @@ class TaskController extends Controller
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
+        $validated['project_sequence'] = (int) Task::where('project_id', $validated['project_id'])->max('project_sequence') + 1;
+
         $task = Task::create($validated);
         $this->ensureAssigneeIsProjectMember(
             (int) $task->project_id,
