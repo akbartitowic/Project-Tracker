@@ -79,7 +79,7 @@ function normalizeSubtaskStatus(status) {
     return 'To Do';
 }
 
-function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours, onMoveToBacklog }) {
+function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours, onMoveToBacklog, cardPrefix }) {
     const [expanded, setExpanded] = useState(false);
 
 
@@ -162,6 +162,11 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                         </div>
                     )}
 
+                    {cardPrefix && (
+                        <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mb-0.5">
+                            {cardPrefix}-{task.id}
+                        </p>
+                    )}
                     <h4 className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-100">{task.title}</h4>
 
                     {/* Expandable details */}
@@ -2201,6 +2206,7 @@ export default function ProjectBoard() {
                                                 assigneeName={task.assignee_id ? assigneeNameById[task.assignee_id] : null}
                                                 onClick={(t) => handleOpenModal(t.status, t)}
                                                 onMoveToBacklog={canUpdateBoard ? handleMoveToBacklog : null}
+                                                cardPrefix={selectedProject?.name ? selectedProject.name.slice(0, 2).toUpperCase() : null}
                                             />
                                         ))}
                                     </BoardColumn>
@@ -2233,6 +2239,11 @@ export default function ProjectBoard() {
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0 flex-1">
+                                        {selectedProject?.name && (
+                                            <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                                                {selectedProject.name.slice(0, 2).toUpperCase()}-{task.id}
+                                            </p>
+                                        )}
                                         <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 leading-snug">
                                             {task.title}
                                         </p>
