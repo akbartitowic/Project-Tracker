@@ -119,9 +119,16 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
     return (
         <div ref={setNodeRef} style={style} className="relative group touch-none" {...attributes} {...listeners}>
             <Card
-                className="cursor-pointer border-slate-200/90 shadow-sm transition-colors hover:border-primary/40 dark:border-slate-700/80"
+                className="cursor-pointer border-slate-200/90 shadow-sm transition-colors hover:border-primary/40 dark:border-slate-700/80 overflow-hidden"
                 onClick={() => onClick(task)}
             >
+                {cardPrefix && (
+                    <div className="bg-primary/10 dark:bg-primary/20 px-3 py-1 border-b border-primary/10 dark:border-primary/20">
+                        <span className="font-mono text-[10px] font-semibold text-primary dark:text-primary/80 tracking-wide">
+                            {cardPrefix}-{task.id}
+                        </span>
+                    </div>
+                )}
                 <div className="p-3">
                     {/* Top badges row */}
                     <div className="mb-1.5 flex flex-wrap items-center gap-1">
@@ -162,11 +169,6 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                         </div>
                     )}
 
-                    {cardPrefix && (
-                        <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mb-0.5">
-                            {cardPrefix}-{task.id}
-                        </p>
-                    )}
                     <h4 className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-100">{task.title}</h4>
 
                     {/* Expandable details */}
