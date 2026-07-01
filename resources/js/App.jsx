@@ -97,6 +97,7 @@ function App() {
           <Route path="board/:projectId/gantt" element={<ProjectBoardGantt />} />
           <Route path="board/:projectId/backlog" element={<ProjectBoardBacklog />} />
           <Route path="board/:projectId/notes" element={<ProjectBoardNotes />} />
+          <Route path="board/:projectId/task/:taskRouteId" element={<ProjectBoard />} />
           <Route path="board/:projectId?" element={<ProjectBoard />} />
           <Route path="team-load" element={<TeamLoad />} />
           <Route path="review" element={<Review />} />

@@ -79,7 +79,7 @@ function normalizeSubtaskStatus(status) {
     return 'To Do';
 }
 
-function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours, onMoveToBacklog }) {
+function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours, onMoveToBacklog, cardPrefix }) {
     const [expanded, setExpanded] = useState(false);
 
 
@@ -119,9 +119,16 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
     return (
         <div ref={setNodeRef} style={style} className="relative group touch-none" {...attributes} {...listeners}>
             <Card
-                className="cursor-pointer border-slate-200/90 shadow-sm transition-colors hover:border-primary/40 dark:border-slate-700/80"
+                className="cursor-pointer border-slate-200/90 shadow-sm transition-colors hover:border-primary/40 dark:border-slate-700/80 overflow-hidden"
                 onClick={() => onClick(task)}
             >
+                {cardPrefix && task.project_sequence != null && (
+                    <div className="bg-primary/10 dark:bg-primary/20 px-3 py-1 border-b border-primary/10 dark:border-primary/20">
+                        <span className="font-mono text-[10px] font-semibold text-primary dark:text-primary/80 tracking-wide">
+                            {cardPrefix}-{task.project_sequence}
+                        </span>
+                    </div>
+                )}
                 <div className="p-3">
                     {/* Top badges row */}
                     <div className="mb-1.5 flex flex-wrap items-center gap-1">
@@ -271,7 +278,7 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
 }
 
 export default function ProjectBoard() {
-    const { projectId } = useParams();
+    const { projectId, taskRouteId } = useParams();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const taskParam = searchParams.get('task');
@@ -653,12 +660,16 @@ export default function ProjectBoard() {
     const closeTaskModal = useCallback(() => {
         setIsModalOpen(false);
         setEditingTaskId(null);
-        setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            next.delete('task');
-            return next;
-        }, { replace: true });
-    }, [setSearchParams]);
+        if (taskRouteId) {
+            navigate(`/board/${projectId}`, { replace: true });
+        } else {
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('task');
+                return next;
+            }, { replace: true });
+        }
+    }, [setSearchParams, taskRouteId, projectId, navigate]);
 
     const handleOpenModal = (status, taskToEdit = null) => {
         applyTaskFormState(status, taskToEdit);
@@ -677,6 +688,8 @@ export default function ProjectBoard() {
 
     useEffect(() => {
         if (!projectId || !selectedProject) return;
+        // When on the task route, let the taskRouteId effect manage the modal
+        if (taskRouteId) return;
         if (!taskParam) {
             if (isModalOpen) {
                 setIsModalOpen(false);
@@ -704,7 +717,18 @@ export default function ProjectBoard() {
                 return next;
             }, { replace: true });
         }
-    }, [taskParam, projectId, selectedProject, tasks, applyTaskFormState, isModalOpen, editingTaskId, setSearchParams]);
+    }, [taskParam, taskRouteId, projectId, selectedProject, tasks, applyTaskFormState, isModalOpen, editingTaskId, setSearchParams]);
+
+    useEffect(() => {
+        if (!taskRouteId || !selectedProject || tasks.length === 0) return;
+        const task = tasks.find(t => String(t.id) === taskRouteId);
+        if (task) {
+            applyTaskFormState(task.status, task);
+            setIsModalOpen(true);
+        } else {
+            navigate(`/board/${projectId}`, { replace: true });
+        }
+    }, [taskRouteId, selectedProject, tasks, projectId]);
 
     useEffect(() => {
         if (!projectId && taskParam) {
@@ -2199,8 +2223,9 @@ export default function ProjectBoard() {
                                                 isFreelance={isFreelance}
                                                 formatHours={formatHours}
                                                 assigneeName={task.assignee_id ? assigneeNameById[task.assignee_id] : null}
-                                                onClick={(t) => handleOpenModal(t.status, t)}
+                                                onClick={(t) => navigate(`/board/${projectId}/task/${t.id}`)}
                                                 onMoveToBacklog={canUpdateBoard ? handleMoveToBacklog : null}
+                                                cardPrefix={selectedProject?.name ? selectedProject.name.slice(0, 2).toUpperCase() : null}
                                             />
                                         ))}
                                     </BoardColumn>
@@ -2220,7 +2245,7 @@ export default function ProjectBoard() {
                         {visibleTasks.map((task) => (
                             <div
                                 key={task.id}
-                                onClick={() => handleOpenModal(task.status, task)}
+                                onClick={() => navigate(`/board/${projectId}/task/${task.id}`)}
                                 className={cn(
                                     'rounded-xl border bg-white dark:bg-[#151b28] p-3 cursor-pointer transition-colors active:bg-slate-50 dark:active:bg-slate-800',
                                     isTaskBulkEditMode && selectedTaskIds.includes(task.id)
@@ -2233,6 +2258,11 @@ export default function ProjectBoard() {
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0 flex-1">
+                                        {selectedProject?.name && task.project_sequence != null && (
+                                            <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                                                {selectedProject.name.slice(0, 2).toUpperCase()}-{task.project_sequence}
+                                            </p>
+                                        )}
                                         <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 leading-snug">
                                             {task.title}
                                         </p>
@@ -2303,7 +2333,7 @@ export default function ProjectBoard() {
                                         if (isTaskBulkEditMode) {
                                             toggleTaskSelection(task.id);
                                         } else {
-                                            handleOpenModal(task.status, task);
+                                            navigate(`/board/${projectId}/task/${task.id}`);
                                         }
                                     }}>
                                         {isTaskBulkEditMode && (
@@ -2396,23 +2426,64 @@ export default function ProjectBoard() {
                 </div>
             )}
 
-            {/* Modal */}
+            {/* Modal / Full-page task view */}
             <Dialog
                 open={isModalOpen}
+                modal={!taskRouteId}
                 onOpenChange={(open) => {
                     if (!open) closeTaskModal();
                     else setIsModalOpen(true);
                 }}
             >
-                <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-3xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
-                    <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
-                        <DialogTitle>{editingTaskId ? 'Edit Task' : 'Add New Task'}</DialogTitle>
-                        {selectedProject && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                {selectedProject.name} · {selectedProject.methodology || 'Project'}
-                            </p>
-                        )}
-                    </DialogHeader>
+                <DialogContent className={cn(
+                    "flex flex-col p-0 gap-0 overflow-hidden",
+                    taskRouteId
+                        ? "!fixed !inset-0 !max-w-none !w-full !h-dvh !max-h-none !translate-x-0 !translate-y-0 !rounded-none shadow-none"
+                        : "w-[calc(100vw-1.5rem)] sm:max-w-3xl max-h-[92vh]"
+                )}>
+                    {taskRouteId ? (
+                        /* ── Full-page header ── */
+                        <div className="flex items-center gap-2 sm:gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28] shrink-0">
+                            <Button variant="ghost" size="icon" className="size-8 shrink-0" onClick={closeTaskModal}>
+                                <ArrowLeft className="size-4" />
+                            </Button>
+                            {selectedProject && editingTask?.project_sequence != null && (
+                                <span className="font-mono text-[11px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded shrink-0">
+                                    {selectedProject.name.slice(0, 2).toUpperCase()}-{editingTask.project_sequence}
+                                </span>
+                            )}
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white truncate leading-tight">
+                                    {newTaskTitle || editingTask?.title || (editingTaskId ? 'Edit Task' : 'Tambah Task')}
+                                </p>
+                                {selectedProject && (
+                                    <p className="text-[11px] text-slate-400 leading-tight">{selectedProject.name}</p>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {editingTaskId && canUpdateBoard && (
+                                    <Button type="button" variant="ghost" size="icon" className="size-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => setConfirmDeleteTaskOpen(true)} disabled={isSubmitting}>
+                                        <Trash2 className="size-4" />
+                                    </Button>
+                                )}
+                                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={closeTaskModal}>Batal</Button>
+                                <Button type="submit" form="task-edit-form" size="sm" className="h-8 text-xs" disabled={isSubmitting}>
+                                    {isSubmitting && <Loader2 className="mr-1 size-3.5 animate-spin" />}
+                                    {editingTaskId ? 'Simpan' : 'Buat Task'}
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        /* ── Modal header ── */
+                        <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+                            <DialogTitle>{editingTaskId ? 'Edit Task' : 'Add New Task'}</DialogTitle>
+                            {selectedProject && (
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                    {selectedProject.name} · {selectedProject.methodology || 'Project'}
+                                </p>
+                            )}
+                        </DialogHeader>
+                    )}
                     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
                     <form
                         id="task-edit-form"
@@ -2685,6 +2756,8 @@ export default function ProjectBoard() {
                                 formatHours={formatHours}
                                 currentUserId={user?.id}
                                 canDeleteAnyNotes={canUpdateBoard}
+                                cardPrefix={selectedProject?.name ? selectedProject.name.slice(0, 2).toUpperCase() : null}
+                                parentProjectSequence={editingTask?.project_sequence ?? null}
                             />
                         </div>
                     )}
@@ -2705,22 +2778,24 @@ export default function ProjectBoard() {
                     )}
                     </div>
 
-                    <DialogFooter className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 bg-slate-50/80 dark:bg-slate-900/40">
-                        {editingTaskId && canUpdateBoard && (
-                            <Button type="button" variant="ghost"
-                                className="mr-auto text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1.5"
-                                onClick={() => setConfirmDeleteTaskOpen(true)}
-                                disabled={isSubmitting}>
-                                <Trash2 className="size-4" />
-                                Hapus Task
+                    {!taskRouteId && (
+                        <DialogFooter className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 bg-slate-50/80 dark:bg-slate-900/40">
+                            {editingTaskId && canUpdateBoard && (
+                                <Button type="button" variant="ghost"
+                                    className="mr-auto text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1.5"
+                                    onClick={() => setConfirmDeleteTaskOpen(true)}
+                                    disabled={isSubmitting}>
+                                    <Trash2 className="size-4" />
+                                    Hapus Task
+                                </Button>
+                            )}
+                            <Button type="button" variant="outline" onClick={closeTaskModal}>Cancel</Button>
+                            <Button type="submit" form="task-edit-form" disabled={isSubmitting}>
+                                {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                                {editingTaskId ? 'Save Changes' : 'Create Task'}
                             </Button>
-                        )}
-                        <Button type="button" variant="outline" onClick={closeTaskModal}>Cancel</Button>
-                        <Button type="submit" form="task-edit-form" disabled={isSubmitting}>
-                            {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
-                            {editingTaskId ? 'Save Changes' : 'Create Task'}
-                        </Button>
-                    </DialogFooter>
+                        </DialogFooter>
+                    )}
                 </DialogContent>
             </Dialog>
 

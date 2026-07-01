@@ -688,6 +688,7 @@ class TaskController extends Controller
 
         if ($parentTaskId) {
             $validated['sort_order'] = (int) Task::where('parent_task_id', $parentTaskId)->max('sort_order') + 1;
+            $validated['task_sequence'] = (int) Task::where('parent_task_id', $parentTaskId)->max('task_sequence') + 1;
         }
 
         if (UserAccess::isFreelance($user)) {
@@ -699,6 +700,8 @@ class TaskController extends Controller
         if (!ProjectAccess::canAccessProject($user, (int) $validated['project_id'])) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
+
+        $validated['project_sequence'] = (int) Task::where('project_id', $validated['project_id'])->max('project_sequence') + 1;
 
         $task = Task::create($validated);
         $this->ensureAssigneeIsProjectMember(
