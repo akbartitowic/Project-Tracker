@@ -688,6 +688,7 @@ class TaskController extends Controller
 
         if ($parentTaskId) {
             $validated['sort_order'] = (int) Task::where('parent_task_id', $parentTaskId)->max('sort_order') + 1;
+            $validated['task_sequence'] = (int) Task::where('parent_task_id', $parentTaskId)->max('task_sequence') + 1;
         }
 
         if (UserAccess::isFreelance($user)) {

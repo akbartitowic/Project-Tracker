@@ -30,6 +30,7 @@ class Task extends Model
         'start_date',
         'is_backlog',
         'project_sequence',
+        'task_sequence',
     ];
 
     protected $casts = [

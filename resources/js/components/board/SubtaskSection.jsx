@@ -91,6 +91,8 @@ export default function SubtaskSection({
     formatHours,
     currentUserId,
     canDeleteAnyNotes = false,
+    cardPrefix = null,
+    parentProjectSequence = null,
 }) {
     const [editingId, setEditingId] = useState(null);
     const [notesTarget, setNotesTarget] = useState(null);
@@ -252,6 +254,11 @@ export default function SubtaskSection({
                                     className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-3 py-2.5"
                                 >
                                     <div className="min-w-0 flex-1">
+                                        {cardPrefix && parentProjectSequence != null && st.task_sequence != null && (
+                                            <span className="inline-block mb-1 font-mono text-[10px] font-semibold text-primary dark:text-primary/80 tracking-wide bg-primary/10 dark:bg-primary/20 px-1.5 py-0.5 rounded">
+                                                {cardPrefix}-{parentProjectSequence}-{st.task_sequence}
+                                            </span>
+                                        )}
                                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{st.title}</p>
                                         {st.description?.trim() && (
                                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 whitespace-pre-wrap">

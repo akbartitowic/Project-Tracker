@@ -688,6 +688,8 @@ export default function ProjectBoard() {
 
     useEffect(() => {
         if (!projectId || !selectedProject) return;
+        // When on the task route, let the taskRouteId effect manage the modal
+        if (taskRouteId) return;
         if (!taskParam) {
             if (isModalOpen) {
                 setIsModalOpen(false);
@@ -715,7 +717,7 @@ export default function ProjectBoard() {
                 return next;
             }, { replace: true });
         }
-    }, [taskParam, projectId, selectedProject, tasks, applyTaskFormState, isModalOpen, editingTaskId, setSearchParams]);
+    }, [taskParam, taskRouteId, projectId, selectedProject, tasks, applyTaskFormState, isModalOpen, editingTaskId, setSearchParams]);
 
     useEffect(() => {
         if (!taskRouteId || !selectedProject || tasks.length === 0) return;
@@ -2754,6 +2756,8 @@ export default function ProjectBoard() {
                                 formatHours={formatHours}
                                 currentUserId={user?.id}
                                 canDeleteAnyNotes={canUpdateBoard}
+                                cardPrefix={selectedProject?.name ? selectedProject.name.slice(0, 2).toUpperCase() : null}
+                                parentProjectSequence={editingTask?.project_sequence ?? null}
                             />
                         </div>
                     )}
