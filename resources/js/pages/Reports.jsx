@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import {
@@ -436,8 +437,8 @@ export default function Reports() {
 
     return (
         <div className="flex-1 flex flex-col overflow-y-auto w-full">
-            <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16 space-y-8">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-5">
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
                             Reports Overview
@@ -455,6 +456,16 @@ export default function Reports() {
                     </Button>
                 </div>
 
+                <Tabs defaultValue="overview">
+                    <TabsList className="mb-5 flex-wrap h-auto gap-1">
+                        <TabsTrigger value="overview">Overview</TabsTrigger>
+                        <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
+                        <TabsTrigger value="financials">Financials</TabsTrigger>
+                        <TabsTrigger value="expenses">Pengeluaran</TabsTrigger>
+                        <TabsTrigger value="tasks">Tasks</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="overview" className="space-y-6">
                 {/* Executive summary */}
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardHeader className="pb-3">
@@ -623,7 +634,9 @@ export default function Reports() {
                         </CardContent>
                     </Card>
                 </div>
+                    </TabsContent>
 
+                    <TabsContent value="portfolio" className="space-y-6">
                 {/* Company project summary */}
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardHeader className="pb-3">
@@ -712,7 +725,9 @@ export default function Reports() {
                         </SectionTable>
                     </CardContent>
                 </Card>
+                    </TabsContent>
 
+                    <TabsContent value="financials" className="space-y-6">
                 {/* Company financial breakdown */}
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardHeader className="pb-3">
@@ -896,7 +911,9 @@ export default function Reports() {
                         </p>
                     </CardContent>
                 </Card>
+                    </TabsContent>
 
+                    <TabsContent value="expenses" className="space-y-6">
                 {/* Expense paid / unpaid by user & category */}
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardHeader className="pb-3">
@@ -1178,7 +1195,9 @@ export default function Reports() {
                         </p>
                     </CardContent>
                 </Card>
+                    </TabsContent>
 
+                    <TabsContent value="tasks" className="space-y-6">
                 {/* Task status table */}
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardHeader className="pb-3">
@@ -1215,7 +1234,9 @@ export default function Reports() {
                         </SectionTable>
                     </CardContent>
                 </Card>
+                    </TabsContent>
 
+                    <TabsContent value="portfolio" className="space-y-6">
                 {/* Project portfolio table */}
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardHeader className="pb-3">
@@ -1476,7 +1497,9 @@ export default function Reports() {
                         </SectionTable>
                     </CardContent>
                 </Card>
+                    </TabsContent>
 
+                    <TabsContent value="financials" className="space-y-6">
                 {/* Revenue trend table */}
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardHeader className="pb-3">
@@ -1561,6 +1584,8 @@ export default function Reports() {
                         </SectionTable>
                     </CardContent>
                 </Card>
+                    </TabsContent>
+                </Tabs>
             </div>
         </div>
     );
