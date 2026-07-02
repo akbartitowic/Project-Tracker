@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import {
     Wallet,
@@ -233,6 +233,7 @@ function UserSearchInput({ value, onChange, options = [], placeholder = 'Cari us
 export default function FinanceMonitoring() {
     const { projectId: projectIdParam } = useParams();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [projectRolesList, setProjectRolesList] = useState([]);
@@ -373,6 +374,16 @@ export default function FinanceMonitoring() {
 
         loadProjectFinance(project.id);
     }, [projectIdParam, projects, navigate, loadProjectFinance]);
+
+    useEffect(() => {
+        const modal = searchParams.get('modal');
+        if (modal === 'quota-breakdown') {
+            if (!isQuotaDetailsOpen) setIsQuotaDetailsOpen(true);
+        } else {
+            if (isQuotaDetailsOpen) setIsQuotaDetailsOpen(false);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
 
     const handleAddAllocation = async (e) => {
         e.preventDefault();
@@ -594,6 +605,7 @@ export default function FinanceMonitoring() {
         if (!selectedProject) return;
         setLoadingQuotas(true);
         setIsQuotaDetailsOpen(true);
+        setSearchParams((prev) => { const p = new URLSearchParams(prev); p.set('modal', 'quota-breakdown'); return p; });
         try {
             const res = await fetchAPI(`/projects/${selectedProject}/quotas`);
             setQuotaBreakdown(res.data || []);
@@ -603,6 +615,11 @@ export default function FinanceMonitoring() {
         } finally {
             setLoadingQuotas(false);
         }
+    };
+
+    const closeQuotaDetails = () => {
+        setIsQuotaDetailsOpen(false);
+        setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('modal'); return p; });
     };
 
     const refreshQuotas = async () => {
@@ -1559,8 +1576,8 @@ export default function FinanceMonitoring() {
 
             {/* Quota Details Modal */}
             {isQuotaDetailsOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={closeQuotaDetails}>
+                    <Card className="w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
                         <CardHeader className="pb-4 border-b">
                             <CardTitle className="flex items-center gap-2">
                                 <Clock className="size-5 text-primary" /> Manhour Quota Breakdown
@@ -1715,7 +1732,7 @@ export default function FinanceMonitoring() {
                             )}
                         </CardContent>
                         <div className="p-6 pt-2 flex items-center justify-end border-t mt-4">
-                            <Button variant="outline" onClick={() => setIsQuotaDetailsOpen(false)}>Close Details</Button>
+                            <Button variant="outline" onClick={closeQuotaDetails}>Close Details</Button>
                         </div>
                     </Card>
                 </div>
