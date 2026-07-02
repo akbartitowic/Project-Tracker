@@ -1121,6 +1121,58 @@ export default function FinanceMonitoring() {
                                         </Card>
                                     );
                                 })()}
+
+                                {/* Right column: Margin / Budget Health (non-waterfall only) */}
+                                {!isWaterfallProject && (() => {
+                                    const isNegative = Number(summary.remaining_margin ?? 0) < 0;
+                                    const marginPct = summary.quotation_value > 0
+                                        ? (summary.remaining_margin / summary.quotation_value) * 100
+                                        : 0;
+                                    const expensePct = Math.min(100, allocationPercentage);
+                                    return (
+                                        <Card className="border-slate-200 dark:border-slate-800">
+                                            <CardHeader className="pb-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+                                                            <Banknote className="size-4 text-slate-600 dark:text-slate-400" />
+                                                        </div>
+                                                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Budget Health</span>
+                                                    </div>
+                                                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isNegative ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'}`}>
+                                                        {isNegative ? 'Over Budget' : 'On Track'}
+                                                    </span>
+                                                </div>
+
+                                                <div className="mt-4 grid grid-cols-3 gap-2">
+                                                    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3">
+                                                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Quotation</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-white truncate">{formatCurrency(summary.quotation_value)}</p>
+                                                    </div>
+                                                    <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 p-3">
+                                                        <p className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400 mb-1">Expense</p>
+                                                        <p className="text-base font-bold text-amber-700 dark:text-amber-300 truncate">{formatCurrency(summary.total_allocated)}</p>
+                                                        <p className="text-[10px] text-amber-500 dark:text-amber-400 mt-0.5">{expensePct.toFixed(1)}% used</p>
+                                                    </div>
+                                                    <div className={`rounded-lg p-3 border ${isNegative ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-900/40' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-900/40'}`}>
+                                                        <p className={`text-[10px] font-bold uppercase mb-1 ${isNegative ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>Margin</p>
+                                                        <p className={`text-base font-bold truncate ${isNegative ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                                                            {formatCurrency(summary.remaining_margin)}
+                                                        </p>
+                                                        <p className={`text-[10px] mt-0.5 ${isNegative ? 'text-rose-500' : 'text-emerald-500'}`}>{marginPct.toFixed(1)}%</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-3">
+                                                    <Progress
+                                                        value={expensePct}
+                                                        className={`h-2 ${expensePct > 100 ? '[&>div]:bg-rose-500' : expensePct > 85 ? '[&>div]:bg-amber-500' : '[&>div]:bg-emerald-500'}`}
+                                                    />
+                                                </div>
+                                            </CardHeader>
+                                        </Card>
+                                    );
+                                })()}
                             </div>
                                 </TabsContent>
 
