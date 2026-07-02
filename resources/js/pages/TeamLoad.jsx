@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
-import { CalendarOff, Check, ChevronDown, ExternalLink, Loader2, Plus, Search, Settings, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { CalendarOff, ArrowUpDown, Check, ChevronDown, ExternalLink, Loader2, Plus, Search, Settings, SlidersHorizontal, Trash2, Users, X } from 'lucide-react';
+import PaginationControls from '../components/ui/PaginationControls';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +35,7 @@ import {
 
 export default function TeamLoad() {
     const navigate = useNavigate();
+    const { user: currentUser } = useAuth();
     const [loading, setLoading]                   = useState(true);
     const [savingExcluded, setSavingExcluded]     = useState(false);
     const [payload, setPayload]                   = useState(null);
@@ -46,6 +49,10 @@ export default function TeamLoad() {
     const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
     const [roleSearchQuery, setRoleSearchQuery]   = useState('');
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+    const [relatedOnly, setRelatedOnly]           = useState(true);
+    const [sortOrder, setSortOrder]               = useState('asc');
+    const [chartPage, setChartPage]               = useState(1);
+    const [chartPageSize, setChartPageSize]       = useState(15);
     const chartScrollRef  = useRef(null);
     const roleDropdownRef = useRef(null);
 
@@ -80,6 +87,12 @@ export default function TeamLoad() {
     const toggleUser = (userId) =>
         setSelectedUserIds((prev) => prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]);
 
+    const currentUserProjectIds = useMemo(() => {
+        if (!currentUser) return new Set();
+        const me = users.find((u) => u.id === currentUser.id);
+        return new Set(me?.project_ids ?? []);
+    }, [users, currentUser]);
+
     const matchesRoleFilter = (user) => {
         if (selectedRoleIds.length === 0) return true;
         return (user.roles || []).some((r) => selectedRoleIds.includes(r.id));
@@ -88,15 +101,32 @@ export default function TeamLoad() {
     const sidebarUsers = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
         let list = users.filter(matchesRoleFilter);
+        if (relatedOnly && currentUserProjectIds.size > 0) {
+            list = list.filter((u) =>
+                u.id === currentUser?.id ||
+                (u.project_ids ?? []).some((pid) => currentUserProjectIds.has(pid))
+            );
+        }
         if (q) list = list.filter((u) => u.name.toLowerCase().includes(q));
+        list = [...list].sort((a, b) =>
+            sortOrder === 'asc'
+                ? a.name.localeCompare(b.name)
+                : b.name.localeCompare(a.name)
+        );
         return list;
-    }, [users, searchQuery, selectedRoleIds]);
+    }, [users, searchQuery, selectedRoleIds, relatedOnly, currentUserProjectIds, currentUser, sortOrder]);
 
     const displayUsers = useMemo(() => {
-        if (selectedUserIds.length > 0)
-            return sidebarUsers.filter((u) => selectedUserIds.includes(u.id));
-        return sidebarUsers;
+        const base = selectedUserIds.length > 0
+            ? sidebarUsers.filter((u) => selectedUserIds.includes(u.id))
+            : sidebarUsers;
+        return base;
     }, [sidebarUsers, selectedUserIds]);
+
+    const pagedDisplayUsers = useMemo(() => {
+        if (selectedUserIds.length > 0) return displayUsers;
+        return displayUsers.slice((chartPage - 1) * chartPageSize, chartPage * chartPageSize);
+    }, [displayUsers, selectedUserIds, chartPage, chartPageSize]);
 
     const monthBands   = useMemo(() => buildLoadMonthBands(timelineDays, LOAD_DAY_WIDTH), [timelineDays]);
     const chartWidth   = timelineDays.length * LOAD_DAY_WIDTH;
@@ -122,11 +152,11 @@ export default function TeamLoad() {
     };
 
     useLayoutEffect(() => {
-        if (loading || !displayUsers.length || !timelineDays.length) return;
+        if (loading || !pagedDisplayUsers.length || !timelineDays.length) return;
         scrollToToday();
         const frame = requestAnimationFrame(() => scrollToToday());
         return () => cancelAnimationFrame(frame);
-    }, [loading, displayUsers.length, timelineDays.length, todayKey]);
+    }, [loading, pagedDisplayUsers.length, timelineDays.length, todayKey]);
 
     useEffect(() => {
         if (!roleDropdownOpen) return;
@@ -463,19 +493,44 @@ export default function TeamLoad() {
                                 Libur
                             </span>
                         </div>
-                        <span className="text-[11px] text-slate-400">
-                            {selectedUserIds.length > 0
-                                ? `${displayUsers.length} dari ${sidebarUsers.length} ditampilkan`
-                                : `${displayUsers.length} anggota`}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setSortOrder((s) => s === 'asc' ? 'desc' : 'asc')}
+                                className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                                title={sortOrder === 'asc' ? 'Urutan A-Z (klik untuk Z-A)' : 'Urutan Z-A (klik untuk A-Z)'}
+                            >
+                                <ArrowUpDown className="size-3" />
+                                {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}
+                            </button>
+                            <span className="text-slate-300 dark:text-slate-700">·</span>
+                            <button
+                                type="button"
+                                onClick={() => { setRelatedOnly((v) => !v); setChartPage(1); }}
+                                className={cn(
+                                    'flex items-center gap-1 text-[11px] transition-colors',
+                                    relatedOnly ? 'text-primary font-semibold' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                )}
+                                title={relatedOnly ? 'Menampilkan anggota 1 project (klik untuk semua)' : 'Menampilkan semua anggota (klik untuk filter)'}
+                            >
+                                <Users className="size-3" />
+                                {relatedOnly ? 'Terkait' : 'Semua'}
+                            </button>
+                            <span className="text-slate-300 dark:text-slate-700">·</span>
+                            <span className="text-[11px] text-slate-400">
+                                {selectedUserIds.length > 0
+                                    ? `${displayUsers.length} dipilih`
+                                    : `${pagedDisplayUsers.length} dari ${displayUsers.length}`}
+                            </span>
+                        </div>
                     </div>
 
-                    {displayUsers.length === 0 ? (
+                    {pagedDisplayUsers.length === 0 ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-sm gap-2 py-16">
                             <p>Tidak ada user yang sesuai filter.</p>
-                            {hasActiveFilter && (
+                            {(hasActiveFilter || relatedOnly) && (
                                 <button type="button"
-                                    onClick={() => { setSearchQuery(''); setSelectedRoleIds([]); setSelectedUserIds([]); }}
+                                    onClick={() => { setSearchQuery(''); setSelectedRoleIds([]); setSelectedUserIds([]); setRelatedOnly(false); setChartPage(1); }}
                                     className="text-xs text-primary hover:underline">
                                     Reset semua filter
                                 </button>
@@ -522,7 +577,7 @@ export default function TeamLoad() {
                                 </div>
 
                                 {/* Rows */}
-                                {displayUsers.map((user) => (
+                                {pagedDisplayUsers.map((user) => (
                                     <div key={user.id}
                                         className={cn(
                                             'flex border-b border-slate-100 dark:border-slate-800',
@@ -566,6 +621,17 @@ export default function TeamLoad() {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    )}
+                    {selectedUserIds.length === 0 && displayUsers.length > chartPageSize && (
+                        <div className="shrink-0 px-4 py-2 border-t border-slate-100 dark:border-slate-800">
+                            <PaginationControls
+                                page={chartPage}
+                                pageSize={chartPageSize}
+                                total={displayUsers.length}
+                                onPageChange={setChartPage}
+                                onPageSizeChange={(s) => { setChartPageSize(s); setChartPage(1); }}
+                            />
                         </div>
                     )}
                 </Card>

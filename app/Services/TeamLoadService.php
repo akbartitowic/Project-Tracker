@@ -74,12 +74,18 @@ class TeamLoadService
             ->groupBy('user_id')
             ->map(fn ($rows) => $rows->map(fn ($r) => ['id' => $r->role_id, 'name' => $r->role_name])->unique('id')->values()->all());
 
+        $projectIdsByUser = DB::table('project_members')
+            ->select('user_id', 'project_id')
+            ->get()
+            ->groupBy('user_id')
+            ->map(fn ($rows) => $rows->pluck('project_id')->unique()->values()->all());
+
         $allRoles = ProjectRole::query()->orderBy('name')->get(['id', 'name'])->toArray();
 
         $users = User::query()
             ->orderBy('name')
             ->get(['id', 'name'])
-            ->map(function (User $user) use ($dailyByUser, $detailsByUser, $timelineDays, $excludedDates, $rolesByUser) {
+            ->map(function (User $user) use ($dailyByUser, $detailsByUser, $timelineDays, $excludedDates, $rolesByUser, $projectIdsByUser) {
                 $raw = $dailyByUser[$user->id] ?? [];
                 $rawDetails = $detailsByUser[$user->id] ?? [];
                 $daily = [];
@@ -104,6 +110,7 @@ class TeamLoadService
                     'daily_mh' => $daily,
                     'daily_details' => $details,
                     'roles' => $rolesByUser->get($user->id, []),
+                    'project_ids' => $projectIdsByUser->get($user->id, []),
                 ];
             })
             ->values()
