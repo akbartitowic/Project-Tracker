@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import PaginationControls from '../components/ui/PaginationControls';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -846,6 +847,8 @@ export default function Review() {
     const [projects,       setProjects]       = useState([]);
     const [summaries,      setSummaries]      = useState({});
     const [loading,        setLoading]        = useState(true);
+    const [page,           setPage]           = useState(1);
+    const [pageSize,       setPageSize]       = useState(10);
     const [error,          setError]          = useState(null);
     const [summaryProject, setSummaryProject] = useState(null);
 
@@ -874,6 +877,15 @@ export default function Review() {
     const activeCount    = projects.filter(p => p.status === 'In Progress').length;
     const agileCount     = projects.filter(p => p.methodology === 'Agile Scrum').length;
     const waterfallCount = projects.filter(p => p.methodology === 'Waterfall').length;
+
+    const sortedProjects = useMemo(
+        () => [...projects].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+        [projects]
+    );
+    const pagedProjects = useMemo(
+        () => sortedProjects.slice((page - 1) * pageSize, page * pageSize),
+        [sortedProjects, page, pageSize]
+    );
 
     return (
         <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16 space-y-5">
@@ -948,24 +960,36 @@ export default function Review() {
                     <p className="text-sm font-medium">Belum ada project</p>
                 </div>
             ) : view === 'card' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {projects.map(p => (
-                        <ProjectGridCard
-                            key={p.id} project={p}
-                            onOpenSummary={setSummaryProject}
-                            summaryData={summaries[p.id]}
-                        />
-                    ))}
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {pagedProjects.map(p => (
+                            <ProjectGridCard
+                                key={p.id} project={p}
+                                onOpenSummary={setSummaryProject}
+                                summaryData={summaries[p.id]}
+                            />
+                        ))}
+                    </div>
+                    <PaginationControls
+                        page={page} pageSize={pageSize} total={sortedProjects.length}
+                        onPageChange={setPage}
+                        onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+                    />
                 </div>
             ) : (
                 <div className="space-y-2.5">
-                    {projects.map(p => (
+                    {pagedProjects.map(p => (
                         <ProjectListRow
                             key={p.id} project={p}
                             onOpenSummary={setSummaryProject}
                             summaryData={summaries[p.id]}
                         />
                     ))}
+                    <PaginationControls
+                        page={page} pageSize={pageSize} total={sortedProjects.length}
+                        onPageChange={setPage}
+                        onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+                    />
                 </div>
             )}
 

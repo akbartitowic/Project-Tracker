@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import PaginationControls from '../components/ui/PaginationControls';
 import { fetchAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { hasPermission } from '../utils/permissions';
@@ -23,6 +24,8 @@ export default function ProjectCategoryMaster() {
 
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [saving, setSaving] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -126,6 +129,15 @@ export default function ProjectCategoryMaster() {
 
   const isEdit = Boolean(editingItem);
 
+  const sortedCategories = useMemo(
+    () => [...categories].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+    [categories]
+  );
+  const pagedCategories = useMemo(
+    () => sortedCategories.slice((page - 1) * pageSize, page * pageSize),
+    [sortedCategories, page, pageSize]
+  );
+
   return (
     <div className="w-full space-y-6 px-4 py-5 sm:px-6 lg:px-8 pb-16">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -159,6 +171,7 @@ export default function ProjectCategoryMaster() {
           ) : categories.length === 0 ? (
             <p className="text-slate-500 text-sm">No categories yet.</p>
           ) : (
+            <>
             <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 border-b border-slate-200 dark:border-slate-800">
@@ -170,7 +183,7 @@ export default function ProjectCategoryMaster() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {categories.map((item) => (
+                  {pagedCategories.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 font-medium text-slate-900 dark:text-white">
@@ -211,6 +224,14 @@ export default function ProjectCategoryMaster() {
                 </tbody>
               </table>
             </div>
+            <PaginationControls
+              page={page}
+              pageSize={pageSize}
+              total={sortedCategories.length}
+              onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+            />
+            </>
           )}
         </CardContent>
       </Card>
