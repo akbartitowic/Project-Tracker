@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useNavigate } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { CalendarOff, ArrowUpDown, Check, ChevronDown, ExternalLink, Loader2, Plus, Search, Settings, SlidersHorizontal, Trash2, Users, X } from 'lucide-react';
+import { CalendarOff, ArrowUpDown, Check, ChevronDown, ExternalLink, Loader2, Plus, Search, Settings, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import PaginationControls from '../components/ui/PaginationControls';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -303,6 +303,32 @@ export default function TeamLoad() {
                         )}
                     </div>
 
+                    {/* Tampilkan filter */}
+                    <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden text-xs">
+                        <button
+                            type="button"
+                            onClick={() => { setRelatedOnly(true); setChartPage(1); }}
+                            className={cn(
+                                'flex-1 px-2 py-1.5 font-medium transition-colors',
+                                relatedOnly
+                                    ? 'bg-primary text-white'
+                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                            )}>
+                            Terkait
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setRelatedOnly(false); setChartPage(1); }}
+                            className={cn(
+                                'flex-1 px-2 py-1.5 font-medium transition-colors border-l border-slate-200 dark:border-slate-700',
+                                !relatedOnly
+                                    ? 'bg-primary text-white'
+                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                            )}>
+                            Semua
+                        </button>
+                    </div>
+
                     {/* Role filter dropdown */}
                     {roles.length > 0 && (
                         <div className="relative" ref={roleDropdownRef}>
@@ -498,23 +524,10 @@ export default function TeamLoad() {
                                 type="button"
                                 onClick={() => setSortOrder((s) => s === 'asc' ? 'desc' : 'asc')}
                                 className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
-                                title={sortOrder === 'asc' ? 'Urutan A-Z (klik untuk Z-A)' : 'Urutan Z-A (klik untuk A-Z)'}
+                                title={sortOrder === 'asc' ? 'A-Z (klik untuk Z-A)' : 'Z-A (klik untuk A-Z)'}
                             >
                                 <ArrowUpDown className="size-3" />
                                 {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}
-                            </button>
-                            <span className="text-slate-300 dark:text-slate-700">·</span>
-                            <button
-                                type="button"
-                                onClick={() => { setRelatedOnly((v) => !v); setChartPage(1); }}
-                                className={cn(
-                                    'flex items-center gap-1 text-[11px] transition-colors',
-                                    relatedOnly ? 'text-primary font-semibold' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                                )}
-                                title={relatedOnly ? 'Menampilkan anggota 1 project (klik untuk semua)' : 'Menampilkan semua anggota (klik untuk filter)'}
-                            >
-                                <Users className="size-3" />
-                                {relatedOnly ? 'Terkait' : 'Semua'}
                             </button>
                             <span className="text-slate-300 dark:text-slate-700">·</span>
                             <span className="text-[11px] text-slate-400">
