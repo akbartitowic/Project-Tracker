@@ -29,6 +29,8 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import PaginationControls from '@/components/ui/PaginationControls';
 
 function SectionTable({ children, className = '' }) {
     return (
@@ -243,6 +245,9 @@ export default function FinanceMonitoring() {
     const [summary, setSummary] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [allocationTab, setAllocationTab] = useState('expense');
+    const [detailTab, setDetailTab] = useState('summary');
+    const [allocPage, setAllocPage] = useState(1);
+    const [allocPageSize, setAllocPageSize] = useState(10);
 
     // Allocation Form States
     const [newAllocation, setNewAllocation] = useState({
@@ -825,6 +830,10 @@ export default function FinanceMonitoring() {
     const expenseAllocations = allocations.filter((alloc) => !alloc.is_topup);
     const incomeAllocations = allocations.filter((alloc) => alloc.is_topup);
     const activeAllocations = allocationTab === 'income' ? incomeAllocations : expenseAllocations;
+    const pagedAllocations = useMemo(() => {
+        const start = (allocPage - 1) * allocPageSize;
+        return activeAllocations.slice(start, start + allocPageSize);
+    }, [activeAllocations, allocPage, allocPageSize]);
     const expenseByUser = summary?.expense_by_user || [];
     const activeAllocationTotal = activeAllocations.reduce((sum, alloc) => sum + Number(alloc.amount || 0), 0);
     const incomeActionLabel = isWaterfallProject ? 'Change Request' : 'Top Up Quota';
@@ -986,6 +995,13 @@ export default function FinanceMonitoring() {
                                 </div>
                             )}
 
+                            <Tabs value={detailTab} onValueChange={setDetailTab}>
+                                <TabsList className="mb-2">
+                                    <TabsTrigger value="summary">Summary</TabsTrigger>
+                                    <TabsTrigger value="allocation">Allocation Breakdown</TabsTrigger>
+                                </TabsList>
+
+                                <TabsContent value="summary" className="space-y-6 mt-4">
                             <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-base font-semibold">Financial summary</CardTitle>
@@ -1072,7 +1088,9 @@ export default function FinanceMonitoring() {
                                     </Card>
                                 )}
                             </div>
+                                </TabsContent>
 
+                                <TabsContent value="allocation" className="mt-4">
                             <Card>
                                 <CardHeader className="pb-4">
                                     <div className="flex items-center justify-between">
@@ -1096,7 +1114,7 @@ export default function FinanceMonitoring() {
                                     <div className="mt-4 inline-flex rounded-lg border border-slate-200 dark:border-slate-800 p-1 bg-slate-50 dark:bg-slate-900/40">
                                         <button
                                             type="button"
-                                            onClick={() => setAllocationTab('expense')}
+                                            onClick={() => { setAllocationTab('expense'); setAllocPage(1); }}
                                             className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${
                                                 allocationTab === 'expense'
                                                     ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
@@ -1107,7 +1125,7 @@ export default function FinanceMonitoring() {
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setAllocationTab('income')}
+                                            onClick={() => { setAllocationTab('income'); setAllocPage(1); }}
                                             className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${
                                                 allocationTab === 'income'
                                                     ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
@@ -1180,7 +1198,7 @@ export default function FinanceMonitoring() {
                                                         </td>
                                                     </tr>
                                                 ) : (
-                                                    activeAllocations.map(alloc => (
+                                                    pagedAllocations.map(alloc => (
                                                         <tr key={alloc.id} className="group">
                                                             <td className="py-3 px-2">
                                                                 <span className="font-medium text-slate-900 dark:text-white">
@@ -1300,6 +1318,18 @@ export default function FinanceMonitoring() {
                                         </table>
                                     </div>
 
+                                    {activeAllocations.length > allocPageSize && (
+                                        <div className="mt-4">
+                                            <PaginationControls
+                                                page={allocPage}
+                                                pageSize={allocPageSize}
+                                                total={activeAllocations.length}
+                                                onPageChange={setAllocPage}
+                                                onPageSizeChange={(s) => { setAllocPageSize(s); setAllocPage(1); }}
+                                            />
+                                        </div>
+                                    )}
+
                                     {/* Add Allocation Form */}
                                     {allocationTab === 'expense' ? (
                                         <form onSubmit={handleAddAllocation} className="mt-6 p-4 rounded-xl border-2 border-dashed border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20">
@@ -1372,6 +1402,8 @@ export default function FinanceMonitoring() {
                                 <ArrowUpRight className="size-4 text-primary" />
                                 <span>Note: Allocations are used to track internal and external costs against the formal quotation. This does not affect the actual manhour billing.</span>
                             </div>
+                                </TabsContent>
+                            </Tabs>
                         </>
                     )}
                 </div>
