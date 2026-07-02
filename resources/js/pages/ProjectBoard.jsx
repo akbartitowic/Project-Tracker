@@ -28,6 +28,7 @@ import {
 import { DndContext, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import PaginationControls from '../components/ui/PaginationControls';
 
 const RUSH_HOUR_FACTOR = 1.3;
 
@@ -314,7 +315,9 @@ export default function ProjectBoard() {
     const kanbanScrollRef = useRef(null);
     const [projectListTab, setProjectListTab] = useState('active');
     const [projectListSearch, setProjectListSearch] = useState('');
-    const [projectSortBy, setProjectSortBy] = useState('newest');
+    const [projectSortBy, setProjectSortBy] = useState('name_asc');
+    const [projectListPage, setProjectListPage] = useState(1);
+    const [projectListPageSize, setProjectListPageSize] = useState(10);
     const [pinnedProjectIds, setPinnedProjectIds] = useState(() => {
         try {
             const raw = localStorage.getItem('projectBoardPinnedIds');
@@ -1270,6 +1273,14 @@ export default function ProjectBoard() {
         return items;
     }, [filteredDisplayedProjects, pinnedProjectIds, projectSortBy]);
 
+    const pagedProjectList = useMemo(
+        () => sortedDisplayedProjects.slice(
+            (projectListPage - 1) * projectListPageSize,
+            projectListPage * projectListPageSize
+        ),
+        [sortedDisplayedProjects, projectListPage, projectListPageSize]
+    );
+
     const displayProjectStatus = useMemo(() => {
         if (!selectedProject) return 'Planning';
         if (selectedProject.status === 'Done') return 'Done';
@@ -1422,8 +1433,9 @@ export default function ProjectBoard() {
                                 : 'Tidak ada hasil pencarian.'}
                         </div>
                     ) : listViewMode === 'grid' ? (
+                        <div className="space-y-4">
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            {sortedDisplayedProjects.map((project) => (
+                            {pagedProjectList.map((project) => (
                                 <Card
                                     key={project.id}
                                     className={cn(
@@ -1557,6 +1569,14 @@ export default function ProjectBoard() {
                                 </Card>
                             ))}
                         </div>
+                        <PaginationControls
+                            page={projectListPage}
+                            pageSize={projectListPageSize}
+                            total={sortedDisplayedProjects.length}
+                            onPageChange={setProjectListPage}
+                            onPageSizeChange={(s) => { setProjectListPageSize(s); setProjectListPage(1); }}
+                        />
+                        </div>
                     ) : (
                         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
                             <table className="w-full text-left text-sm whitespace-nowrap">
@@ -1571,7 +1591,7 @@ export default function ProjectBoard() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                                    {sortedDisplayedProjects.map((project) => (
+                                    {pagedProjectList.map((project) => (
                                         <tr
                                             key={project.id}
                                             className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedProjectIds.includes(project.id) ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
@@ -1701,6 +1721,15 @@ export default function ProjectBoard() {
                                     ))}
                                 </tbody>
                             </table>
+                            <div className="px-4 pb-3">
+                                <PaginationControls
+                                    page={projectListPage}
+                                    pageSize={projectListPageSize}
+                                    total={sortedDisplayedProjects.length}
+                                    onPageChange={setProjectListPage}
+                                    onPageSizeChange={(s) => { setProjectListPageSize(s); setProjectListPage(1); }}
+                                />
+                            </div>
                         </div>
                     )}
 

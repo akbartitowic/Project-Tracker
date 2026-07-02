@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
+import PaginationControls from '../components/ui/PaginationControls';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { hasPermission } from '../utils/permissions';
@@ -83,6 +84,8 @@ export default function CompanyMaster() {
 
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [saving, setSaving] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -229,6 +232,15 @@ export default function CompanyMaster() {
 
   const isEdit = Boolean(editingItem);
 
+  const sortedCompanies = useMemo(
+    () => [...companies].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+    [companies]
+  );
+  const pagedCompanies = useMemo(
+    () => sortedCompanies.slice((page - 1) * pageSize, page * pageSize),
+    [sortedCompanies, page, pageSize]
+  );
+
   return (
     <div className="w-full space-y-6 px-4 py-5 sm:px-6 lg:px-8 pb-16">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -262,6 +274,7 @@ export default function CompanyMaster() {
           ) : companies.length === 0 ? (
             <p className="text-slate-500 text-sm">No companies yet.</p>
           ) : (
+            <>
             <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 border-b border-slate-200 dark:border-slate-800">
@@ -274,7 +287,7 @@ export default function CompanyMaster() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {companies.map((item) => (
+                  {pagedCompanies.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
                       <td className="px-4 py-3">
                         <CompanyLogo url={item.logo_url} name={item.name} />
@@ -313,6 +326,14 @@ export default function CompanyMaster() {
                 </tbody>
               </table>
             </div>
+            <PaginationControls
+              page={page}
+              pageSize={pageSize}
+              total={sortedCompanies.length}
+              onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+            />
+            </>
           )}
         </CardContent>
       </Card>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, KanbanSquare, Clock3, RefreshCcw, CheckCircle2, ListTodo, Activity, ArrowUpDown } from 'lucide-react';
+import PaginationControls from '../components/ui/PaginationControls';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
@@ -37,7 +38,9 @@ export default function ProjectList() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [projectTab, setProjectTab] = useState('active');
-    const [sortBy, setSortBy] = useState('newest');
+    const [sortBy, setSortBy] = useState('name_asc');
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
     const [methodologyTab, setMethodologyTab] = useState('all');
 
     useEffect(() => {
@@ -121,6 +124,11 @@ export default function ProjectList() {
         return { total, active, done, totalTasks, totalReopen };
     }, [filteredProjects]);
     const isFreelance = isFreelanceUser(user);
+
+    const pagedProjects = useMemo(
+        () => visibleProjects.slice((page - 1) * pageSize, page * pageSize),
+        [visibleProjects, page, pageSize]
+    );
 
     return (
         <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
@@ -252,7 +260,7 @@ export default function ProjectList() {
                                 ) : visibleProjects.length === 0 ? (
                                     <tr><td colSpan={isFreelance ? "7" : "8"} className="py-10 text-center text-slate-400">{projectTab === 'done' ? 'Belum ada project Done.' : 'Belum ada project Active.'}</td></tr>
                                 ) : (
-                                    visibleProjects.map((project) => {
+                                    pagedProjects.map((project) => {
                                         const methodology = normalizeMethodology(project.methodology);
                                         const isScrum = methodology.includes('scrum') || methodology.includes('agile');
                                         const isWaterfall = methodology.includes('waterfall');
@@ -324,6 +332,13 @@ export default function ProjectList() {
                                 )}
                             </tbody>
                         </table>
+                        <PaginationControls
+                            page={page}
+                            pageSize={pageSize}
+                            total={visibleProjects.length}
+                            onPageChange={setPage}
+                            onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+                        />
                     </div>
                 </CardContent>
             </Card>
