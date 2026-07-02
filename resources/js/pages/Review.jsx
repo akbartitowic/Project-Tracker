@@ -848,7 +848,7 @@ export default function Review() {
     const [summaries,      setSummaries]      = useState({});
     const [loading,        setLoading]        = useState(true);
     const [page,           setPage]           = useState(1);
-    const [pageSize,       setPageSize]       = useState(10);
+    const [pageSize,       setPageSize]       = useState(12);
     const [error,          setError]          = useState(null);
     const [summaryProject, setSummaryProject] = useState(null);
 

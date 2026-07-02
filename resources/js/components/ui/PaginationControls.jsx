@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const PAGE_SIZE_OPTIONS = [10, 12, 20, 50, 100];
 
 export default function PaginationControls({ page, pageSize, total, onPageChange, onPageSizeChange }) {
     const totalPages = Math.max(1, Math.ceil(total / pageSize));

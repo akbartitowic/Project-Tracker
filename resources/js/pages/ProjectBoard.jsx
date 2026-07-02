@@ -317,7 +317,7 @@ export default function ProjectBoard() {
     const [projectListSearch, setProjectListSearch] = useState('');
     const [projectSortBy, setProjectSortBy] = useState('name_asc');
     const [projectListPage, setProjectListPage] = useState(1);
-    const [projectListPageSize, setProjectListPageSize] = useState(10);
+    const [projectListPageSize, setProjectListPageSize] = useState(12);
     const [pinnedProjectIds, setPinnedProjectIds] = useState(() => {
         try {
             const raw = localStorage.getItem('projectBoardPinnedIds');
