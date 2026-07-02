@@ -1057,36 +1057,70 @@ export default function FinanceMonitoring() {
                                             </div>
                                         </CardHeader>
                                     </Card>
-                                ) : (
-                                    <Card className="bg-blue-50 dark:bg-blue-500/5 border-blue-200 dark:border-blue-500/20 cursor-pointer hover:border-blue-400 transition-all"
-                                         onClick={loadQuotaBreakdown}>
-                                        <CardHeader className="pb-3">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <CardDescription className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Manhour Quota Status</CardDescription>
-                                                    <CardTitle className="text-xl mt-1">
-                                                        {summary.allocated_hours}/{summary.total_manhours} <span className="text-sm font-normal text-slate-500 uppercase ml-1">Hours</span>
-                                                    </CardTitle>
-                                                    {summary.has_topup_manhours ? (
-                                                        <div className="mt-2 inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5">
-                                                            <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                                                                Top Up MH +{formatHours(summary.topup_hours_total)}h
-                                                            </span>
+                                ) : (() => {
+                                    const usedPct = (Number(summary.allocated_hours || 0) / (Number(summary.total_manhours) || 1)) * 100;
+                                    const remaining = Number(summary.fifo_remaining_hours ?? summary.remaining_hours ?? 0);
+                                    const isOverQuota = remaining < 0;
+                                    return (
+                                        <Card
+                                            className="border-blue-200 dark:border-blue-500/20 cursor-pointer hover:shadow-md hover:border-blue-400 dark:hover:border-blue-400/60 active:scale-[0.99] transition-all group"
+                                            onClick={loadQuotaBreakdown}
+                                        >
+                                            <CardHeader className="pb-4">
+                                                {/* Header row */}
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-500/20">
+                                                            <Clock className="size-4 text-blue-600 dark:text-blue-400" />
                                                         </div>
-                                                    ) : null}
+                                                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                                                            Manhour Quota
+                                                        </span>
+                                                    </div>
+                                                    <span className="flex items-center gap-1 text-[11px] font-medium text-blue-400 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
+                                                        <ArrowUpRight className="size-3.5" />
+                                                        Lihat breakdown
+                                                    </span>
                                                 </div>
-                                                <div className="text-right">
-                                                    <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Remaining</div>
-                                                    <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                                                        {formatHours(summary.fifo_remaining_hours ?? summary.remaining_hours)}{' '}
-                                                        <span className="text-xs font-normal opacity-70">Hrs (FIFO)</span>
+
+                                                {/* Stats grid */}
+                                                <div className="mt-4 grid grid-cols-3 gap-2">
+                                                    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3">
+                                                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Total Quota</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-white">{formatHours(summary.total_manhours)}h</p>
+                                                        {summary.has_topup_manhours && (
+                                                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                                                                +{formatHours(summary.topup_hours_total)}h top up
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 p-3">
+                                                        <p className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400 mb-1">Allocated</p>
+                                                        <p className="text-base font-bold text-amber-700 dark:text-amber-300">{formatHours(summary.allocated_hours)}h</p>
+                                                        <p className="text-[10px] text-amber-500 dark:text-amber-400 mt-0.5">{usedPct.toFixed(1)}% used</p>
+                                                    </div>
+                                                    <div className={`rounded-lg p-3 border ${isOverQuota ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-900/40' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-900/40'}`}>
+                                                        <p className={`text-[10px] font-bold uppercase mb-1 ${isOverQuota ? 'text-rose-600 dark:text-rose-400' : 'text-blue-600 dark:text-blue-400'}`}>Remaining</p>
+                                                        <p className={`text-base font-bold ${isOverQuota ? 'text-rose-700 dark:text-rose-300' : 'text-blue-700 dark:text-blue-300'}`}>
+                                                            {formatHours(Math.abs(remaining))}h
+                                                        </p>
+                                                        <p className={`text-[10px] mt-0.5 ${isOverQuota ? 'text-rose-500 dark:text-rose-400' : 'text-blue-400'}`}>
+                                                            {isOverQuota ? 'over quota' : 'FIFO'}
+                                                        </p>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <Progress value={(summary.allocated_hours / (summary.total_manhours || 1)) * 100} className="h-1.5 mt-3" />
-                                        </CardHeader>
-                                    </Card>
-                                )}
+
+                                                {/* Progress bar */}
+                                                <div className="mt-3">
+                                                    <Progress
+                                                        value={Math.min(100, usedPct)}
+                                                        className={`h-2 ${isOverQuota ? '[&>div]:bg-rose-500' : '[&>div]:bg-blue-500'}`}
+                                                    />
+                                                </div>
+                                            </CardHeader>
+                                        </Card>
+                                    );
+                                })()}
                             </div>
                                 </TabsContent>
 
