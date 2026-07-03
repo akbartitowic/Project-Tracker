@@ -1,0 +1,86 @@
+# Project Context: HubTask — Internal Project Management System
+
+## Tech Stack (Actual)
+- **Backend:** Laravel 12.x (PHP 8.2+) — REST API via `routes/api.php`
+- **Frontend:** React 19.x (SPA) + Vite 7.x — bukan Blade template
+- **Database (dev):** SQLite | **(prod):** MySQL / PostgreSQL
+- **UI:** Tailwind CSS 4.x + shadcn/ui + Radix UI
+- **Auth:** Laravel Sanctum (Bearer token, expiry 720 menit default)
+- **Icons:** Lucide React
+- **PDF:** barryvdh/laravel-dompdf
+- **Drag & Drop:** @dnd-kit
+- **Queue:** Laravel Queue (database driver)
+- **RBAC:** Custom — tabel `roles`, `permissions`, `permission_role`, middleware `permission:{slug}`
+
+## App Rules & Logic
+- Gunakan bahasa Indonesia untuk semua teks di UI.
+- Desain dark mode — background `#000040`, card `#151b28`, surface `#1e2532`.
+- Semua route API dilindungi `auth:sanctum` + `permission:{slug}` middleware.
+- RBAC berbasis slug permission (bukan Spatie), dikelola dari modul System Roles.
+- Terdapat tiga level user: Admin/PM (akses penuh), Member (board & manhour), Freelance (view & update status task saja).
+- PDF quotation di-generate server-side dan disimpan di storage.
+- Notifikasi email dikirim via Laravel Queue (async) — reminder due date, digest.
+- Manhour menggunakan multiplier rush hour 1.3x bila flag aktif.
+- Semua aktivitas user tercatat di `activity_logs` (audit trail).
+
+## Modules & Current Progress
+
+### Auth & User Management
+- [x] Login (Sanctum token)
+- [x] Signup
+- [x] Logout
+- [x] Profile (update data diri)
+- [x] RBAC — System Roles & Permissions
+- [x] Manajemen User (Team Users)
+
+### Core Project
+- [x] Project List
+- [x] Create Project
+- [x] Project Board (Kanban + drag & drop)
+- [x] Project Board — Dashboard (overview per project)
+- [x] Project Board — Backlog
+- [x] Project Board — Gantt Chart
+- [x] Project Board — Notes
+- [x] Task Management (CRUD, subtask, assignee, due date, priority, billable, rush hour)
+- [x] Task Notes
+- [x] Manhour Logging
+- [x] Project Members & Role Quotas
+- [x] Team Load Monitoring
+- [x] Project Roles
+
+### Sales & Presales
+- [x] Sales Pipeline (Sales Pitch)
+- [x] Quotation Generator (PDF, logo, preview)
+- [x] Presales Pipeline
+- [x] Konversi Presales → Project
+- [x] Company Master
+- [x] Project Category Master
+- [x] Sales Category Project Master
+
+### Finance
+- [x] Finance Monitoring (alokasi, realisasi, top-up, change request)
+- [x] Finance Categories
+- [x] Finance Report
+- [x] Realization Report
+
+### Reports & Export
+- [x] Generate Report (project report PDF)
+- [x] Reports (company financials, efficiency, revenue trend, dll.)
+- [x] System Backup (CSV & SQL dump)
+
+### Review System
+- [x] Review Config (evaluation cycles, bobot per pertanyaan)
+- [x] Review (trigger & monitor status)
+- [x] Public Review Link (share ke klien eksternal tanpa login)
+
+### Integration
+- [x] Integration Projects
+- [x] Integrasi Monitoring
+- [x] Connector Monitoring
+- [x] Global Integration (API key management)
+
+### System
+- [x] Dashboard (overview metrics)
+- [x] System Settings (branding, SMTP, app config)
+- [x] System Logs (activity log audit trail)
+- [x] Report Schedules (email otomatis terjadwal)
