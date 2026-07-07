@@ -119,6 +119,12 @@ export default function ProjectBoardBacklog() {
 
     const allSelected  = backlogItems.length > 0 && selectedIds.size === backlogItems.length;
     const someSelected = selectedIds.size > 0 && selectedIds.size < backlogItems.length;
+    const totalMh = backlogItems.reduce((sum, item) => sum + (Number(item.estimated_hours) || 0), 0);
+    const selectedMh = backlogItems.reduce(
+        (sum, item) => sum + (selectedIds.has(item.id) ? (Number(item.estimated_hours) || 0) : 0),
+        0,
+    );
+    const uncheckedMh = totalMh - selectedMh;
 
     const handleToggleSelect = (id) => {
         setSelectedIds((prev) => {
@@ -587,6 +593,38 @@ export default function ProjectBoardBacklog() {
                                     </div>
                                 );
                             })}
+
+                            {/* Footer: total MH */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5">
+                                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                    Total {backlogItems.length} task
+                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                    {selectedIds.size > 0 ? (
+                                        <>
+                                            <span
+                                                className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 rounded-full px-2 h-5"
+                                                title={`Total MH ${selectedIds.size} task yang dicentang`}
+                                            >
+                                                <Clock className="size-2.5" />
+                                                Dicentang: {formatMh(selectedMh)} MH
+                                            </span>
+                                            <span
+                                                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-700/60 rounded-full px-2 h-5"
+                                                title={`Total MH ${backlogItems.length - selectedIds.size} task yang belum dicentang`}
+                                            >
+                                                <Clock className="size-2.5" />
+                                                Belum: {formatMh(uncheckedMh)} MH
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 rounded-full px-2 h-5">
+                                            <Clock className="size-2.5" />
+                                            {formatMh(totalMh)} MH
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

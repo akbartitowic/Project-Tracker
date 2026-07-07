@@ -22,29 +22,26 @@ async function fetchPublic(path, opts = {}) {
     return data;
 }
 
-/* ── Star rating input ── */
-function StarInput({ value, onChange }) {
-    const [hover, setHover] = useState(0);
+/* ── Score input (1-10) ── */
+function ScoreInput({ value, onChange }) {
     return (
-        <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map(s => (
+        <div className="flex flex-wrap items-center gap-1">
+            {Array.from({ length: 10 }, (_, i) => i + 1).map(s => (
                 <button
                     key={s}
                     type="button"
-                    onMouseEnter={() => setHover(s)}
-                    onMouseLeave={() => setHover(0)}
                     onClick={() => onChange(s)}
-                    className="p-0.5 transition-transform hover:scale-110"
+                    className={cn(
+                        'flex size-8 items-center justify-center rounded-md border text-sm font-semibold transition-colors',
+                        s === value
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-primary/50 hover:text-primary',
+                    )}
                 >
-                    <Star className={cn(
-                        'size-6 transition-colors',
-                        s <= (hover || value)
-                            ? 'fill-amber-400 text-amber-400'
-                            : 'fill-slate-200 text-slate-200',
-                    )} />
+                    {s}
                 </button>
             ))}
-            {value > 0 && <span className="ml-1.5 text-sm text-slate-500">{value}/5</span>}
+            {value > 0 && <span className="ml-1.5 text-sm text-slate-500">{value}/10</span>}
         </div>
     );
 }
@@ -289,7 +286,7 @@ export default function PublicReview() {
                                                     </div>
                                                 </div>
                                                 <div className="pl-8 space-y-2">
-                                                    <StarInput
+                                                    <ScoreInput
                                                         value={answers[idx].score}
                                                         onChange={s => setAnswers(prev => prev.map((a, i) => i === idx ? { ...a, score: s } : a))}
                                                     />
@@ -335,7 +332,7 @@ export default function PublicReview() {
                                     </Button>
 
                                     {!step2Valid && (
-                                        <p className="text-center text-xs text-slate-400">Semua pertanyaan wajib diberi bintang.</p>
+                                        <p className="text-center text-xs text-slate-400">Semua pertanyaan wajib diberi skor.</p>
                                     )}
                                 </div>
                             )}

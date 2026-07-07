@@ -62,13 +62,16 @@ class User extends Authenticatable
 
     public function hasPermission($slug)
     {
-        if (strtolower((string) $this->email) === 'tito@noohtify.com') {
+        if ($this->is_superuser) {
             return true;
         }
         $roleModel = $this->role()->first();
         if (!$roleModel) {
             return false;
         }
-        return $roleModel->permissions()->where('slug', $slug)->exists();
+        return $roleModel->permissions()
+            ->where('slug', $slug)
+            ->whereHas('module', fn ($q) => $q->where('is_active', true))
+            ->exists();
     }
 }

@@ -282,7 +282,7 @@ function CreateEvaluationForm({ onCreated, onCancel }) {
 }
 
 /* ── Score bar visual ── */
-function ScoreBar({ score, maxScore = 5 }) {
+function ScoreBar({ score, maxScore = 10 }) {
     return (
         <div className="flex items-center gap-1">
             {Array.from({ length: maxScore }).map((_, i) => (
@@ -414,10 +414,10 @@ function QuestionRow({ question, index, canConfig, onEdit, onDelete }) {
                 </div>
             </div>
 
-            {/* Skor 1-5 visual */}
+            {/* Skor 1-10 visual */}
             <div className="pl-9 flex items-center gap-2">
-                <span className="text-[10px] text-slate-400">Skor 1–5</span>
-                <ScoreBar score={3} />
+                <span className="text-[10px] text-slate-400">Skor 1–10</span>
+                <ScoreBar score={6} />
             </div>
 
             {/* Confirm delete */}

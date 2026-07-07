@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Role;
+use App\Models\MenuItem;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +18,7 @@ class AuthController extends Controller
 
     private function serializeUser(User $user): array
     {
-        $roleModel = $user->role()->with('permissions')->first();
+        $roleModel = $user->role()->with('permissions.module')->first();
         $data = $user->toArray();
         $data['role_name'] = $roleModel?->name ?? ($data['role'] ?? null);
         $data['role_permissions'] = $roleModel
@@ -25,9 +26,16 @@ class AuthController extends Controller
                 'id' => $p->id,
                 'slug' => $p->slug,
                 'name' => $p->name,
-                'module' => $p->module,
+                'module' => $p->module->name,
+                'module_is_active' => $p->module->is_active,
+                'module_sort_order' => $p->module->sort_order,
             ])->values()->all()
             : [];
+        // Same list for every user — visibility is still gated by role_permissions
+        // above; this is just sidebar presentation metadata (label/icon/path).
+        $data['menu_items'] = MenuItem::orderBy('sort_order')->get(
+            ['permission_slug', 'section', 'path', 'label', 'icon', 'variant', 'sort_order']
+        )->all();
         return $data;
     }
 

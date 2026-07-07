@@ -763,7 +763,14 @@ class TaskController extends Controller
             'due_date' => 'nullable|date',
             'start_date' => 'nullable|date',
             'is_billable' => 'nullable|boolean',
+            'updated_at' => 'nullable|date',
         ]);
+
+        if ($request->filled('updated_at') && !$user->hasPermission('project_board.edit_last_update')) {
+            return response()->json(['message' => 'You do not have permission to edit the last-updated date.'], 403);
+        }
+        $customUpdatedAt = $validated['updated_at'] ?? null;
+        unset($validated['updated_at']);
 
         if ($dateErr = $this->validateTaskDateRange($validated)) {
             return response()->json($dateErr, 422);
@@ -791,6 +798,14 @@ class TaskController extends Controller
         }
 
         $changes = $task->update($validated) ? 1 : 0;
+
+        if ($customUpdatedAt) {
+            // Query builder update() doesn't auto-touch timestamps, so this
+            // survives after the model save() above already set it to now().
+            Task::where('id', $task->id)->update(['updated_at' => Carbon::parse($customUpdatedAt)]);
+            $changes = 1;
+        }
+
         if ($changes && !empty($validated['assignee_id'])) {
             $this->ensureAssigneeIsProjectMember(
                 (int) $task->project_id,

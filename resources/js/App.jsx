@@ -10,6 +10,7 @@ import ProjectBoardNotes from './pages/ProjectBoardNotes';
 import TeamUsers from './pages/TeamUsers';
 import ProjectRoles from './pages/ProjectRoles';
 import SystemRoles from './pages/SystemRoles';
+import Modules from './pages/Modules';
 import SystemSettings from './pages/SystemSettings';
 import Profile from './pages/Profile';
 
@@ -98,6 +99,7 @@ function App() {
           <Route path="review/config" element={<ReviewConfig />} />
           <Route path="users" element={<TeamUsers />} />
           <Route path="roles" element={<SystemRoles />} />
+          <Route path="modules" element={<Modules />} />
           <Route path="project-roles" element={<ProjectRoles />} />
           <Route path="settings" element={<SystemSettings />} />
           <Route path="profile" element={<Profile />} />

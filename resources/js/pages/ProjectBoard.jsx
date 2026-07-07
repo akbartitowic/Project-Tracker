@@ -116,6 +116,9 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
     const createdLabel = task.created_at
         ? new Date(task.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
         : null;
+    const updatedLabel = task.updated_at
+        ? new Date(task.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+        : null;
 
     return (
         <div ref={setNodeRef} style={style} className="relative group touch-none" {...attributes} {...listeners}>
@@ -203,6 +206,11 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                             {createdLabel && (
                                 <p className="mt-1.5 text-[10px] text-slate-400 dark:text-slate-500">
                                     Dibuat: {createdLabel}
+                                </p>
+                            )}
+                            {updatedLabel && (
+                                <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                                    Diperbarui: {updatedLabel}
                                 </p>
                             )}
                         </>
@@ -310,10 +318,23 @@ export default function ProjectBoard() {
     const [tasks, setTasks] = useState([]);
     const [viewMode, setViewMode] = useState('kanban');
     const [filterMemberId, setFilterMemberId] = useState(null);
+    const [filterProjectRoleId, setFilterProjectRoleId] = useState(null);
     const [listViewMode, setListViewMode] = useState('grid');
     const [mobileKanbanCol, setMobileKanbanCol] = useState('To Do');
     const kanbanScrollRef = useRef(null);
-    const [projectListTab, setProjectListTab] = useState('active');
+    const [projectListTab, setProjectListTabState] = useState(() => searchParams.get('tab') || 'active');
+    const setProjectListTab = useCallback((tab) => {
+        setProjectListTabState(tab);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (tab === 'active') {
+                next.delete('tab');
+            } else {
+                next.set('tab', tab);
+            }
+            return next;
+        }, { replace: true });
+    }, [setSearchParams]);
     const [projectListSearch, setProjectListSearch] = useState('');
     const [projectSortBy, setProjectSortBy] = useState('name_asc');
     const [projectListPage, setProjectListPage] = useState(1);
@@ -343,6 +364,7 @@ export default function ProjectBoard() {
     const [newTaskCategory, setNewTaskCategory] = useState('');
     const [newTaskStartDate, setNewTaskStartDate] = useState('');
     const [newTaskDueDate, setNewTaskDueDate] = useState('');
+    const [newTaskUpdatedAt, setNewTaskUpdatedAt] = useState('');
     const [newTaskBillable, setNewTaskBillable] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -365,6 +387,7 @@ export default function ProjectBoard() {
 
     const isFreelance = isFreelanceUser(user);
     const canUpdateBoard = hasPermission(user, 'project_board.update');
+    const canEditLastUpdate = hasPermission(user, 'project_board.edit_last_update');
     const [showMetrics, setShowMetrics] = useState(() => {
         try { return localStorage.getItem('boardShowMetrics') === 'true'; } catch { return false; }
     });
@@ -633,6 +656,7 @@ export default function ProjectBoard() {
             setNewTaskRoleFilter(taskToEdit.project_role_id ? taskToEdit.project_role_id.toString() : 'All');
             setNewTaskStartDate(toDateInputValue(taskToEdit.start_date));
             setNewTaskDueDate(toDateInputValue(taskToEdit.due_date));
+            setNewTaskUpdatedAt(toDateInputValue(taskToEdit.updated_at));
             setNewTaskBillable(taskToEdit.is_billable !== false);
         } else {
             setEditingTaskId(null);
@@ -656,6 +680,7 @@ export default function ProjectBoard() {
             setNewTaskCategory('');
             setNewTaskStartDate('');
             setNewTaskDueDate('');
+            setNewTaskUpdatedAt('');
             setNewTaskBillable(true);
         }
     }, [projectMembers, roleQuotas, selectedProject]);
@@ -879,6 +904,9 @@ export default function ProjectBoard() {
             if (!hasSubtasks) {
                 payload.is_billable = isBillable;
             }
+            if (editingTaskId && canEditLastUpdate && newTaskUpdatedAt) {
+                payload.updated_at = newTaskUpdatedAt;
+            }
 
             if (editingTaskId) {
                 await fetchAPI(`/tasks/${editingTaskId}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -995,8 +1023,10 @@ export default function ProjectBoard() {
     };
 
     const visibleTasks = useMemo(
-        () => filterMemberId ? tasks.filter((t) => String(t.assignee_id) === String(filterMemberId)) : tasks,
-        [tasks, filterMemberId]
+        () => tasks
+            .filter((t) => !filterMemberId || String(t.assignee_id) === String(filterMemberId))
+            .filter((t) => !filterProjectRoleId || String(t.project_role_id) === String(filterProjectRoleId)),
+        [tasks, filterMemberId, filterProjectRoleId]
     );
     const getTasksByStatus = (status) => visibleTasks.filter(t => t.status === status);
 
@@ -1983,6 +2013,25 @@ export default function ProjectBoard() {
                             <Star className={cn('size-3.5', String(filterMemberId) === String(user?.id) && 'fill-current')} />
                             My Task
                         </Button>
+
+                        {roleQuotas.length > 0 && (
+                            <Select
+                                value={filterProjectRoleId ?? 'all'}
+                                onValueChange={(val) => setFilterProjectRoleId(val === 'all' ? null : val)}
+                            >
+                                <SelectTrigger className="h-8 w-auto min-w-[140px] gap-1.5 text-xs">
+                                    <SelectValue placeholder="Semua Role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Semua Role</SelectItem>
+                                    {roleQuotas.map((q) => (
+                                        <SelectItem key={q.project_role_id} value={String(q.project_role_id)}>
+                                            {q.role_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -2269,7 +2318,7 @@ export default function ProjectBoard() {
                     {/* ── Mobile: card list ── */}
                     <div className="sm:hidden space-y-2">
                         {visibleTasks.length === 0 && (
-                            <p className="text-center text-slate-400 py-10 text-sm">{filterMemberId ? 'Tidak ada task untuk member ini.' : 'Belum ada task.'}</p>
+                            <p className="text-center text-slate-400 py-10 text-sm">{(filterMemberId || filterProjectRoleId) ? 'Tidak ada task untuk filter ini.' : 'Belum ada task.'}</p>
                         )}
                         {visibleTasks.map((task) => (
                             <div
@@ -2355,7 +2404,7 @@ export default function ProjectBoard() {
                             </thead>
                             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                 {visibleTasks.length === 0 && (
-                                    <tr><td colSpan={8} className="px-6 py-10 text-center text-sm text-slate-400">{filterMemberId ? 'Tidak ada task untuk member ini.' : 'Belum ada task.'}</td></tr>
+                                    <tr><td colSpan={8} className="px-6 py-10 text-center text-sm text-slate-400">{(filterMemberId || filterProjectRoleId) ? 'Tidak ada task untuk filter ini.' : 'Belum ada task.'}</td></tr>
                                 )}
                                 {visibleTasks.map(task => (
                                     <tr key={task.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedTaskIds.includes(task.id) ? 'bg-primary/5 dark:bg-primary/10' : ''}`} onClick={(e) => {
@@ -2667,6 +2716,24 @@ export default function ProjectBoard() {
                                     </p>
                                 )}
                             </div>
+
+                            {editingTaskId && canEditLastUpdate && (
+                                <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10 p-3 space-y-2">
+                                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                                        <Clock className="size-3.5" />
+                                        Override "Diperbarui" (khusus role tertentu)
+                                    </p>
+                                    <Input
+                                        type="date"
+                                        value={newTaskUpdatedAt}
+                                        onChange={(e) => setNewTaskUpdatedAt(e.target.value)}
+                                        className="w-full sm:w-1/2"
+                                    />
+                                    <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                                        Mengubah tanggal ini akan menimpa tanggal "Diperbarui" yang tampil di kartu task.
+                                    </p>
+                                </div>
+                            )}
                         </section>
 
                         <section className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">

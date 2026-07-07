@@ -3,14 +3,14 @@
 ## Tech Stack (Actual)
 - **Backend:** Laravel 12.x (PHP 8.2+) — REST API via `routes/api.php`
 - **Frontend:** React 19.x (SPA) + Vite 7.x — bukan Blade template
-- **Database (dev):** SQLite | **(prod):** MySQL / PostgreSQL
+- **Database (dev & prod, terverifikasi dari `.env`):** MySQL
 - **UI:** Tailwind CSS 4.x + shadcn/ui + Radix UI
 - **Auth:** Laravel Sanctum (Bearer token, expiry 720 menit default)
 - **Icons:** Lucide React
 - **PDF:** barryvdh/laravel-dompdf
 - **Drag & Drop:** @dnd-kit
 - **Queue:** Laravel Queue (database driver)
-- **RBAC:** Custom — tabel `roles`, `permissions`, `permission_role`, middleware `permission:{slug}`
+- **RBAC:** Custom — tabel `modules` (top-level, sumber nama modul/menu) → `permissions` (FK `module_id`, NOT NULL, `restrictOnDelete`) → `permission_role` pivot ke `roles`. Middleware `permission:{slug}`. Modul di-provision otomatis dari `App\Support\PermissionCatalog::menuActionMap()` lewat `sync()`.
 
 ## App Rules & Logic
 - Gunakan bahasa Indonesia untuk semua teks di UI.
@@ -31,6 +31,7 @@
 - [x] Logout
 - [x] Profile (update data diri)
 - [x] RBAC — System Roles & Permissions
+- [x] RBAC — Modules/Menus sebagai entitas DB nyata (tabel `modules`, FK dari `permissions`) + halaman admin "Modules" (`/modules`, read + toggle `is_active`/`sort_order`; nama modul tetap code-defined via `PermissionCatalog::menuActionMap()`). Menonaktifkan modul benar-benar memblokir akses (middleware + sidebar), bukan cuma kosmetik.
 - [x] Manajemen User (Team Users)
 
 ### Core Project

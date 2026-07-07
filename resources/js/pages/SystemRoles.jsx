@@ -133,7 +133,8 @@ export default function SystemRoles() {
                     : ACTIONS.find((a) => String(perm.name || '').toLowerCase().startsWith(a));
                 if (action) byAction[action] = perm;
             });
-            return { moduleName, byAction };
+            const isModuleActive = modulePerms[0]?.module?.is_active ?? true;
+            return { moduleName, byAction, isModuleActive };
         });
     }, [permissions]);
 
@@ -481,7 +482,10 @@ export default function SystemRoles() {
                                             return (
                                                 <Card
                                                     key={moduleGroup.moduleName}
-                                                    className="overflow-hidden border-slate-200/90 shadow-none dark:border-slate-700/80"
+                                                    className={cn(
+                                                        'overflow-hidden border-slate-200/90 shadow-none dark:border-slate-700/80',
+                                                        !moduleGroup.isModuleActive && 'opacity-60',
+                                                    )}
                                                 >
                                                     <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-2.5 dark:border-slate-800 dark:bg-slate-900/40">
                                                         <div className="min-w-0 flex-1">
@@ -491,6 +495,11 @@ export default function SystemRoles() {
                                                                 </h3>
                                                                 {hasIntegration && (
                                                                     <Plug className="size-3 shrink-0 text-primary/70" title="Mengontrol akses integrasi API" />
+                                                                )}
+                                                                {!moduleGroup.isModuleActive && (
+                                                                    <Badge variant="outline" className="h-4 shrink-0 border-amber-300 px-1 text-[10px] font-semibold text-amber-600 dark:border-amber-700 dark:text-amber-400">
+                                                                        Nonaktif
+                                                                    </Badge>
                                                                 )}
                                                             </div>
                                                             <p className="text-[11px] text-slate-500 tabular-nums">

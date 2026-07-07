@@ -92,7 +92,7 @@ function FinanceProjectTable({ projects, onSelectProject }) {
                     <th className="px-4 py-2.5 font-medium text-left">Project</th>
                     <th className="px-3 py-2.5 font-medium hidden sm:table-cell">Status</th>
                     <th className="px-3 py-2.5 font-medium hidden md:table-cell">Metodologi</th>
-                    <th className="px-4 py-2.5 font-medium text-right">Nilai Quotation</th>
+                    <th className="px-4 py-2.5 font-medium text-right">Aksi</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -136,12 +136,15 @@ function FinanceProjectTable({ projects, onSelectProject }) {
                             )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                                <span className="font-semibold text-sm text-slate-900 dark:text-white whitespace-nowrap">
-                                    {proj.quotation_value ? formatCurrency(proj.quotation_value) : <span className="text-slate-400 font-normal text-xs">Belum diisi</span>}
-                                </span>
-                                <ArrowUpRight className="size-3.5 text-slate-300 group-hover:text-primary transition-colors shrink-0" />
-                            </div>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 gap-1.5 text-xs"
+                                onClick={(e) => { e.stopPropagation(); onSelectProject(proj.id); }}
+                            >
+                                Detail
+                                <ArrowUpRight className="size-3.5" />
+                            </Button>
                         </td>
                     </tr>
                 ))}
@@ -818,10 +821,6 @@ export default function FinanceMonitoring() {
         [filteredProjects]
     );
 
-    const totalQuotationValue = useMemo(
-        () => projects.reduce((s, p) => s + Number(p.quotation_value || 0), 0),
-        [projects]
-    );
     const allActiveCount = useMemo(() => projects.filter((p) => p.status !== 'Done').length, [projects]);
     const allDoneCount = useMemo(() => projects.filter((p) => p.status === 'Done').length, [projects]);
 
@@ -878,7 +877,7 @@ export default function FinanceMonitoring() {
 
                         {/* ── Summary stats ── */}
                         {!loading && projects.length > 0 && (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-2 gap-3">
                                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                                     <CardContent className="p-4">
                                         <p className="text-xs text-slate-500 dark:text-slate-400">Project Aktif</p>
@@ -891,13 +890,6 @@ export default function FinanceMonitoring() {
                                         <p className="text-xs text-slate-500 dark:text-slate-400">Project Selesai</p>
                                         <p className="text-2xl font-bold text-slate-900 dark:text-white mt-0.5">{allDoneCount}</p>
                                         <p className="text-xs text-slate-400 mt-1">Marked as Done</p>
-                                    </CardContent>
-                                </Card>
-                                <Card className="border-slate-200 dark:border-slate-800 shadow-sm col-span-2 sm:col-span-1">
-                                    <CardContent className="p-4">
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">Total Nilai Quotation</p>
-                                        <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-0.5 truncate">{formatCurrency(totalQuotationValue)}</p>
-                                        <p className="text-xs text-slate-400 mt-1">Dari {projects.length} project</p>
                                     </CardContent>
                                 </Card>
                             </div>

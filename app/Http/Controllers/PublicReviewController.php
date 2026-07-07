@@ -91,7 +91,7 @@ class PublicReviewController extends Controller
             'reviewer_position' => 'nullable|string|max:100',
             'answers'           => 'required|array',
             'answers.*.question_id' => 'required|integer|exists:review_questions,id',
-            'answers.*.score'   => 'required|integer|min:1|max:5',
+            'answers.*.score'   => 'required|integer|min:1|max:10',
             'answers.*.comment' => 'nullable|string|max:1000',
             'notes'             => 'nullable|string|max:2000',
         ]);
@@ -101,7 +101,7 @@ class PublicReviewController extends Controller
         $totalScore  = 0;
         foreach ($validated['answers'] as $ans) {
             $q = $questionMap[$ans['question_id']] ?? null;
-            if ($q) $totalScore += ($ans['score'] / 5) * $q->weight;
+            if ($q) $totalScore += ($ans['score'] / 10) * $q->weight;
         }
 
         $review = ProjectReview::create([

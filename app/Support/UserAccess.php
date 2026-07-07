@@ -12,7 +12,12 @@ class UserAccess
             return '';
         }
 
-        return strtolower(trim((string) ($user->role->name ?? $user->role ?? '')));
+        // `getRelationValue` resolves the `role()` relation directly, bypassing
+        // the `role` string column that shares its name and would otherwise
+        // shadow it via the magic `$user->role` property accessor.
+        $role = $user->getRelationValue('role');
+
+        return strtolower(trim((string) ($role->name ?? $user->getRawOriginal('role') ?? '')));
     }
 
     public static function isFreelance(?User $user): bool
@@ -31,8 +36,7 @@ class UserAccess
             return false;
         }
 
-        $email = strtolower((string) ($user->email ?? ''));
-        if ($email === 'tito@noohtify.com') {
+        if ($user->is_superuser) {
             return true;
         }
 

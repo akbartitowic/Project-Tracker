@@ -15,6 +15,8 @@ use App\Http\Controllers\FinanceCategoryController;
 use App\Http\Controllers\ProjectAllocationController;
 use App\Http\Controllers\StatController;
 use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\ModuleController;
+use App\Http\Controllers\MenuItemController;
 use App\Http\Controllers\SystemController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ActivityLogController;
@@ -87,6 +89,18 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::put('/roles/{role}', [RoleController::class, 'update'])->middleware('permission:access_control.update');
     Route::patch('/roles/{role}', [RoleController::class, 'update'])->middleware('permission:access_control.update');
     Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->middleware('permission:access_control.delete');
+
+    // 3.1 Modules Routes
+    Route::get('/modules', [ModuleController::class, 'index'])->middleware('permission:modules_management.read');
+    Route::put('/modules/{module}', [ModuleController::class, 'update'])->middleware('permission:modules_management.update');
+    Route::patch('/modules/{module}', [ModuleController::class, 'update'])->middleware('permission:modules_management.update');
+
+    // 3.2 Menu Items Routes
+    Route::get('/menu-items', [MenuItemController::class, 'index'])->middleware('permission:modules_management.read');
+    Route::post('/menu-items', [MenuItemController::class, 'store'])->middleware('permission:modules_management.create');
+    Route::put('/menu-items/{menuItem}', [MenuItemController::class, 'update'])->middleware('permission:modules_management.update');
+    Route::patch('/menu-items/{menuItem}', [MenuItemController::class, 'update'])->middleware('permission:modules_management.update');
+    Route::delete('/menu-items/{menuItem}', [MenuItemController::class, 'destroy'])->middleware('permission:modules_management.delete');
 
     // 3.5 Project Roles Routes
     Route::get('/project-roles', [ProjectRoleController::class, 'index'])->middleware('permission:project_roles.read');

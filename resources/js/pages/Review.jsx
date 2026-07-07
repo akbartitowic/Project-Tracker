@@ -111,30 +111,27 @@ function ReviewResultBar({ summary, overall, onClick }) {
     );
 }
 
-/* ── Star score input (1-5) ── */
-function StarInput({ value, onChange }) {
-    const [hover, setHover] = useState(0);
+/* ── Score input (1-10) ── */
+function ScoreInput({ value, onChange }) {
     return (
-        <div className="flex items-center gap-0.5">
-            {[1, 2, 3, 4, 5].map(s => (
+        <div className="flex flex-wrap items-center gap-1">
+            {Array.from({ length: 10 }, (_, i) => i + 1).map(s => (
                 <button
                     key={s}
                     type="button"
-                    onMouseEnter={() => setHover(s)}
-                    onMouseLeave={() => setHover(0)}
                     onClick={() => onChange(s)}
-                    className="p-0.5 transition-transform hover:scale-110"
+                    className={cn(
+                        'flex size-7 items-center justify-center rounded-md border text-xs font-semibold transition-colors',
+                        s === value
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-primary/50 hover:text-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
+                    )}
                 >
-                    <Star className={cn(
-                        'size-5 transition-colors',
-                        s <= (hover || value)
-                            ? 'fill-amber-400 text-amber-400'
-                            : 'fill-slate-200 text-slate-200 dark:fill-slate-700 dark:text-slate-700',
-                    )} />
+                    {s}
                 </button>
             ))}
             {value > 0 && (
-                <span className="ml-1 text-xs text-slate-500">{value}/5</span>
+                <span className="ml-1 text-xs text-slate-500">{value}/10</span>
             )}
         </div>
     );
@@ -207,7 +204,7 @@ function ReviewSubmitForm({ project, evaluation, onSubmitted, onCancel }) {
                             </div>
                         </div>
                         <div className="pl-7 space-y-1.5">
-                            <StarInput value={answers[idx].score} onChange={s => setScore(idx, s)} />
+                            <ScoreInput value={answers[idx].score} onChange={s => setScore(idx, s)} />
                             <textarea
                                 rows={1}
                                 placeholder="Komentar (opsional)…"
@@ -262,7 +259,7 @@ function ReviewDetail({ review }) {
 
             <div className="space-y-3">
                 {review.answers?.map((a, idx) => {
-                    const level = getLevel((a.score / 5) * 100);
+                    const level = getLevel((a.score / 10) * 100);
                     return (
                         <div key={a.question_id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
                             <div className="flex items-start gap-2">
@@ -272,10 +269,7 @@ function ReviewDetail({ review }) {
                                     <p className="text-[10px] text-primary">Bobot {a.weight}%</p>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
-                                    {[1,2,3,4,5].map(s => (
-                                        <Star key={s} className={cn('size-3.5', s <= a.score ? 'fill-amber-400 text-amber-400' : 'fill-slate-200 text-slate-200 dark:fill-slate-700 dark:text-slate-700')} />
-                                    ))}
-                                    <span className={cn('text-xs font-semibold ml-1', level?.color)}>{a.score}/5</span>
+                                    <span className={cn('text-sm font-bold', level?.color)}>{a.score}/10</span>
                                 </div>
                             </div>
                             {a.comment && (
@@ -844,13 +838,18 @@ export default function Review() {
     const view    = searchParams.get('view') === 'list' ? 'list' : 'card';
     const setView = (v) => setSearchParams(prev => { prev.set('view', v); return prev; });
 
+    // Summary dialog state lives in the URL (?project=<id>) so it's linkable,
+    // shareable, and closes on browser back — not just local component state.
+    const summaryProjectId = searchParams.get('project');
+    const openSummary  = (project) => setSearchParams(prev => { prev.set('project', String(project.id)); return prev; });
+    const closeSummary = () => setSearchParams(prev => { prev.delete('project'); return prev; });
+
     const [projects,       setProjects]       = useState([]);
     const [summaries,      setSummaries]      = useState({});
     const [loading,        setLoading]        = useState(true);
     const [page,           setPage]           = useState(1);
     const [pageSize,       setPageSize]       = useState(12);
     const [error,          setError]          = useState(null);
-    const [summaryProject, setSummaryProject] = useState(null);
 
     const load = useCallback(async () => {
         setLoading(true); setError(null);
@@ -885,6 +884,10 @@ export default function Review() {
     const pagedProjects = useMemo(
         () => sortedProjects.slice((page - 1) * pageSize, page * pageSize),
         [sortedProjects, page, pageSize]
+    );
+    const summaryProject = useMemo(
+        () => (summaryProjectId ? projects.find(p => String(p.id) === summaryProjectId) ?? null : null),
+        [projects, summaryProjectId]
     );
 
     return (
@@ -965,7 +968,7 @@ export default function Review() {
                         {pagedProjects.map(p => (
                             <ProjectGridCard
                                 key={p.id} project={p}
-                                onOpenSummary={setSummaryProject}
+                                onOpenSummary={openSummary}
                                 summaryData={summaries[p.id]}
                             />
                         ))}
@@ -981,7 +984,7 @@ export default function Review() {
                     {pagedProjects.map(p => (
                         <ProjectListRow
                             key={p.id} project={p}
-                            onOpenSummary={setSummaryProject}
+                            onOpenSummary={openSummary}
                             summaryData={summaries[p.id]}
                         />
                     ))}
@@ -996,7 +999,7 @@ export default function Review() {
             {/* Summary dialog */}
             <ReviewSummaryDialog
                 open={summaryProject !== null}
-                onClose={() => setSummaryProject(null)}
+                onClose={closeSummary}
                 project={summaryProject}
                 canSubmit={canSubmit}
                 canConfig={canConfig}

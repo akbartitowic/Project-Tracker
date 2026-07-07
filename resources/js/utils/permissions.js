@@ -14,6 +14,7 @@ const ROUTE_PERMISSION_MAP = [
     { path: '/finance-report', permission: 'finance_report.read' },
     { path: '/users', permission: 'teams_users.read' },
     { path: '/roles', permission: 'access_control.read' },
+    { path: '/modules', permission: 'modules_management.read' },
     { path: '/project-roles', permission: 'project_roles.read' },
     { path: '/system-logs', permission: 'system_log.read' },
     { path: '/integrasi/projects', permission: 'integrasi.read' },
@@ -26,13 +27,31 @@ export function getPermissionSlugs(user) {
     const permissions = user?.role?.permissions || user?.role_permissions || [];
     return new Set(
         permissions
+            // Permissions whose module has been deactivated (Modules screen)
+            // are treated as not granted, even if still assigned to the role.
+            .filter((permission) => permission?.module_is_active !== false)
             .map((permission) => permission?.slug)
             .filter(Boolean)
     );
 }
 
+/**
+ * Sort weight for a sidebar item gated by `slug`, driven by its module's
+ * `sort_order` (edited from the Modules admin screen) rather than a fixed
+ * position in the JSX. Items with no matching permission (e.g. a superuser
+ * account, which has no role_permissions entries) sort last.
+ */
+export function getModuleSortOrder(user, slug) {
+    const permissions = user?.role?.permissions || user?.role_permissions || [];
+    const moduleSlug = String(slug || '').split('.')[0];
+    const match = permissions.find(
+        (permission) => String(permission?.slug || '').split('.')[0] === moduleSlug
+    );
+    return match?.module_sort_order ?? Number.MAX_SAFE_INTEGER;
+}
+
 export function hasPermission(user, slug) {
-    if (String(user?.email || '').toLowerCase() === 'tito@noohtify.com') {
+    if (user?.is_superuser) {
         return true;
     }
     if (!slug) return true;
@@ -47,7 +66,7 @@ export function isFreelanceUser(user) {
 export function isAdminUser(user) {
     const roleName = String(user?.role?.name || user?.role_name || user?.role || '').toLowerCase();
     if (roleName === 'admin') return true;
-    return String(user?.email || '').toLowerCase() === 'tito@noohtify.com';
+    return Boolean(user?.is_superuser);
 }
 
 export function getDefaultLandingPath(user) {
