@@ -10,7 +10,7 @@
 - **PDF:** barryvdh/laravel-dompdf
 - **Drag & Drop:** @dnd-kit
 - **Queue:** Laravel Queue (database driver)
-- **RBAC:** Custom — tabel `modules` (top-level, sumber nama modul/menu) → `permissions` (FK `module_id`, NOT NULL, `restrictOnDelete`) → `permission_role` pivot ke `roles`. Middleware `permission:{slug}`. Modul di-provision otomatis dari `App\Support\PermissionCatalog::menuActionMap()` lewat `sync()`.
+- **RBAC:** Custom — tabel `modules` (top-level, sumber nama modul/menu) → `permissions` (FK `module_id`, NOT NULL, `restrictOnDelete`) → `permission_role` pivot ke `roles`. Middleware `permission:{slug}`. Modul di-provision otomatis dari `App\Support\PermissionCatalog::menuActionMap()` lewat `sync()`. Akun dengan `users.is_superuser = true` bypass semua permission check (`User::hasPermission()`, `UserAccess::isPrivileged()`) — menggantikan hardcode email check yang lama.
 
 ## App Rules & Logic
 - Gunakan bahasa Indonesia untuk semua teks di UI.
@@ -48,6 +48,7 @@
 - [x] Project Members & Role Quotas
 - [x] Team Load Monitoring
 - [x] Project Roles
+- [x] Project Board — filter task per project role (dropdown "Semua Role", kombinasi dengan filter member/My Task) + tab list project (Aktif/Done/Favorit) sync ke query param URL (`?tab=done`/`?tab=favorite`), jadi bisa di-refresh/bookmark/share tetap di tab yang sama.
 
 ### Sales & Presales
 - [x] Sales Pipeline (Sales Pitch)
@@ -70,7 +71,7 @@
 - [x] System Backup (CSV & SQL dump)
 
 ### Review System
-- [x] Review Config (evaluation cycles, bobot per pertanyaan)
+- [x] Review Config (evaluation cycles, bobot per pertanyaan, skala skor 1–10)
 - [x] Review (trigger & monitor status)
 - [x] Public Review Link (share ke klien eksternal tanpa login)
 

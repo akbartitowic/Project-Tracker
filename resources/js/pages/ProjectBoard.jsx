@@ -80,7 +80,7 @@ function normalizeSubtaskStatus(status) {
     return 'To Do';
 }
 
-function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours, onMoveToBacklog, cardPrefix }) {
+function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours, onMoveToBacklog, onDelete, cardPrefix }) {
     const [expanded, setExpanded] = useState(false);
 
 
@@ -236,6 +236,19 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                                     Backlog
                                 </button>
                             )}
+                            {onDelete && (
+                                <button
+                                    type="button"
+                                    title="Hapus Task"
+                                    className="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDelete(task);
+                                    }}
+                                >
+                                    <Trash2 className="size-3.5" />
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -339,15 +352,7 @@ export default function ProjectBoard() {
     const [projectSortBy, setProjectSortBy] = useState('name_asc');
     const [projectListPage, setProjectListPage] = useState(1);
     const [projectListPageSize, setProjectListPageSize] = useState(12);
-    const [pinnedProjectIds, setPinnedProjectIds] = useState(() => {
-        try {
-            const raw = localStorage.getItem('projectBoardPinnedIds');
-            const parsed = raw ? JSON.parse(raw) : [];
-            return Array.isArray(parsed) ? parsed.map((id) => String(id)) : [];
-        } catch {
-            return [];
-        }
-    });
+    const hasAppliedDefaultFavoriteTabRef = useRef(false);
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -382,6 +387,7 @@ export default function ProjectBoard() {
     const [isUpdatingProjectStatus, setIsUpdatingProjectStatus] = useState(false);
     const [isDeletingTask, setIsDeletingTask] = useState(false);
     const [confirmDeleteTaskOpen, setConfirmDeleteTaskOpen] = useState(false);
+    const [taskToDelete, setTaskToDelete] = useState(null);
     const [backlogConfirmTask, setBacklogConfirmTask] = useState(null);
     const [isMovingToBacklog, setIsMovingToBacklog] = useState(false);
 
@@ -391,10 +397,6 @@ export default function ProjectBoard() {
     const [showMetrics, setShowMetrics] = useState(() => {
         try { return localStorage.getItem('boardShowMetrics') === 'true'; } catch { return false; }
     });
-
-    useEffect(() => {
-        localStorage.setItem('projectBoardPinnedIds', JSON.stringify(pinnedProjectIds));
-    }, [pinnedProjectIds]);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -499,14 +501,23 @@ export default function ProjectBoard() {
         setAssignmentRows((prev) => prev.map((row, idx) => idx === index ? { ...row, [field]: value } : row));
     };
     const isProjectPinned = useCallback((projectId) => (
-        pinnedProjectIds.includes(String(projectId))
-    ), [pinnedProjectIds]);
-    const togglePinnedProject = useCallback((projectId) => {
+        projects.find((p) => String(p.id) === String(projectId))?.is_favorite === true
+    ), [projects]);
+    const togglePinnedProject = useCallback(async (projectId) => {
         const key = String(projectId);
-        setPinnedProjectIds((prev) => (
-            prev.includes(key) ? prev.filter((id) => id !== key) : [...prev, key]
-        ));
-    }, []);
+        const nextFavorite = !isProjectPinned(key);
+        setProjects((prev) => prev.map((p) => (
+            String(p.id) === key ? { ...p, is_favorite: nextFavorite } : p
+        )));
+        try {
+            await fetchAPI(`/projects/${key}/favorite`, { method: nextFavorite ? 'POST' : 'DELETE' });
+        } catch (error) {
+            setProjects((prev) => prev.map((p) => (
+                String(p.id) === key ? { ...p, is_favorite: !nextFavorite } : p
+            )));
+            alert(error.message || 'Gagal memperbarui favorit project.');
+        }
+    }, [isProjectPinned]);
 
     const saveProjectAssignments = async () => {
         if (!assigningProject) return;
@@ -1133,14 +1144,23 @@ export default function ProjectBoard() {
         }
     };
 
+    const openDeleteTaskConfirm = (task) => {
+        setTaskToDelete(task);
+        setConfirmDeleteTaskOpen(true);
+    };
+
     const handleDeleteTask = async () => {
-        if (!editingTaskId) return;
+        if (!taskToDelete) return;
+        const deletedTaskId = taskToDelete.id;
         setIsDeletingTask(true);
         try {
-            await fetchAPI(`/tasks/${editingTaskId}`, { method: 'DELETE' });
+            await fetchAPI(`/tasks/${deletedTaskId}`, { method: 'DELETE' });
             setConfirmDeleteTaskOpen(false);
-            closeTaskModal();
-            setTasks((prev) => prev.filter((t) => Number(t.id) !== Number(editingTaskId)));
+            setTaskToDelete(null);
+            if (editingTaskId && Number(editingTaskId) === Number(deletedTaskId)) {
+                closeTaskModal();
+            }
+            setTasks((prev) => prev.filter((t) => Number(t.id) !== Number(deletedTaskId)));
         } catch (err) {
             alert(err.message || 'Gagal menghapus task.');
         } finally {
@@ -1254,9 +1274,18 @@ export default function ProjectBoard() {
         [projects]
     );
     const favoriteProjects = useMemo(
-        () => projects.filter((p) => pinnedProjectIds.includes(String(p.id))),
-        [projects, pinnedProjectIds]
+        () => projects.filter((p) => p.is_favorite),
+        [projects]
     );
+
+    useEffect(() => {
+        if (hasAppliedDefaultFavoriteTabRef.current || projects.length === 0) return;
+        hasAppliedDefaultFavoriteTabRef.current = true;
+        if (!searchParams.get('tab') && favoriteProjects.length > 0) {
+            setProjectListTab('favorite');
+        }
+    }, [projects, favoriteProjects, searchParams, setProjectListTab]);
+
     const displayedProjects = projectListTab === 'done'
         ? doneProjects
         : projectListTab === 'favorite'
@@ -1286,8 +1315,8 @@ export default function ProjectBoard() {
         const usage = (project) => Number(project?.usage_percentage) || 0;
 
         items.sort((a, b) => {
-            const aPinned = pinnedProjectIds.includes(String(a?.id));
-            const bPinned = pinnedProjectIds.includes(String(b?.id));
+            const aPinned = !!a?.is_favorite;
+            const bPinned = !!b?.is_favorite;
             if (aPinned !== bPinned) return aPinned ? -1 : 1;
             if (projectSortBy === 'oldest') {
                 const dateDiff = createdAtTime(a) - createdAtTime(b);
@@ -1301,7 +1330,7 @@ export default function ProjectBoard() {
             return dateDiff !== 0 ? dateDiff : numericId(b) - numericId(a);
         });
         return items;
-    }, [filteredDisplayedProjects, pinnedProjectIds, projectSortBy]);
+    }, [filteredDisplayedProjects, projectSortBy]);
 
     const pagedProjectList = useMemo(
         () => sortedDisplayedProjects.slice(
@@ -2303,6 +2332,7 @@ export default function ProjectBoard() {
                                                 assigneeName={task.assignee_id ? assigneeNameById[task.assignee_id] : null}
                                                 onClick={(t) => navigate(`/board/${projectId}/task/${t.id}`)}
                                                 onMoveToBacklog={canUpdateBoard ? handleMoveToBacklog : null}
+                                                onDelete={canUpdateBoard ? openDeleteTaskConfirm : null}
                                                 cardPrefix={selectedProject?.name ? selectedProject.name.slice(0, 2).toUpperCase() : null}
                                             />
                                         ))}
@@ -2513,7 +2543,9 @@ export default function ProjectBoard() {
                     else setIsModalOpen(true);
                 }}
             >
-                <DialogContent className={cn(
+                <DialogContent
+                    showCloseButton={!taskRouteId}
+                    className={cn(
                     "flex flex-col p-0 gap-0 overflow-hidden",
                     taskRouteId
                         ? "!fixed !inset-0 !max-w-none !w-full !h-dvh !max-h-none !translate-x-0 !translate-y-0 !rounded-none shadow-none"
@@ -2540,7 +2572,7 @@ export default function ProjectBoard() {
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                                 {editingTaskId && canUpdateBoard && (
-                                    <Button type="button" variant="ghost" size="icon" className="size-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => setConfirmDeleteTaskOpen(true)} disabled={isSubmitting}>
+                                    <Button type="button" variant="ghost" size="icon" className="size-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => openDeleteTaskConfirm(editingTask)} disabled={isSubmitting}>
                                         <Trash2 className="size-4" />
                                     </Button>
                                 )}
@@ -2879,7 +2911,7 @@ export default function ProjectBoard() {
                             {editingTaskId && canUpdateBoard && (
                                 <Button type="button" variant="ghost"
                                     className="mr-auto text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1.5"
-                                    onClick={() => setConfirmDeleteTaskOpen(true)}
+                                    onClick={() => openDeleteTaskConfirm(editingTask)}
                                     disabled={isSubmitting}>
                                     <Trash2 className="size-4" />
                                     Hapus Task
@@ -2896,7 +2928,13 @@ export default function ProjectBoard() {
             </Dialog>
 
             {/* Confirm Delete Task */}
-            <Dialog open={confirmDeleteTaskOpen} onOpenChange={setConfirmDeleteTaskOpen}>
+            <Dialog
+                open={confirmDeleteTaskOpen}
+                onOpenChange={(open) => {
+                    setConfirmDeleteTaskOpen(open);
+                    if (!open) setTaskToDelete(null);
+                }}
+            >
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -2904,11 +2942,11 @@ export default function ProjectBoard() {
                             Hapus Task
                         </DialogTitle>
                         <DialogDescription>
-                            Task <strong className="text-slate-700 dark:text-slate-200">"{editingTask?.title}"</strong> akan dihapus permanen beserta semua subtask dan catatannya. Tindakan ini tidak bisa dibatalkan.
+                            Task <strong className="text-slate-700 dark:text-slate-200">"{taskToDelete?.title}"</strong> akan dihapus permanen beserta semua subtask dan catatannya. Tindakan ini tidak bisa dibatalkan.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="mt-2">
-                        <Button type="button" variant="outline" onClick={() => setConfirmDeleteTaskOpen(false)} disabled={isDeletingTask}>
+                        <Button type="button" variant="outline" onClick={() => { setConfirmDeleteTaskOpen(false); setTaskToDelete(null); }} disabled={isDeletingTask}>
                             Batal
                         </Button>
                         <Button type="button" variant="destructive" onClick={handleDeleteTask} disabled={isDeletingTask}>

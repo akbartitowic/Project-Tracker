@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use App\Support\ManhourBucketCalculator;
 use App\Support\TaskBillable;
+use App\Models\ProjectFavorite;
 use App\Models\ProjectMember;
 use App\Models\ProjectRoleQuota;
 use App\Models\ProjectRole;
@@ -86,7 +87,11 @@ class ProjectController extends Controller
                   AND companies.logo_path IS NOT NULL
                 ORDER BY presales.id DESC
                 LIMIT 1
-            ) as company_logo_path");
+            ) as company_logo_path")
+            ->selectRaw('EXISTS(
+                SELECT 1 FROM project_favorites pf
+                WHERE pf.project_id = projects.id AND pf.user_id = ?
+            ) as is_favorite', [$user->id]);
 
         if (!ProjectAccess::isPrivileged($user)) {
             $query->whereExists(function ($sub) use ($user) {
@@ -106,12 +111,38 @@ class ProjectController extends Controller
             $p->jobs = is_string($p->jobs) ? json_decode($p->jobs) : $p->jobs;
             $p->company_logo_url = PublicStorageUrl::for($p->company_logo_path);
             unset($p->company_logo_path);
+            $p->is_favorite = (bool) $p->is_favorite;
             if ($stripManhours) {
                 UserAccess::stripProjectManhourFields($p);
             }
         });
 
         return response()->json(['data' => $projects]);
+    }
+
+    public function favorite(Request $request, $id)
+    {
+        $user = $request->user();
+        ProjectAccess::assertCanAccessProject($user, (int) $id);
+
+        ProjectFavorite::firstOrCreate([
+            'user_id' => $user->id,
+            'project_id' => $id,
+        ]);
+
+        return response()->json(['message' => 'Project favorited']);
+    }
+
+    public function unfavorite(Request $request, $id)
+    {
+        $user = $request->user();
+        ProjectAccess::assertCanAccessProject($user, (int) $id);
+
+        ProjectFavorite::where('user_id', $user->id)
+            ->where('project_id', $id)
+            ->delete();
+
+        return response()->json(['message' => 'Project unfavorited']);
     }
 
     public function destroy(Request $request)

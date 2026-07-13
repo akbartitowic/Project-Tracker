@@ -70,6 +70,8 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::put('/projects/{id}/members', [ProjectController::class, 'syncMembers'])->middleware('permission:list_project.update');
     Route::patch('/projects/{id}/status', [ProjectController::class, 'updateStatus'])->middleware('permission:project_board.update');
     Route::get('/projects/{id}/finance-summary', [ProjectAllocationController::class, 'financeSummary'])->middleware('permission:finance_monitoring.read');
+    Route::post('/projects/{id}/favorite', [ProjectController::class, 'favorite'])->middleware('permission:project_board.read');
+    Route::delete('/projects/{id}/favorite', [ProjectController::class, 'unfavorite'])->middleware('permission:project_board.read');
 
     // 1.5 System Log Routes
     Route::get('/activity-logs', [ActivityLogController::class, 'index'])->middleware('permission:system_log.read');

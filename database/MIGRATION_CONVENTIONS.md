@@ -41,6 +41,7 @@ Keep total length **&lt; 48 chars** when possible.
 | project_role_quotas | `prq` |
 | activity_logs | `al` |
 | permissions / roles pivot | `rp`, `rperm` |
+| project_favorites | `pf` |
 
 Add a new row here when you introduce a new table.
 
