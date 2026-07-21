@@ -31,7 +31,7 @@ class ProjectAllocation extends Model
         'realized_at' => 'datetime',
         'paid_at' => 'datetime',
         'paid_amount' => 'decimal:2',
-        'cr_date' => 'date',
+        'cr_date' => 'date:Y-m-d',
     ];
 
     public function user(): BelongsTo

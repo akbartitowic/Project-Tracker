@@ -12,6 +12,6 @@ class TeamLoadExcludedDate extends Model
     ];
 
     protected $casts = [
-        'excluded_date' => 'date',
+        'excluded_date' => 'date:Y-m-d',
     ];
 }

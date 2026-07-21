@@ -42,6 +42,8 @@ Keep total length **&lt; 48 chars** when possible.
 | activity_logs | `al` |
 | permissions / roles pivot | `rp`, `rperm` |
 | project_favorites | `pf` |
+| task_assignees | `tka` |
+| task_note_mentions | `tnm` |
 
 Add a new row here when you introduce a new table.
 

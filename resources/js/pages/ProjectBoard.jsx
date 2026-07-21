@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
-import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star, Inbox, ChevronDown } from 'lucide-react';
+import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star, Inbox, ChevronDown, Copy } from 'lucide-react';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../utils/taskDates';
 import { hasPermission } from '../utils/permissions';
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +17,9 @@ import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import SubtaskSection, { subtasksTotalHours } from '../components/board/SubtaskSection';
 import AssigneeSearchSelect from '../components/board/AssigneeSearchSelect';
+import EpicSearchInput from '../components/board/EpicSearchInput';
+import DescriptionEditor from '../components/board/DescriptionEditor';
+import TaskAssigneesSection from '../components/board/TaskAssigneesSection';
 import TaskNotesSection from '../components/board/TaskNotesSection';
 import {
     billableHoursForTask,
@@ -25,9 +28,8 @@ import {
     TaskBillingBadges,
     taskIsEffectivelyNonBillable,
 } from '../utils/taskBillable.jsx';
-import { DndContext, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
 import PaginationControls from '../components/ui/PaginationControls';
 
 const RUSH_HOUR_FACTOR = 1.3;
@@ -80,21 +82,20 @@ function normalizeSubtaskStatus(status) {
     return 'To Do';
 }
 
-function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours, onMoveToBacklog, onDelete, cardPrefix }) {
+function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHours, onMoveToBacklog, onDelete, onDuplicate, cardPrefix, canDrag, bulkMode, selected, onToggleSelect }) {
     const [expanded, setExpanded] = useState(false);
 
 
-    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: task.id,
-        data: { task }
+        data: { task },
+        disabled: !canDrag,
     });
 
-    const style = transform ? {
-        transform: CSS.Translate.toString(transform),
-        opacity: isDragging ? 0.5 : 1,
-        zIndex: isDragging ? 50 : 1,
-        position: 'relative'
-    } : undefined;
+    // The card itself stays put as a dimmed placeholder while dragging;
+    // DragOverlay renders the visual clone that follows the pointer so it
+    // isn't clipped by the column's scrollable (overflow-y-auto) area.
+    const style = isDragging ? { opacity: 0.4 } : undefined;
 
     const prioColors = {
         High: 'bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400',
@@ -106,6 +107,7 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
     const assigneeLabel = task.assignee_id
         ? (task.assignee_name || assigneeName || `Assignee ${task.assignee_id}`)
         : 'Unassigned';
+    const otherAssignees = (task.assignees || []).filter((a) => String(a.id) !== String(task.assignee_id));
     const leafLoadH = loadHoursForTask(task);
     const hoursLabel = task.subtasks?.length > 0
         ? `${formatHours(subtasksTotalHours(task.subtasks))}h`
@@ -122,9 +124,21 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
 
     return (
         <div ref={setNodeRef} style={style} className="relative group touch-none" {...attributes} {...listeners}>
+            {bulkMode && (
+                <div
+                    className="absolute left-2 top-2 z-10"
+                    onClick={(e) => { e.stopPropagation(); onToggleSelect?.(task.id); }}
+                >
+                    <Checkbox checked={!!selected} onCheckedChange={() => onToggleSelect?.(task.id)} className="bg-white shadow dark:bg-slate-900" />
+                </div>
+            )}
             <Card
-                className="cursor-pointer border-slate-200/90 shadow-sm transition-colors hover:border-primary/40 dark:border-slate-700/80 overflow-hidden"
-                onClick={() => onClick(task)}
+                className={cn(
+                    'cursor-pointer border-slate-200/90 shadow-sm transition-colors hover:border-primary/40 dark:border-slate-700/80 overflow-hidden',
+                    bulkMode && 'pl-8',
+                    selected && 'border-primary ring-1 ring-primary',
+                )}
+                onClick={() => (bulkMode ? onToggleSelect?.(task.id) : onClick(task))}
             >
                 {cardPrefix && task.project_sequence != null && (
                     <div className="bg-primary/10 dark:bg-primary/20 px-3 py-1 border-b border-primary/10 dark:border-primary/20">
@@ -143,6 +157,15 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                         {task.rush_hour && (
                             <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
                                 Rush
+                            </span>
+                        )}
+                        {task.duplicated_from_id && (
+                            <span
+                                title={`Disalin dari task #${task.duplicated_from_id}`}
+                                className="flex items-center gap-0.5 rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                            >
+                                <Copy className="size-2.5" />
+                                Clone
                             </span>
                         )}
                         {!isFreelance && hoursLabel && (
@@ -217,8 +240,16 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                     )}
 
                     <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
-                        <span className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400" title={assigneeLabel}>
-                            {assigneeLabel}
+                        <span className="flex min-w-0 items-center gap-1 truncate text-[11px] font-medium text-slate-500 dark:text-slate-400" title={assigneeLabel}>
+                            <span className="truncate">{assigneeLabel}</span>
+                            {otherAssignees.length > 0 && (
+                                <span
+                                    title={`Menempel juga: ${otherAssignees.map((a) => a.name).join(', ')}`}
+                                    className="shrink-0 rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                                >
+                                    +{otherAssignees.length}
+                                </span>
+                            )}
                         </span>
                         <div className="flex items-center gap-1 shrink-0">
                             {task.description && <FileText className="size-3.5 text-slate-400" aria-label="Has description" />}
@@ -234,6 +265,19 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                                 >
                                     <Inbox className="size-3" />
                                     Backlog
+                                </button>
+                            )}
+                            {onDuplicate && (
+                                <button
+                                    type="button"
+                                    title="Duplicate Task"
+                                    className="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-primary/10 hover:text-primary"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDuplicate(task);
+                                    }}
+                                >
+                                    <Copy className="size-3.5" />
                                 </button>
                             )}
                             {onDelete && (
@@ -257,6 +301,34 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
     );
 }
 
+function TaskDragOverlayCard({ task, assigneeName }) {
+    const prioColors = {
+        High: 'bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400',
+        Medium: 'bg-orange-100 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400',
+        Low: 'bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'
+    };
+    const pClass = prioColors[task.priority] || prioColors.Low;
+    const assigneeLabel = task.assignee_id
+        ? (task.assignee_name || assigneeName || `Assignee ${task.assignee_id}`)
+        : 'Unassigned';
+
+    return (
+        <Card className="w-[min(18rem,88vw)] cursor-grabbing border-primary/40 shadow-lg dark:border-primary/40 sm:w-72">
+            <div className="p-3">
+                <div className="mb-1.5 flex flex-wrap items-center gap-1">
+                    <span className={`${pClass} rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide`}>
+                        {task.priority}
+                    </span>
+                </div>
+                <h4 className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-100">{task.title}</h4>
+                <div className="mt-2.5 truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                    {assigneeLabel}
+                </div>
+            </div>
+        </Card>
+    );
+}
+
 function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
     const { isOver, setNodeRef } = useDroppable({ id: title });
     const perc = totalCount > 0 ? Math.round((count / totalCount) * 100) : 0;
@@ -265,13 +337,13 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
         <div
             ref={setNodeRef}
             className={cn(
-                'flex w-[min(18rem,88vw)] shrink-0 snap-start flex-col rounded-xl border bg-slate-50/90 transition-colors duration-200 dark:bg-[#151b28]/60 sm:w-72',
+                'flex max-h-[70vh] min-h-[240px] w-[min(18rem,88vw)] shrink-0 snap-start flex-col rounded-xl border bg-slate-50/90 transition-colors duration-200 dark:bg-[#151b28]/60 sm:w-72',
                 isOver
                     ? 'border-primary/40 bg-primary/5 shadow-sm dark:bg-primary/5'
                     : 'border-slate-200/80 dark:border-slate-800/60',
             )}
         >
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 px-3 py-2.5 dark:border-slate-800/50">
+            <div className="flex shrink-0 items-center justify-between gap-2 rounded-t-xl border-b border-slate-200/80 bg-slate-50/90 px-3 py-2.5 dark:border-slate-800/50 dark:bg-[#151b28]/95">
                 <div className="flex min-w-0 items-center gap-2">
                     <span className={cn('size-2 shrink-0 rounded-full', color)} />
                     <h3 className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</h3>
@@ -279,7 +351,7 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
                     <span className="shrink-0 text-[10px] font-semibold text-slate-400">{perc}%</span>
                 </div>
             </div>
-            <div className="relative flex flex-col gap-2.5 p-2.5">
+            <div className="relative flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2.5">
                 {children}
                 {count === 0 && (
                     <p className="pointer-events-none py-6 text-center text-xs text-slate-400 dark:text-slate-500">
@@ -287,8 +359,8 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
                     </p>
                 )}
             </div>
-            {title === 'To Do' && (
-                <div className="shrink-0 border-t border-slate-200/80 p-2 dark:border-slate-800/50">
+            {title === 'To Do' && onAddTask && (
+                <div className="shrink-0 rounded-b-xl border-t border-slate-200/80 p-2 dark:border-slate-800/50">
                     <Button variant="outline" size="sm" className="h-8 w-full border-dashed text-xs" onClick={onAddTask}>
                         <Plus className="mr-1.5 size-3.5" />
                         Add Task
@@ -329,9 +401,11 @@ export default function ProjectBoard() {
     const [users, setUsers] = useState([]);
     const [projectMembers, setProjectMembers] = useState([]);
     const [tasks, setTasks] = useState([]);
+    const [activeDragTask, setActiveDragTask] = useState(null);
     const [viewMode, setViewMode] = useState('kanban');
     const [filterMemberId, setFilterMemberId] = useState(null);
     const [filterProjectRoleId, setFilterProjectRoleId] = useState(null);
+    const [filterEpic, setFilterEpic] = useState(null);
     const [listViewMode, setListViewMode] = useState('grid');
     const [mobileKanbanCol, setMobileKanbanCol] = useState('To Do');
     const kanbanScrollRef = useRef(null);
@@ -384,15 +458,21 @@ export default function ProjectBoard() {
     const [bulkEditEstimate, setBulkEditEstimate] = useState('');
     const [bulkEditRoleFilter, setBulkEditRoleFilter] = useState('All');
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
+    const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
+    const [isBulkDeleting, setIsBulkDeleting] = useState(false);
     const [isUpdatingProjectStatus, setIsUpdatingProjectStatus] = useState(false);
     const [isDeletingTask, setIsDeletingTask] = useState(false);
     const [confirmDeleteTaskOpen, setConfirmDeleteTaskOpen] = useState(false);
     const [taskToDelete, setTaskToDelete] = useState(null);
     const [backlogConfirmTask, setBacklogConfirmTask] = useState(null);
     const [isMovingToBacklog, setIsMovingToBacklog] = useState(false);
+    const [duplicateConfirmTask, setDuplicateConfirmTask] = useState(null);
+    const [duplicateIncludeSubtasks, setDuplicateIncludeSubtasks] = useState(true);
+    const [isDuplicatingTask, setIsDuplicatingTask] = useState(false);
 
     const isFreelance = isFreelanceUser(user);
     const canUpdateBoard = hasPermission(user, 'project_board.update');
+    const canCreateTask = hasPermission(user, 'project_board.create');
     const canEditLastUpdate = hasPermission(user, 'project_board.edit_last_update');
     const [showMetrics, setShowMetrics] = useState(() => {
         try { return localStorage.getItem('boardShowMetrics') === 'true'; } catch { return false; }
@@ -789,6 +869,13 @@ export default function ProjectBoard() {
         [visibleRoleQuotas]
     );
 
+    const epicOptions = useMemo(
+        () => Array.from(new Set(
+            tasks.filter((t) => !t.parent_task_id).map((t) => t.feature_title).filter(Boolean)
+        )).sort((a, b) => a.localeCompare(b)),
+        [tasks]
+    );
+
     const categoryBasedRoleQuotas = visibleRoleQuotas.filter((quota) =>
         newTaskCategory ? quota.role_name === newTaskCategory : true
     );
@@ -799,6 +886,15 @@ export default function ProjectBoard() {
     );
     const editingSubtasks = editingTask?.subtasks ?? [];
     const hasSubtasks = editingSubtasks.length > 0;
+    const hasAssigneeMhSplit = !hasSubtasks && (editingTask?.assignees?.length ?? 0) >= 2;
+
+    // When MH is derived from the per-assignee split below, keep this read-only field
+    // mirroring the live total instead of the stale value captured when the modal opened.
+    useEffect(() => {
+        if (hasAssigneeMhSplit && editingTask) {
+            setNewTaskEstimate(baseInputFromStoredHours(editingTask.estimated_hours, !!editingTask.rush_hour));
+        }
+    }, [hasAssigneeMhSplit, editingTask?.estimated_hours, editingTask?.rush_hour]);
 
     const formatHours = (value) => {
         const num = Number(value);
@@ -903,7 +999,6 @@ export default function ProjectBoard() {
                 description: newTaskDescription,
                 priority: newTaskPriority,
                 status: newTaskStatus,
-                assignee_id: newTaskAssignee !== 'Unassigned' ? parseInt(newTaskAssignee) : null,
                 estimated_hours: storedHours,
                 rush_hour: isWaterfall || isFreelance || !isBillable ? false : newTaskRushHour,
                 project_id: selectedProject.id,
@@ -912,6 +1007,11 @@ export default function ProjectBoard() {
                 start_date: newTaskStartDate || null,
                 due_date: newTaskDueDate || null,
             };
+            if (!editingTaskId) {
+                // Editing an existing task manages assignees via the dedicated
+                // multi-assignee section below instead of this single field.
+                payload.assignee_id = newTaskAssignee !== 'Unassigned' ? parseInt(newTaskAssignee) : null;
+            }
             if (!hasSubtasks) {
                 payload.is_billable = isBillable;
             }
@@ -1005,18 +1105,27 @@ export default function ProjectBoard() {
         }
     };
 
+    const handleDragStart = (event) => {
+        const draggedTask = tasks.find(t => t.id === event.active.id);
+        setActiveDragTask(draggedTask || null);
+    };
+
     const handleDragEnd = async (event) => {
+        setActiveDragTask(null);
         const { active, over } = event;
-        if (!over) return; // Dropped outside a valid column
+        if (!over || !canUpdateBoard) return; // Dropped outside a valid column, or no permission to move
 
         const taskId = active.id;
         const newStatus = over.id;
         const task = tasks.find(t => t.id === taskId);
 
         if (task && task.status !== newStatus) {
-            // Optimistic update
-            const oldTasks = [...tasks];
-            setTasks(prev => prev.map(t => t.id.toString() === taskId.toString() ? { ...t, status: newStatus } : t));
+            // Optimistic update — moved card goes straight to the top of its new column
+            const oldStatus = task.status;
+            setTasks(prev => [
+                { ...task, status: newStatus },
+                ...prev.filter(t => t.id !== taskId),
+            ]);
 
             try {
                 await fetchAPI(`/tasks/${taskId}/status`, {
@@ -1026,18 +1135,26 @@ export default function ProjectBoard() {
                 await loadBoard(selectedProject.id);
                 await syncSelectedProjectFromList(selectedProject.id);
             } catch (error) {
-                // Revert on failure
-                setTasks(oldTasks);
+                // Revert only this task, so it doesn't clobber other concurrent updates
+                setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: oldStatus } : t));
                 console.error("Failed to move task", error);
+                alert(error.message || 'Gagal memindahkan task, silakan coba lagi.');
             }
         }
     };
 
     const visibleTasks = useMemo(
         () => tasks
-            .filter((t) => !filterMemberId || String(t.assignee_id) === String(filterMemberId))
-            .filter((t) => !filterProjectRoleId || String(t.project_role_id) === String(filterProjectRoleId)),
-        [tasks, filterMemberId, filterProjectRoleId]
+            .filter((t) => {
+                if (!filterMemberId) return true;
+                if (t.assignees?.length > 0) {
+                    return t.assignees.some((a) => String(a.id) === String(filterMemberId));
+                }
+                return String(t.assignee_id) === String(filterMemberId);
+            })
+            .filter((t) => !filterProjectRoleId || String(t.project_role_id) === String(filterProjectRoleId))
+            .filter((t) => !filterEpic || t.feature_title === filterEpic),
+        [tasks, filterMemberId, filterProjectRoleId, filterEpic]
     );
     const getTasksByStatus = (status) => visibleTasks.filter(t => t.status === status);
 
@@ -1087,6 +1204,28 @@ export default function ProjectBoard() {
             alert(error.message || 'Failed to bulk edit tasks.');
         } finally {
             setIsSubmittingBulk(false);
+        }
+    };
+
+    const handleBulkDeleteSubmit = async () => {
+        if (selectedTaskIds.length === 0) return;
+        setIsBulkDeleting(true);
+        try {
+            const res = await fetchAPI('/tasks/bulk-delete', {
+                method: 'DELETE',
+                body: JSON.stringify({ ids: selectedTaskIds }),
+            });
+            const deletedCount = res?.deletedCount ?? selectedTaskIds.length;
+            setIsBulkDeleteConfirmOpen(false);
+            setSelectedTaskIds([]);
+            setIsTaskBulkEditMode(false);
+            await loadBoard(selectedProject.id);
+            await syncSelectedProjectFromList(selectedProject.id);
+            alert(`${deletedCount} task berhasil dihapus.`);
+        } catch (error) {
+            alert(error.message || 'Gagal menghapus task terpilih.');
+        } finally {
+            setIsBulkDeleting(false);
         }
     };
 
@@ -1187,6 +1326,30 @@ export default function ProjectBoard() {
         }
     };
 
+    const openDuplicateConfirm = (task) => {
+        setDuplicateConfirmTask(task);
+        setDuplicateIncludeSubtasks(true);
+    };
+
+    const confirmDuplicateTask = async () => {
+        if (!duplicateConfirmTask) return;
+        setIsDuplicatingTask(true);
+        try {
+            await fetchAPI(`/tasks/${duplicateConfirmTask.id}/duplicate`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    include_subtasks: duplicateConfirmTask.subtasks?.length > 0 ? duplicateIncludeSubtasks : false,
+                }),
+            });
+            setDuplicateConfirmTask(null);
+            await loadBoard(selectedProject.id);
+        } catch (err) {
+            alert(err.message || 'Gagal menduplikasi task.');
+        } finally {
+            setIsDuplicatingTask(false);
+        }
+    };
+
     const COLUMNS = [
         { title: 'To Do', color: 'bg-slate-400' },
         { title: 'In Progress', color: 'bg-primary' },
@@ -1231,6 +1394,18 @@ export default function ProjectBoard() {
         });
         return map;
     }, [users, projectMembers]);
+
+    /** @mention candidates for task notes — always this project's formal team, regardless of /users access. */
+    const mentionableUsers = useMemo(() => {
+        const seen = new Set();
+        const opts = [];
+        for (const m of projectMembers) {
+            if (!m?.user_id || seen.has(m.user_id)) continue;
+            seen.add(m.user_id);
+            opts.push({ id: m.user_id, name: m.user_name || 'User' });
+        }
+        return opts;
+    }, [projectMembers]);
 
     /** When /users is forbidden (no teams_users.read), fall back to project members for assignee picker */
     const assigneeSelectOptions = useMemo(() => {
@@ -1315,9 +1490,6 @@ export default function ProjectBoard() {
         const usage = (project) => Number(project?.usage_percentage) || 0;
 
         items.sort((a, b) => {
-            const aPinned = !!a?.is_favorite;
-            const bPinned = !!b?.is_favorite;
-            if (aPinned !== bPinned) return aPinned ? -1 : 1;
             if (projectSortBy === 'oldest') {
                 const dateDiff = createdAtTime(a) - createdAtTime(b);
                 return dateDiff !== 0 ? dateDiff : numericId(a) - numericId(b);
@@ -1947,23 +2119,27 @@ export default function ProjectBoard() {
                                 <List className="size-4" />
                             </Button>
                         </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1.5"
-                            onClick={() => {
-                                setImportFile(null);
-                                setImportResult(null);
-                                setIsImportModalOpen(true);
-                            }}
-                        >
-                            <Upload className="size-4" />
-                            <span className="hidden sm:inline">Import</span>
-                        </Button>
-                        <Button size="sm" className="gap-1.5 shadow-md shadow-primary/20" onClick={() => handleOpenModal('To Do')}>
-                            <Plus className="size-4" />
-                            Add Task
-                        </Button>
+                        {canCreateTask && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5"
+                                onClick={() => {
+                                    setImportFile(null);
+                                    setImportResult(null);
+                                    setIsImportModalOpen(true);
+                                }}
+                            >
+                                <Upload className="size-4" />
+                                <span className="hidden sm:inline">Import</span>
+                            </Button>
+                        )}
+                        {canCreateTask && (
+                            <Button size="sm" className="gap-1.5 shadow-md shadow-primary/20" onClick={() => handleOpenModal('To Do')}>
+                                <Plus className="size-4" />
+                                Add Task
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -2061,6 +2237,25 @@ export default function ProjectBoard() {
                                 </SelectContent>
                             </Select>
                         )}
+
+                        {epicOptions.length > 0 && (
+                            <Select
+                                value={filterEpic ?? 'all'}
+                                onValueChange={(val) => setFilterEpic(val === 'all' ? null : val)}
+                            >
+                                <SelectTrigger className="h-8 w-auto min-w-[140px] gap-1.5 text-xs">
+                                    <SelectValue placeholder="Semua Epic" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Semua Epic</SelectItem>
+                                    {epicOptions.map((epic) => (
+                                        <SelectItem key={epic} value={epic}>
+                                            {epic}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -2109,7 +2304,6 @@ export default function ProjectBoard() {
                                 size="sm"
                                 className="h-8"
                                 onClick={() => {
-                                    if (!isTaskBulkEditMode && viewMode !== 'list') setViewMode('list');
                                     setIsTaskBulkEditMode(!isTaskBulkEditMode);
                                     if (isTaskBulkEditMode) setSelectedTaskIds([]);
                                 }}
@@ -2124,6 +2318,17 @@ export default function ProjectBoard() {
                                 onClick={() => setIsBulkEditTaskModalOpen(true)}
                             >
                                 Edit ({selectedTaskIds.length})
+                            </Button>
+                        )}
+                        {canUpdateBoard && isTaskBulkEditMode && selectedTaskIds.length > 0 && (
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                className="h-8 gap-1.5"
+                                onClick={() => setIsBulkDeleteConfirmOpen(true)}
+                            >
+                                <Trash2 className="size-3.5" />
+                                Delete ({selectedTaskIds.length})
                             </Button>
                         )}
                         {canUpdateBoard && selectedProject?.status !== 'Done' && (
@@ -2312,7 +2517,7 @@ export default function ProjectBoard() {
                             if (col && col.title !== mobileKanbanCol) setMobileKanbanCol(col.title);
                         }}
                     >
-                        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+                        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                             <div className="flex min-w-min gap-3 sm:gap-4 items-start">
                                 {COLUMNS.map(col => (
                                     <BoardColumn
@@ -2321,7 +2526,7 @@ export default function ProjectBoard() {
                                         color={col.color}
                                         count={getTasksByStatus(col.title).length}
                                         totalCount={tasks.length}
-                                        onAddTask={() => handleOpenModal('To Do')}
+                                        onAddTask={canCreateTask ? () => handleOpenModal('To Do') : null}
                                     >
                                         {getTasksByStatus(col.title).map(task => (
                                             <DraggableTaskCard
@@ -2333,12 +2538,25 @@ export default function ProjectBoard() {
                                                 onClick={(t) => navigate(`/board/${projectId}/task/${t.id}`)}
                                                 onMoveToBacklog={canUpdateBoard ? handleMoveToBacklog : null}
                                                 onDelete={canUpdateBoard ? openDeleteTaskConfirm : null}
+                                                onDuplicate={canCreateTask ? openDuplicateConfirm : null}
                                                 cardPrefix={selectedProject?.name ? selectedProject.name.slice(0, 2).toUpperCase() : null}
+                                                canDrag={canUpdateBoard && !isTaskBulkEditMode}
+                                                bulkMode={!isFreelance && isTaskBulkEditMode}
+                                                selected={selectedTaskIds.includes(task.id)}
+                                                onToggleSelect={toggleTaskSelection}
                                             />
                                         ))}
                                     </BoardColumn>
                                 ))}
                             </div>
+                            <DragOverlay>
+                                {activeDragTask && (
+                                    <TaskDragOverlayCard
+                                        task={activeDragTask}
+                                        assigneeName={activeDragTask.assignee_id ? assigneeNameById[activeDragTask.assignee_id] : null}
+                                    />
+                                )}
+                            </DragOverlay>
                         </DndContext>
                     </div>
                 </div>
@@ -2348,7 +2566,7 @@ export default function ProjectBoard() {
                     {/* ── Mobile: card list ── */}
                     <div className="sm:hidden space-y-2">
                         {visibleTasks.length === 0 && (
-                            <p className="text-center text-slate-400 py-10 text-sm">{(filterMemberId || filterProjectRoleId) ? 'Tidak ada task untuk filter ini.' : 'Belum ada task.'}</p>
+                            <p className="text-center text-slate-400 py-10 text-sm">{(filterMemberId || filterProjectRoleId || filterEpic) ? 'Tidak ada task untuk filter ini.' : 'Belum ada task.'}</p>
                         )}
                         {visibleTasks.map((task) => (
                             <div
@@ -2434,7 +2652,7 @@ export default function ProjectBoard() {
                             </thead>
                             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                 {visibleTasks.length === 0 && (
-                                    <tr><td colSpan={8} className="px-6 py-10 text-center text-sm text-slate-400">{(filterMemberId || filterProjectRoleId) ? 'Tidak ada task untuk filter ini.' : 'Belum ada task.'}</td></tr>
+                                    <tr><td colSpan={8} className="px-6 py-10 text-center text-sm text-slate-400">{(filterMemberId || filterProjectRoleId || filterEpic) ? 'Tidak ada task untuk filter ini.' : 'Belum ada task.'}</td></tr>
                                 )}
                                 {visibleTasks.map(task => (
                                     <tr key={task.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedTaskIds.includes(task.id) ? 'bg-primary/5 dark:bg-primary/10' : ''}`} onClick={(e) => {
@@ -2534,66 +2752,40 @@ export default function ProjectBoard() {
                 </div>
             )}
 
-            {/* Modal / Full-page task view */}
+            {/* Task detail/edit modal — always a popup over the board, whether opened via card click or the /task/:id deep link */}
             <Dialog
                 open={isModalOpen}
-                modal={!taskRouteId}
                 onOpenChange={(open) => {
                     if (!open) closeTaskModal();
                     else setIsModalOpen(true);
                 }}
             >
-                <DialogContent
-                    showCloseButton={!taskRouteId}
-                    className={cn(
-                    "flex flex-col p-0 gap-0 overflow-hidden",
-                    taskRouteId
-                        ? "!fixed !inset-0 !max-w-none !w-full !h-dvh !max-h-none !translate-x-0 !translate-y-0 !rounded-none shadow-none"
-                        : "w-[calc(100vw-1.5rem)] sm:max-w-3xl max-h-[92vh]"
-                )}>
-                    {taskRouteId ? (
-                        /* ── Full-page header ── */
-                        <div className="flex items-center gap-2 sm:gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28] shrink-0">
-                            <Button variant="ghost" size="icon" className="size-8 shrink-0" onClick={closeTaskModal}>
-                                <ArrowLeft className="size-4" />
-                            </Button>
+                <DialogContent className="flex max-h-[92vh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+                    <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+                        <div className="flex items-center gap-2">
+                            <DialogTitle>{editingTaskId ? 'Edit Task' : 'Add New Task'}</DialogTitle>
                             {selectedProject && editingTask?.project_sequence != null && (
                                 <span className="font-mono text-[11px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded shrink-0">
                                     {selectedProject.name.slice(0, 2).toUpperCase()}-{editingTask.project_sequence}
                                 </span>
                             )}
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-slate-900 dark:text-white truncate leading-tight">
-                                    {newTaskTitle || editingTask?.title || (editingTaskId ? 'Edit Task' : 'Tambah Task')}
-                                </p>
-                                {selectedProject && (
-                                    <p className="text-[11px] text-slate-400 leading-tight">{selectedProject.name}</p>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                                {editingTaskId && canUpdateBoard && (
-                                    <Button type="button" variant="ghost" size="icon" className="size-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => openDeleteTaskConfirm(editingTask)} disabled={isSubmitting}>
-                                        <Trash2 className="size-4" />
-                                    </Button>
-                                )}
-                                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={closeTaskModal}>Batal</Button>
-                                <Button type="submit" form="task-edit-form" size="sm" className="h-8 text-xs" disabled={isSubmitting}>
-                                    {isSubmitting && <Loader2 className="mr-1 size-3.5 animate-spin" />}
-                                    {editingTaskId ? 'Simpan' : 'Buat Task'}
-                                </Button>
-                            </div>
                         </div>
-                    ) : (
-                        /* ── Modal header ── */
-                        <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
-                            <DialogTitle>{editingTaskId ? 'Edit Task' : 'Add New Task'}</DialogTitle>
-                            {selectedProject && (
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                    {selectedProject.name} · {selectedProject.methodology || 'Project'}
-                                </p>
-                            )}
-                        </DialogHeader>
-                    )}
+                        {selectedProject && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                {selectedProject.name} · {selectedProject.methodology || 'Project'}
+                            </p>
+                        )}
+                        {editingTask?.duplicated_from_id && (
+                            <button
+                                type="button"
+                                onClick={() => navigate(`/board/${projectId}/task/${editingTask.duplicated_from_id}`)}
+                                className="mt-1 inline-flex w-fit items-center gap-1 text-xs text-primary hover:underline"
+                            >
+                                <Copy className="size-3" />
+                                Disalin dari Task #{editingTask.duplicated_from_id}
+                            </button>
+                        )}
+                    </DialogHeader>
                     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
                     <form
                         id="task-edit-form"
@@ -2603,8 +2795,14 @@ export default function ProjectBoard() {
                         <section className="space-y-3">
                             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Task Details</p>
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Feature Title <span className="text-rose-500">*</span></label>
-                                <Input type="text" value={newTaskFeatureTitle} onChange={e => setNewTaskFeatureTitle(e.target.value)} placeholder="E.g., Authentication" required />
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Epic <span className="text-rose-500">*</span></label>
+                                <EpicSearchInput
+                                    value={newTaskFeatureTitle}
+                                    onChange={setNewTaskFeatureTitle}
+                                    options={epicOptions}
+                                    placeholder="E.g., Authentication"
+                                    required
+                                />
                             </div>
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Task Title <span className="text-rose-500">*</span></label>
@@ -2614,7 +2812,13 @@ export default function ProjectBoard() {
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                                     Description / Sub-task <span className="text-slate-400 font-normal">(Optional)</span>
                                 </label>
-                                <Textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} placeholder="Enter detailed description..." className="min-h-[72px] resize-y" />
+                                <DescriptionEditor
+                                    key={editingTaskId ?? 'new'}
+                                    value={newTaskDescription}
+                                    onChange={setNewTaskDescription}
+                                    projectId={selectedProject?.id}
+                                    placeholder="Enter detailed description... (paste an image to attach it)"
+                                />
                             </div>
                             {(categoryOptions.length > 0 || (!isFreelance && !hasSubtasks)) && (
                                 <div className={`grid grid-cols-1 gap-3 ${categoryOptions.length > 0 && !isFreelance && !hasSubtasks ? 'sm:grid-cols-2' : ''}`}>
@@ -2802,15 +3006,17 @@ export default function ProjectBoard() {
                                         </Select>
                                     </div>
                                 )}
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Assignee</label>
-                                    <AssigneeSearchSelect
-                                        value={newTaskAssignee}
-                                        onChange={setNewTaskAssignee}
-                                        options={assigneeSelectOptions}
-                                        placeholder="Ketik min. 2 karakter..."
-                                    />
-                                </div>
+                                {!editingTaskId && (
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Assignee</label>
+                                        <AssigneeSearchSelect
+                                            value={newTaskAssignee}
+                                            onChange={setNewTaskAssignee}
+                                            options={assigneeSelectOptions}
+                                            placeholder="Ketik min. 2 karakter..."
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </section>
 
@@ -2838,10 +3044,17 @@ export default function ProjectBoard() {
                                             type="number"
                                             value={newTaskEstimate}
                                             onChange={e => setNewTaskEstimate(e.target.value)}
+                                            onFocus={e => e.target.select()}
                                             min="0"
                                             step="0.5"
+                                            disabled={hasAssigneeMhSplit}
                                             placeholder={newTaskBillable ? '0' : 'Kosongkan jika tidak dipakai'}
                                         />
+                                        {hasAssigneeMhSplit && (
+                                            <p className="text-[11px] text-slate-400">
+                                                Diatur dari pembagian MH per assignee di bagian "Assignees" di bawah.
+                                            </p>
+                                        )}
                                     </div>
                                     {newTaskBillable && selectedProject?.methodology !== 'Waterfall' && (
                                         <div className="flex items-center gap-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-3 py-2.5 sm:mb-0.5 sm:min-w-[200px]">
@@ -2866,6 +3079,27 @@ export default function ProjectBoard() {
                             </section>
                         )}
                     </form>
+
+                    {editingTaskId && selectedProject && (
+                        <div className="px-6 pb-5 border-t border-slate-200 dark:border-slate-800 pt-4">
+                            <TaskAssigneesSection
+                                taskId={editingTaskId}
+                                assignees={(editingTask?.assignees ?? []).map((a) => ({
+                                    id: a.id,
+                                    name: a.name,
+                                    is_active: !!(a.is_active ?? a.pivot?.is_active),
+                                    mh: a.mh ?? a.pivot?.mh ?? 0,
+                                }))}
+                                assigneeSelectOptions={assigneeSelectOptions}
+                                hasSubtasks={hasSubtasks}
+                                canManage={canUpdateBoard}
+                                onChanged={async () => {
+                                    await loadBoard(selectedProject.id);
+                                    await syncSelectedProjectFromList(selectedProject.id);
+                                }}
+                            />
+                        </div>
+                    )}
 
                     {editingTaskId && selectedProject && (
                         <div className="px-6 pb-5 border-t border-slate-200 dark:border-slate-800">
@@ -2897,6 +3131,7 @@ export default function ProjectBoard() {
                                 taskLabel={newTaskTitle || editingTask?.title}
                                 currentUserId={user?.id}
                                 canDeleteAny={canUpdateBoard}
+                                mentionableUsers={mentionableUsers}
                             />
                         </div>
                     ) : (
@@ -2906,24 +3141,22 @@ export default function ProjectBoard() {
                     )}
                     </div>
 
-                    {!taskRouteId && (
-                        <DialogFooter className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 bg-slate-50/80 dark:bg-slate-900/40">
-                            {editingTaskId && canUpdateBoard && (
-                                <Button type="button" variant="ghost"
-                                    className="mr-auto text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1.5"
-                                    onClick={() => openDeleteTaskConfirm(editingTask)}
-                                    disabled={isSubmitting}>
-                                    <Trash2 className="size-4" />
-                                    Hapus Task
-                                </Button>
-                            )}
-                            <Button type="button" variant="outline" onClick={closeTaskModal}>Cancel</Button>
-                            <Button type="submit" form="task-edit-form" disabled={isSubmitting}>
-                                {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
-                                {editingTaskId ? 'Save Changes' : 'Create Task'}
+                    <DialogFooter className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 bg-slate-50/80 dark:bg-slate-900/40">
+                        {editingTaskId && canUpdateBoard && (
+                            <Button type="button" variant="ghost"
+                                className="mr-auto text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1.5"
+                                onClick={() => openDeleteTaskConfirm(editingTask)}
+                                disabled={isSubmitting}>
+                                <Trash2 className="size-4" />
+                                Hapus Task
                             </Button>
-                        </DialogFooter>
-                    )}
+                        )}
+                        <Button type="button" variant="outline" onClick={closeTaskModal}>Cancel</Button>
+                        <Button type="submit" form="task-edit-form" disabled={isSubmitting}>
+                            {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                            {editingTaskId ? 'Save Changes' : 'Create Task'}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 
@@ -2952,6 +3185,30 @@ export default function ProjectBoard() {
                         <Button type="button" variant="destructive" onClick={handleDeleteTask} disabled={isDeletingTask}>
                             {isDeletingTask && <Loader2 className="mr-2 size-4 animate-spin" />}
                             Ya, Hapus
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Confirm Bulk Delete Tasks */}
+            <Dialog open={isBulkDeleteConfirmOpen} onOpenChange={setIsBulkDeleteConfirmOpen}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-600">
+                            <Trash2 className="size-4" />
+                            Hapus {selectedTaskIds.length} Task?
+                        </DialogTitle>
+                        <DialogDescription>
+                            <strong className="text-slate-700 dark:text-slate-200">{selectedTaskIds.length} task</strong> yang dipilih akan dihapus permanen beserta semua subtask dan catatannya. Tindakan ini tidak bisa dibatalkan.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="mt-2">
+                        <Button type="button" variant="outline" onClick={() => setIsBulkDeleteConfirmOpen(false)} disabled={isBulkDeleting}>
+                            Batal
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={handleBulkDeleteSubmit} disabled={isBulkDeleting}>
+                            {isBulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                            Ya, Hapus {selectedTaskIds.length} Task
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -3005,6 +3262,68 @@ export default function ProjectBoard() {
                                 ? <Loader2 className="size-3.5 animate-spin" />
                                 : <Inbox className="size-3.5" />}
                             Ya, Pindahkan ke Backlog
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Confirm Duplicate Task */}
+            <Dialog open={!!duplicateConfirmTask} onOpenChange={(open) => { if (!open) setDuplicateConfirmTask(null); }}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Copy className="size-4" />
+                            Duplicate Task?
+                        </DialogTitle>
+                        <DialogDescription className="sr-only">Konfirmasi duplikasi task</DialogDescription>
+                    </DialogHeader>
+
+                    {duplicateConfirmTask && (
+                        <div className="space-y-3">
+                            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 px-4 py-3 space-y-1">
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white leading-snug">
+                                    {duplicateConfirmTask.title}
+                                </p>
+                                {duplicateConfirmTask.feature_title && duplicateConfirmTask.feature_title !== duplicateConfirmTask.title && (
+                                    <p className="text-xs text-slate-500">{duplicateConfirmTask.feature_title}</p>
+                                )}
+                            </div>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                Sebuah task baru akan dibuat di kolom "To Do" dengan konten yang sama, lengkap dengan info relasi ke task asli. Task asli tidak akan berubah.
+                            </p>
+                            {duplicateConfirmTask.subtasks?.length > 0 && (
+                                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                    <Checkbox
+                                        checked={duplicateIncludeSubtasks}
+                                        onCheckedChange={(v) => setDuplicateIncludeSubtasks(!!v)}
+                                    />
+                                    Sertakan {duplicateConfirmTask.subtasks.length} subtask
+                                </label>
+                            )}
+                        </div>
+                    )}
+
+                    <DialogFooter className="mt-1 gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDuplicateConfirmTask(null)}
+                            disabled={isDuplicatingTask}
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={confirmDuplicateTask}
+                            disabled={isDuplicatingTask}
+                        >
+                            {isDuplicatingTask
+                                ? <Loader2 className="size-3.5 animate-spin" />
+                                : <Copy className="size-3.5" />}
+                            Ya, Duplicate
                         </Button>
                     </DialogFooter>
                 </DialogContent>

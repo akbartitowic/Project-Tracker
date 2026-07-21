@@ -38,6 +38,7 @@ use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\ProjectReviewController;
 use App\Http\Controllers\ReviewTokenController;
 use App\Http\Controllers\PublicReviewController;
+use App\Http\Controllers\NotificationController;
 
 // Public review submission — no auth required
 Route::middleware('throttle:30,1')->prefix('public')->group(function () {
@@ -54,6 +55,11 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profile', [AuthController::class, 'updateProfile'])->middleware('permission:profile.update');
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
 
     // 1. Projects Routes
     Route::get('/projects', [ProjectController::class, 'index'])->middleware('permission:project_board.read');
@@ -120,14 +126,18 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/tasks/template', [TaskController::class, 'downloadTemplate'])->middleware('permission:project_board.read');
     Route::get('/tasks/backlog', [TaskController::class, 'backlog'])->middleware('permission:project_board.read');
     Route::post('/tasks/import', [TaskController::class, 'import'])->middleware('permission:project_board.create');
+    Route::post('/tasks/description-images', [TaskController::class, 'uploadDescriptionImage'])->middleware('permission:project_board.read');
     Route::post('/tasks', [TaskController::class, 'store'])->middleware('permission:project_board.create');
+    Route::post('/tasks/{id}/duplicate', [TaskController::class, 'duplicate'])->middleware('permission:project_board.create');
     Route::put('/tasks/bulk-edit', [TaskController::class, 'bulkEditManhours'])->middleware('permission:project_board.update');
+    Route::delete('/tasks/bulk-delete', [TaskController::class, 'bulkDestroy'])->middleware('permission:project_board.update');
     Route::get('/tasks/{taskId}/notes', [TaskNoteController::class, 'index'])->middleware('permission:project_board.read');
     Route::post('/tasks/{taskId}/notes', [TaskNoteController::class, 'store'])->middleware('permission:project_board.read');
     Route::delete('/tasks/{taskId}/notes/{noteId}', [TaskNoteController::class, 'destroy'])->middleware('permission:project_board.read');
     Route::put('/tasks/{id}', [TaskController::class, 'update'])->middleware('permission:project_board.update');
     Route::delete('/tasks/{id}', [TaskController::class, 'destroy'])->middleware('permission:project_board.update');
     Route::put('/tasks/{id}/status', [TaskController::class, 'updateStatus'])->middleware('permission:project_board.update');
+    Route::put('/tasks/{id}/assignees', [TaskController::class, 'updateAssignees'])->middleware('permission:project_board.update');
     Route::post('/tasks/{id}/promote', [TaskController::class, 'promote'])->middleware('permission:project_board.update');
     Route::post('/tasks/{id}/send-to-backlog', [TaskController::class, 'sendToBacklog'])->middleware('permission:project_board.update');
 

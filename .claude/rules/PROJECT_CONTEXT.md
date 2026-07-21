@@ -42,8 +42,8 @@
 - [x] Project Board — Backlog
 - [x] Project Board — Gantt Chart
 - [x] Project Board — Notes
-- [x] Task Management (CRUD, subtask, assignee, due date, priority, billable, rush hour)
-- [x] Task Notes
+- [x] Task Management (CRUD, subtask, assignee, due date, priority, billable, rush hour, duplicate/clone task dengan opsi ikut subtask, multi-assignee dengan status aktif per task)
+- [x] Task Notes (@mention anggota project di komentar + notifikasi email & in-app bell ke yang di-mention)
 - [x] Manhour Logging
 - [x] Project Members & Role Quotas
 - [x] Team Load Monitoring

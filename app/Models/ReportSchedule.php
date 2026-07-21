@@ -20,7 +20,7 @@ class ReportSchedule extends Model
         'is_active'    => 'boolean',
         'day_of_week'  => 'integer',
         'day_of_month' => 'integer',
-        'custom_date'  => 'date',
+        'custom_date'  => 'date:Y-m-d',
         'last_run_at'  => 'datetime',
         'next_run_at'  => 'datetime',
     ];

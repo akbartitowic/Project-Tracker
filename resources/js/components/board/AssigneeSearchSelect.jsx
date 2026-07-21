@@ -13,6 +13,7 @@ export default function AssigneeSearchSelect({
     placeholder = 'Cari nama atau role...',
     className,
     inputClassName,
+    showUnassignedOption = true,
 }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -97,18 +98,20 @@ export default function AssigneeSearchSelect({
                     className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
                     role="listbox"
                 >
-                    <li>
-                        <button
-                            type="button"
-                            className={cn(
-                                'w-full px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800',
-                                value === UNASSIGNED && 'bg-primary/10 font-medium text-primary',
-                            )}
-                            onClick={() => pick(UNASSIGNED)}
-                        >
-                            Unassigned
-                        </button>
-                    </li>
+                    {showUnassignedOption && (
+                        <li>
+                            <button
+                                type="button"
+                                className={cn(
+                                    'w-full px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800',
+                                    value === UNASSIGNED && 'bg-primary/10 font-medium text-primary',
+                                )}
+                                onClick={() => pick(UNASSIGNED)}
+                            >
+                                Unassigned
+                            </button>
+                        </li>
+                    )}
                     {filteredOptions.length === 0 ? (
                         <li className="px-3 py-2 text-sm text-slate-500">Tidak ada hasil</li>
                     ) : (

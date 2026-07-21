@@ -47,7 +47,7 @@ class TeamLoadService
                          );
                   });
             })
-            ->with(['project:id,name'])
+            ->with(['project:id,name', 'assignees:id'])
             ->get(['id', 'title', 'feature_title', 'assignee_id', 'estimated_hours', 'start_date', 'due_date', 'project_id', 'parent_task_id']);
 
         /** @var array<int, array<string, float>> $dailyByUser */
@@ -172,32 +172,60 @@ class TeamLoadService
             return;
         }
 
-        $hours = (float) $task->estimated_hours;
-        $perDay = $hours / count($workingDates);
-        $assigneeId = (int) $task->assignee_id;
+        // Multi-assignee tasks (e.g. handed off from Dev to QA, both still attached) each get their
+        // own MH share of the task in their Team Load — not the full task hours duplicated per person.
+        $hoursByAssignee = $task->parent_task_id
+            ? [(int) $task->assignee_id => (float) $task->estimated_hours]
+            : $this->assigneeHoursMap($task);
 
-        if (! isset($dailyByUser[$assigneeId])) {
-            $dailyByUser[$assigneeId] = [];
-        }
-        if (! isset($detailsByUser[$assigneeId])) {
-            $detailsByUser[$assigneeId] = [];
-        }
+        foreach ($hoursByAssignee as $assigneeId => $hours) {
+            if ($hours <= 0) {
+                continue;
+            }
+            $perDay = $hours / count($workingDates);
 
-        $item = [
-            'task_id' => $task->id,
-            'title' => $task->title,
-            'feature_title' => $task->feature_title,
-            'project_id' => $task->project_id,
-            'project_name' => $task->project?->name ?? 'Project',
-            'mh_per_day' => round($perDay, 2),
-            'is_subtask' => $task->parent_task_id !== null,
-        ];
+            if (! isset($dailyByUser[$assigneeId])) {
+                $dailyByUser[$assigneeId] = [];
+            }
+            if (! isset($detailsByUser[$assigneeId])) {
+                $detailsByUser[$assigneeId] = [];
+            }
+
+            $item = [
+                'task_id' => $task->id,
+                'title' => $task->title,
+                'feature_title' => $task->feature_title,
+                'project_id' => $task->project_id,
+                'project_name' => $task->project?->name ?? 'Project',
+                'mh_per_day' => round($perDay, 2),
+                'is_subtask' => $task->parent_task_id !== null,
+            ];
+
+            foreach ($workingDates as $date) {
+                $dailyByUser[$assigneeId][$date] = ($dailyByUser[$assigneeId][$date] ?? 0) + $perDay;
+                $detailsByUser[$assigneeId][$date][] = $item;
+            }
+        }
 
         foreach ($workingDates as $date) {
-            $dailyByUser[$assigneeId][$date] = ($dailyByUser[$assigneeId][$date] ?? 0) + $perDay;
-            $detailsByUser[$assigneeId][$date][] = $item;
             $allDates[] = $date;
         }
+    }
+
+    /** Each attached assignee's own MH share of the task; falls back to the full task hours for legacy rows without a split. */
+    private function assigneeHoursMap(Task $task): array
+    {
+        if ($task->relationLoaded('assignees') && $task->assignees->isNotEmpty()) {
+            $map = [];
+            foreach ($task->assignees as $assignee) {
+                $mh = $assignee->pivot->mh;
+                $map[(int) $assignee->id] = $mh !== null ? (float) $mh : (float) $task->estimated_hours;
+            }
+
+            return $map;
+        }
+
+        return [(int) $task->assignee_id => (float) $task->estimated_hours];
     }
 
     /** @param  list<string>  $excludedDates */

@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { fetchAPI } from '../../services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Plus, Trash2, Pencil, CalendarRange, MessageSquare } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import TaskNotesSection from './TaskNotesSection';
 import AssigneeSearchSelect from './AssigneeSearchSelect';
+import DescriptionEditor from './DescriptionEditor';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../../utils/taskDates';
 import { parseOptionalManhoursInput, subtasksTotalHours } from '../../utils/taskBillable.jsx';
+import { descriptionPreviewText } from '../../utils/richText';
 
 export { subtasksTotalHours };
 
@@ -260,9 +261,9 @@ export default function SubtaskSection({
                                             </span>
                                         )}
                                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{st.title}</p>
-                                        {st.description?.trim() && (
+                                        {descriptionPreviewText(st.description) && (
                                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 whitespace-pre-wrap">
-                                                {st.description.trim()}
+                                                {descriptionPreviewText(st.description)}
                                             </p>
                                         )}
                                         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
@@ -371,11 +372,12 @@ export default function SubtaskSection({
                                         />
                                         <div className="space-y-1">
                                             <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Description</label>
-                                            <Textarea
-                                                placeholder="Deskripsi subtask (opsional)..."
+                                            <DescriptionEditor
+                                                key={`edit-${st.id}`}
                                                 value={form.description}
-                                                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                                                className="min-h-[72px] resize-y text-sm"
+                                                onChange={(html) => setForm((f) => ({ ...f, description: html }))}
+                                                projectId={selectedProject?.id}
+                                                placeholder="Deskripsi subtask (opsional)... (paste gambar untuk melampirkan)"
                                             />
                                         </div>
                                         <div className={`grid grid-cols-1 gap-3 ${categoryOptions.length > 0 ? 'sm:grid-cols-2' : ''}`}>
@@ -503,6 +505,7 @@ export default function SubtaskSection({
                                                     value={form.estimate}
                                                     placeholder={form.billable ? '0' : 'Opsional'}
                                                     onChange={(e) => setForm((f) => ({ ...f, estimate: e.target.value }))}
+                                                    onFocus={(e) => e.target.select()}
                                                 />
                                             </div>
                                             {form.billable && isScrum && (
@@ -562,11 +565,12 @@ export default function SubtaskSection({
                     />
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Description</label>
-                        <Textarea
-                            placeholder="Deskripsi subtask (opsional)..."
+                        <DescriptionEditor
+                            key="new-subtask"
                             value={form.description}
-                            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                            className="min-h-[72px] resize-y text-sm"
+                            onChange={(html) => setForm((f) => ({ ...f, description: html }))}
+                            projectId={selectedProject?.id}
+                            placeholder="Deskripsi subtask (opsional)... (paste gambar untuk melampirkan)"
                         />
                     </div>
                     <div className={`grid grid-cols-1 gap-3 ${categoryOptions.length > 0 ? 'sm:grid-cols-2' : ''}`}>
@@ -694,6 +698,7 @@ export default function SubtaskSection({
                                 value={form.estimate}
                                 placeholder={form.billable ? '0' : 'Opsional'}
                                 onChange={(e) => setForm((f) => ({ ...f, estimate: e.target.value }))}
+                                onFocus={(e) => e.target.select()}
                             />
                         </div>
                         {form.billable && isScrum && (

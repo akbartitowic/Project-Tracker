@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchAPI } from '../../services/api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,12 +17,63 @@ function formatNoteTime(iso) {
     });
 }
 
+function escapeRegExp(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Finds an in-progress "@query" right before the cursor, e.g. typing "@And" mid-sentence.
+// Returns null once a space/newline breaks the token, or if "@" isn't at a word boundary
+// (so "email@x.com" doesn't trigger the mention dropdown).
+function detectMentionTrigger(text, cursor) {
+    const uptoCursor = text.slice(0, cursor);
+    const at = uptoCursor.lastIndexOf('@');
+    if (at === -1) return null;
+
+    const between = uptoCursor.slice(at + 1);
+    if (/\s/.test(between)) return null;
+
+    const before = at === 0 ? '' : uptoCursor[at - 1];
+    if (before && !/\s/.test(before)) return null;
+
+    return { start: at, query: between };
+}
+
+// Wraps "@Name" occurrences (matched against this note's recorded mentions) in a highlighted span.
+// Longest names are matched first so a shorter name can't shadow a longer one that starts the same way.
+function renderMentionHighlights(body, mentions) {
+    if (!mentions || mentions.length === 0) return body;
+
+    const sorted = [...mentions].sort((a, b) => b.name.length - a.name.length);
+    const pattern = new RegExp(`@(${sorted.map((m) => escapeRegExp(m.name)).join('|')})(?![A-Za-z0-9])`, 'g');
+
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    let key = 0;
+    while ((match = pattern.exec(body)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(body.slice(lastIndex, match.index));
+        }
+        parts.push(
+            <span key={`mention-${key++}`} className="text-primary font-semibold">
+                @{match[1]}
+            </span>
+        );
+        lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < body.length) {
+        parts.push(body.slice(lastIndex));
+    }
+    return parts;
+}
+
 export default function TaskNotesSection({
     taskId,
     taskLabel,
     currentUserId,
     canDeleteAny = false,
     compact = false,
+    mentionableUsers = [],
 }) {
     const [notes, setNotes] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -30,6 +81,9 @@ export default function TaskNotesSection({
     const [posting, setPosting] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
     const [error, setError] = useState('');
+    const [mentionState, setMentionState] = useState(null); // { start, query } | null
+    const [mentionIndex, setMentionIndex] = useState(0);
+    const textareaRef = useRef(null);
 
     const loadNotes = useCallback(async () => {
         if (!taskId) return;
@@ -50,6 +104,44 @@ export default function TaskNotesSection({
         loadNotes();
     }, [loadNotes]);
 
+    const filteredMentions = useMemo(() => {
+        if (!mentionState) return [];
+        const q = mentionState.query.toLowerCase();
+        return mentionableUsers.filter((u) => u.name.toLowerCase().includes(q)).slice(0, 6);
+    }, [mentionState, mentionableUsers]);
+
+    const activeMentionIndex = filteredMentions.length
+        ? Math.min(mentionIndex, filteredMentions.length - 1)
+        : 0;
+
+    const handleBodyChange = (e) => {
+        const newText = e.target.value;
+        setBody(newText);
+        setMentionState(detectMentionTrigger(newText, e.target.selectionStart));
+        setMentionIndex(0);
+    };
+
+    const selectMention = (user) => {
+        if (!mentionState || !user) return;
+        const cursor = textareaRef.current ? textareaRef.current.selectionStart : body.length;
+        const before = body.slice(0, mentionState.start);
+        const after = body.slice(cursor);
+        const insertion = `@${user.name} `;
+        const newText = before + insertion + after;
+
+        setBody(newText);
+        setMentionState(null);
+        setMentionIndex(0);
+
+        requestAnimationFrame(() => {
+            if (textareaRef.current) {
+                const pos = before.length + insertion.length;
+                textareaRef.current.focus();
+                textareaRef.current.setSelectionRange(pos, pos);
+            }
+        });
+    };
+
     const handlePost = async () => {
         const text = body.trim();
         if (!text || !taskId) return;
@@ -66,6 +158,7 @@ export default function TaskNotesSection({
                 await loadNotes();
             }
             setBody('');
+            setMentionState(null);
         } catch (err) {
             setError(err.message || 'Gagal menyimpan catatan.');
         } finally {
@@ -151,7 +244,7 @@ export default function TaskNotesSection({
                                                 </span>
                                             </div>
                                             <p className="text-sm text-slate-700 dark:text-slate-300 mt-1 whitespace-pre-wrap break-words">
-                                                {note.body}
+                                                {renderMentionHighlights(note.body, note.mentions)}
                                             </p>
                                         </div>
                                         {canDelete && (
@@ -178,19 +271,73 @@ export default function TaskNotesSection({
             </div>
 
             <div className="space-y-2">
-                <Textarea
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                            e.preventDefault();
-                            handlePost();
-                        }
-                    }}
-                    placeholder="Tulis catatan atau komentar… (Ctrl+Enter untuk kirim)"
-                    className="min-h-[72px] resize-y text-sm"
-                    maxLength={5000}
-                />
+                <div className="relative">
+                    <Textarea
+                        ref={textareaRef}
+                        value={body}
+                        onChange={handleBodyChange}
+                        onBlur={() => {
+                            // Delay so a mousedown selection on the dropdown below still registers first.
+                            window.setTimeout(() => setMentionState(null), 150);
+                        }}
+                        onKeyDown={(e) => {
+                            if (mentionState && filteredMentions.length > 0) {
+                                if (e.key === 'ArrowDown') {
+                                    e.preventDefault();
+                                    setMentionIndex((i) => (i + 1) % filteredMentions.length);
+                                    return;
+                                }
+                                if (e.key === 'ArrowUp') {
+                                    e.preventDefault();
+                                    setMentionIndex((i) => (i - 1 + filteredMentions.length) % filteredMentions.length);
+                                    return;
+                                }
+                                if (e.key === 'Enter' || e.key === 'Tab') {
+                                    e.preventDefault();
+                                    selectMention(filteredMentions[activeMentionIndex]);
+                                    return;
+                                }
+                                if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    setMentionState(null);
+                                    return;
+                                }
+                            }
+                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                e.preventDefault();
+                                handlePost();
+                            }
+                        }}
+                        placeholder="Tulis catatan atau komentar… (ketik @ untuk mention, Ctrl+Enter untuk kirim)"
+                        className="min-h-[72px] resize-y text-sm"
+                        maxLength={5000}
+                    />
+                    {mentionState && filteredMentions.length > 0 && (
+                        <ul className="absolute left-0 right-0 top-full mt-1 z-20 max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg text-sm">
+                            {filteredMentions.map((u, idx) => (
+                                <li key={u.id}>
+                                    <button
+                                        type="button"
+                                        className={`w-full text-left px-3 py-1.5 flex items-center gap-2 ${
+                                            idx === activeMentionIndex
+                                                ? 'bg-primary/10 text-primary'
+                                                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                        }`}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            selectMention(u);
+                                        }}
+                                    >
+                                        <span className="size-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
+                                            {u.name.charAt(0).toUpperCase()}
+                                        </span>
+                                        {u.name}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
                 <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] text-slate-400">{body.length}/5000</span>
                     <Button

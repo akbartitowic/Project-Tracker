@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
+import { formatTaskDateShort } from '../utils/taskDates';
 import { ArrowLeft, Briefcase, GanttChart, LayoutGrid, Loader2, ChevronDown, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -150,8 +151,8 @@ export default function ProjectBoardGantt() {
                 tableData.push([
                     parentRow.task.title,
                     '—',
-                    parentRow.task.start_date ? new Date(parentRow.task.start_date).toLocaleDateString('id-ID') : '—',
-                    parentRow.task.due_date ? new Date(parentRow.task.due_date).toLocaleDateString('id-ID') : '—',
+                    formatTaskDateShort(parentRow.task.start_date) || '—',
+                    formatTaskDateShort(parentRow.task.due_date) || '—',
                     parentRow.task.status || '—',
                 ]);
 
@@ -161,8 +162,8 @@ export default function ProjectBoardGantt() {
                         tableData.push([
                             `  ↳ ${subtask.task.title}`,
                             subtask.task.feature_title || '—',
-                            subtask.task.start_date ? new Date(subtask.task.start_date).toLocaleDateString('id-ID') : '—',
-                            subtask.task.due_date ? new Date(subtask.task.due_date).toLocaleDateString('id-ID') : '—',
+                            formatTaskDateShort(subtask.task.start_date) || '—',
+                            formatTaskDateShort(subtask.task.due_date) || '—',
                             subtask.task.status || '—',
                         ]);
                     }

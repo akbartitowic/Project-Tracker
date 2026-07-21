@@ -23,7 +23,7 @@ class SendTaskDueReminders extends Command
         $skipped = 0;
 
         Task::query()
-            ->with(['assignee', 'project'])
+            ->with(['assignee', 'assignees', 'project'])
             ->whereNotNull('assignee_id')
             ->whereNotNull('due_date')
             ->orderBy('id')
@@ -35,62 +35,71 @@ class SendTaskDueReminders extends Command
                         continue;
                     }
 
-                    $assignee = $task->assignee;
-                    if (!$assignee || !$assignee->email || !$assignee->task_email_notifications_enabled) {
-                        $skipped++;
-                        continue;
+                    // Every attached assignee gets reminded (e.g. a Dev+QA handoff task nags both).
+                    $assignees = (!$task->parent_task_id && $task->assignees->isNotEmpty())
+                        ? $task->assignees
+                        : collect([$task->assignee])->filter();
+
+                    $dueDateReminded = false;
+                    foreach ($assignees as $assignee) {
+                        if (!$assignee || !$assignee->email || !$assignee->task_email_notifications_enabled) {
+                            $skipped++;
+                            continue;
+                        }
+
+                        $tz = (string) ($assignee->timezone ?: 'Asia/Jakarta');
+                        try {
+                            $nowLocal = $nowUtc->copy()->timezone($tz);
+                        } catch (Throwable) {
+                            $nowLocal = $nowUtc->copy()->timezone('Asia/Jakarta');
+                            $tz = 'Asia/Jakarta';
+                        }
+
+                        if ($nowLocal->format('H') !== '08') {
+                            $skipped++;
+                            continue;
+                        }
+
+                        $dueDate = $task->due_date instanceof Carbon
+                            ? $task->due_date->copy()->timezone($tz)->toDateString()
+                            : Carbon::parse((string) $task->due_date, $tz)->toDateString();
+                        $todayLocal = $nowLocal->toDateString();
+                        if ($dueDate > $todayLocal) {
+                            $skipped++;
+                            continue;
+                        }
+
+                        $lastLocalDate = $task->last_due_reminder_sent_at
+                            ? $task->last_due_reminder_sent_at->copy()->timezone($tz)->toDateString()
+                            : null;
+                        if ($lastLocalDate === $todayLocal) {
+                            $skipped++;
+                            continue;
+                        }
+
+                        $boardUrl = $task->project_id ? url('/board/' . $task->project_id) : null;
+                        try {
+                            Mail::to($assignee->email)->send(new TaskDueReminderMail($task, $boardUrl));
+                            $sent++;
+                            $dueDateReminded = true;
+                            ActivityLog::create([
+                                'user_id' => $assignee->id,
+                                'type' => 'Project',
+                                'activity' => 'Task Reminder Email Sent',
+                                'description' => "Reminder email sent to '{$assignee->email}' for task '{$task->title}' (project ID: {$task->project_id}).",
+                            ]);
+                        } catch (Throwable $e) {
+                            ActivityLog::create([
+                                'user_id' => $assignee->id,
+                                'type' => 'Project',
+                                'activity' => 'Task Reminder Email Failed',
+                                'description' => "Failed sending reminder to '{$assignee->email}' for task '{$task->title}': {$e->getMessage()}",
+                            ]);
+                        }
                     }
 
-                    $tz = (string) ($assignee->timezone ?: 'Asia/Jakarta');
-                    try {
-                        $nowLocal = $nowUtc->copy()->timezone($tz);
-                    } catch (Throwable) {
-                        $nowLocal = $nowUtc->copy()->timezone('Asia/Jakarta');
-                        $tz = 'Asia/Jakarta';
-                    }
-
-                    if ($nowLocal->format('H') !== '08') {
-                        $skipped++;
-                        continue;
-                    }
-
-                    $dueDate = $task->due_date instanceof Carbon
-                        ? $task->due_date->copy()->timezone($tz)->toDateString()
-                        : Carbon::parse((string) $task->due_date, $tz)->toDateString();
-                    $todayLocal = $nowLocal->toDateString();
-                    if ($dueDate > $todayLocal) {
-                        $skipped++;
-                        continue;
-                    }
-
-                    $lastLocalDate = $task->last_due_reminder_sent_at
-                        ? $task->last_due_reminder_sent_at->copy()->timezone($tz)->toDateString()
-                        : null;
-                    if ($lastLocalDate === $todayLocal) {
-                        $skipped++;
-                        continue;
-                    }
-
-                    $boardUrl = $task->project_id ? url('/board/' . $task->project_id) : null;
-                    try {
-                        Mail::to($assignee->email)->send(new TaskDueReminderMail($task, $boardUrl));
-                        $task->forceFill([
-                            'last_due_reminder_sent_at' => now(),
-                        ])->save();
-                        $sent++;
-                        ActivityLog::create([
-                            'user_id' => $assignee->id,
-                            'type' => 'Project',
-                            'activity' => 'Task Reminder Email Sent',
-                            'description' => "Reminder email sent to '{$assignee->email}' for task '{$task->title}' (project ID: {$task->project_id}).",
-                        ]);
-                    } catch (Throwable $e) {
-                        ActivityLog::create([
-                            'user_id' => $assignee->id,
-                            'type' => 'Project',
-                            'activity' => 'Task Reminder Email Failed',
-                            'description' => "Failed sending reminder to '{$assignee->email}' for task '{$task->title}': {$e->getMessage()}",
-                        ]);
+                    if ($dueDateReminded) {
+                        $task->forceFill(['last_due_reminder_sent_at' => now()])->save();
                     }
                 }
             });

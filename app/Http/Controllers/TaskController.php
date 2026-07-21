@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Mail;
 use Throwable;
 use App\Services\TaskAggregationService;
 use App\Support\ProjectAccess;
+use App\Support\PublicStorageUrl;
 use App\Support\TaskBillable;
 use App\Support\UserAccess;
 use App\Traits\LogActivity;
@@ -27,10 +28,10 @@ class TaskController extends Controller
 
     private const RUSH_HOUR_FACTOR = 1.3;
 
-    private function sendTaskAssignedEmail(Task $task): void
+    private function sendTaskAssignedEmail(Task $task, ?User $recipient = null): void
     {
         $task->loadMissing(['assignee', 'project']);
-        $assignee = $task->assignee;
+        $assignee = $recipient ?? $task->assignee;
         if (!$assignee || !$assignee->email) {
             return;
         }
@@ -359,7 +360,9 @@ class TaskController extends Controller
         $query = Task::query()
             ->leftJoin('users', 'users.id', '=', 'tasks.assignee_id')
             ->select('tasks.*')
-            ->selectRaw('users.name as assignee_name');
+            ->selectRaw('users.name as assignee_name')
+            ->orderBy('tasks.sort_order')
+            ->orderBy('tasks.id');
 
         ProjectAccess::applyMemberProjectScope($query, 'tasks.project_id', $user);
 
@@ -377,6 +380,7 @@ class TaskController extends Controller
         }
 
         $tasks = $query->get();
+        $tasks->load(['assignees' => fn ($q) => $q->select('users.id', 'users.name')]);
 
         if ($request->has('project_id')) {
             $taskIds = $tasks->pluck('id');
@@ -616,6 +620,11 @@ class TaskController extends Controller
                     $task->assignee_id ? (int) $task->assignee_id : null,
                     $task->project_role_id ? (int) $task->project_role_id : null
                 );
+                if (!empty($task->assignee_id) && !$task->parent_task_id) {
+                    $task->assignees()->syncWithoutDetaching([
+                        (int) $task->assignee_id => ['is_active' => true, 'mh' => $task->estimated_hours],
+                    ]);
+                }
                 $successCount++;
             };
 
@@ -711,6 +720,11 @@ class TaskController extends Controller
         );
         if (!empty($task->assignee_id)) {
             $this->sendTaskAssignedEmail($task);
+            if (!$task->parent_task_id) {
+                $task->assignees()->syncWithoutDetaching([
+                    (int) $task->assignee_id => ['is_active' => true, 'mh' => $task->estimated_hours],
+                ]);
+            }
         }
 
         if ($task->parent_task_id) {
@@ -723,22 +737,258 @@ class TaskController extends Controller
         return response()->json(['id' => $task->id, 'parent_task_id' => $task->parent_task_id]);
     }
 
+    public function duplicate(Request $request, $id)
+    {
+        $user = $request->user();
+        $task = Task::findOrFail($id);
+        if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+        if ($task->parent_task_id) {
+            return response()->json(['message' => 'Hanya task utama (bukan subtask) yang bisa di-duplicate.'], 422);
+        }
+
+        $validated = $request->validate([
+            'include_subtasks' => 'nullable|boolean',
+        ]);
+        $includeSubtasks = (bool) ($validated['include_subtasks'] ?? false);
+
+        $newTask = DB::transaction(function () use ($task, $includeSubtasks) {
+            $projectId = (int) $task->project_id;
+
+            // Duplicated card always lands on top of "To Do" — it hasn't been started yet.
+            Task::where('project_id', $projectId)
+                ->where('status', 'To Do')
+                ->whereNull('parent_task_id')
+                ->increment('sort_order');
+
+            $clone = Task::create([
+                'project_id' => $projectId,
+                'title' => $task->title,
+                'feature_title' => $task->feature_title,
+                'description' => $task->description,
+                'status' => 'To Do',
+                'priority' => $task->priority,
+                'is_billable' => $task->is_billable,
+                'sort_order' => 0,
+                'assignee_id' => $task->assignee_id,
+                'estimated_hours' => $task->estimated_hours,
+                'rush_hour' => $task->rush_hour,
+                'project_role_id' => $task->project_role_id,
+                'category' => $task->category,
+                'due_date' => $task->due_date,
+                'start_date' => $task->start_date,
+                'is_backlog' => false,
+                'project_sequence' => (int) Task::where('project_id', $projectId)->max('project_sequence') + 1,
+                'duplicated_from_id' => $task->id,
+            ]);
+
+            if ($includeSubtasks) {
+                $seq = 0;
+                foreach ($task->subtasks as $subtask) {
+                    $seq++;
+                    Task::create([
+                        'project_id' => $projectId,
+                        'title' => $subtask->title,
+                        'feature_title' => $subtask->feature_title,
+                        'description' => $subtask->description,
+                        'status' => 'To Do',
+                        'priority' => $subtask->priority,
+                        'is_billable' => $subtask->is_billable,
+                        'parent_task_id' => $clone->id,
+                        'sort_order' => $seq,
+                        'task_sequence' => $seq,
+                        'assignee_id' => $subtask->assignee_id,
+                        'estimated_hours' => $subtask->estimated_hours,
+                        'rush_hour' => $subtask->rush_hour,
+                        'project_role_id' => $subtask->project_role_id,
+                        'category' => $subtask->category,
+                        'due_date' => $subtask->due_date,
+                        'start_date' => $subtask->start_date,
+                        'duplicated_from_id' => $subtask->id,
+                    ]);
+                }
+                TaskAggregationService::syncParentEstimatedHours($clone->id);
+                $clone->refresh();
+            }
+
+            return $clone;
+        });
+
+        // Carry over the full assignee list (not just the active one) so a Dev+QA handoff clones intact,
+        // including each assignee's own MH share of the (identical) cloned total.
+        $originalAssignees = $task->assignees;
+        if ($originalAssignees->isNotEmpty()) {
+            $syncPayload = [];
+            foreach ($originalAssignees as $au) {
+                $syncPayload[$au->id] = ['is_active' => (bool) $au->pivot->is_active, 'mh' => $au->pivot->mh];
+            }
+            $newTask->assignees()->sync($syncPayload);
+
+            foreach ($originalAssignees as $au) {
+                $this->ensureAssigneeIsProjectMember(
+                    (int) $newTask->project_id,
+                    (int) $au->id,
+                    $newTask->project_role_id ? (int) $newTask->project_role_id : null
+                );
+                $this->sendTaskAssignedEmail($newTask, $au);
+            }
+        } elseif (!empty($newTask->assignee_id)) {
+            $this->ensureAssigneeIsProjectMember(
+                (int) $newTask->project_id,
+                (int) $newTask->assignee_id,
+                $newTask->project_role_id ? (int) $newTask->project_role_id : null
+            );
+            $this->sendTaskAssignedEmail($newTask);
+        }
+
+        $this->log('Project', 'Duplicated Task', "Duplicated task '{$task->title}' (ID: {$task->id}) into new task ID: {$newTask->id}");
+
+        return response()->json(['id' => $newTask->id, 'duplicated_from_id' => $task->id]);
+    }
+
     public function updateStatus(Request $request, $id)
     {
         $user = $request->user();
         $validated = $request->validate([
-            'status' => 'required|string'
+            'status' => 'required|string|in:To Do,In Progress,Review,Re-open,Done'
         ]);
         $task = Task::findOrFail($id);
         if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
         $oldStatus = $task->status;
-        $changes = $task->update($validated) ? 1 : 0;
-        
+        $movedColumns = $oldStatus !== $validated['status'];
+
+        $changes = DB::transaction(function () use ($task, $validated, $movedColumns) {
+            if ($movedColumns && !$task->parent_task_id) {
+                // Kartu yang dipindah kolom selalu naik ke posisi teratas.
+                Task::where('project_id', $task->project_id)
+                    ->where('status', $validated['status'])
+                    ->whereNull('parent_task_id')
+                    ->where('id', '!=', $task->id)
+                    ->increment('sort_order');
+                $validated['sort_order'] = 0;
+            }
+            return $task->update($validated) ? 1 : 0;
+        });
+
         $this->log('Project', 'Updated Task Status', "Changed task '{$task->title}' from {$oldStatus} to {$validated['status']}");
-        
+
         return response()->json(['changes' => $changes]);
+    }
+
+    /**
+     * Manage the full set of users attached to a task and which one is currently active
+     * (e.g. handed off from Developer to QA — QA becomes active, Dev stays attached).
+     */
+    public function updateAssignees(Request $request, $id)
+    {
+        $user = $request->user();
+        $task = Task::findOrFail($id);
+        if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+        if ($task->parent_task_id) {
+            return response()->json(['message' => 'Multi-assignee hanya berlaku untuk task utama (bukan subtask).'], 422);
+        }
+
+        $validated = $request->validate([
+            'assignee_ids' => 'present|array',
+            'assignee_ids.*' => 'integer|exists:users,id',
+            'active_ids' => 'present|array',
+            'active_ids.*' => 'integer',
+            'mh_by_assignee' => 'nullable|array',
+            'mh_by_assignee.*' => 'numeric|min:0',
+            'split_evenly' => 'nullable|boolean',
+        ]);
+
+        $assigneeIds = array_values(array_unique(array_map('intval', $validated['assignee_ids'])));
+        // Each assignee toggles independently — any subset (including all, or none) can be active.
+        $activeIds = array_values(array_intersect(array_map('intval', $validated['active_ids']), $assigneeIds));
+        // The task's denormalized "primary" pointer (card label, CSV export, legacy code) picks
+        // one deterministic id: the lowest active id, or failing that the lowest assignee id.
+        $primaryId = !empty($activeIds) ? min($activeIds) : (!empty($assigneeIds) ? min($assigneeIds) : null);
+
+        $hasSubtasks = Task::where('parent_task_id', $task->id)->exists();
+        $mhByAssignee = $validated['mh_by_assignee'] ?? null;
+        $splitEvenly = (bool) ($validated['split_evenly'] ?? false);
+        if (($mhByAssignee !== null || $splitEvenly) && $hasSubtasks) {
+            return response()->json(['message' => 'MH task ini otomatis dihitung dari subtask, tidak bisa dibagi manual per assignee.'], 422);
+        }
+
+        $existingIds = $task->assignees()->pluck('users.id')->map(fn ($v) => (int) $v)->all();
+        $newIds = array_values(array_diff($assigneeIds, $existingIds));
+
+        DB::transaction(function () use ($task, $assigneeIds, $activeIds, $primaryId, $mhByAssignee, $splitEvenly, $hasSubtasks) {
+            $syncData = [];
+            $newTotal = null;
+
+            if ($mhByAssignee !== null) {
+                // Explicit per-assignee edit from the user — trust it and recompute the task's total.
+                $total = 0.0;
+                foreach ($assigneeIds as $uid) {
+                    $mh = round((float) ($mhByAssignee[$uid] ?? 0), 2);
+                    $syncData[$uid] = ['is_active' => in_array($uid, $activeIds, true), 'mh' => $mh];
+                    $total += $mh;
+                }
+                $newTotal = round($total, 2);
+            } elseif ($splitEvenly) {
+                // "Bagi rata" button — explicitly redistribute the current total evenly.
+                $count = count($assigneeIds);
+                $each = $count > 0 ? round(((float) $task->estimated_hours) / $count, 2) : 0;
+                foreach ($assigneeIds as $uid) {
+                    $syncData[$uid] = ['is_active' => in_array($uid, $activeIds, true), 'mh' => $each];
+                }
+            } else {
+                // Plain add/remove/toggle-active — never touch anyone's MH silently. Existing
+                // assignees keep whatever MH they already had; a brand-new assignee starts at 0
+                // until the user fills it in or hits "Bagi rata".
+                $existingMh = $task->assignees()->get()->mapWithKeys(
+                    fn ($u) => [(int) $u->id => (float) $u->pivot->mh]
+                );
+                foreach ($assigneeIds as $uid) {
+                    $syncData[$uid] = ['is_active' => in_array($uid, $activeIds, true), 'mh' => $existingMh[$uid] ?? 0];
+                }
+            }
+
+            $task->assignees()->sync($syncData);
+
+            $updateData = ['assignee_id' => $primaryId];
+            if ($newTotal !== null && !$hasSubtasks) {
+                $updateData['estimated_hours'] = $newTotal;
+            }
+            $task->update($updateData);
+        });
+
+        foreach ($newIds as $uid) {
+            $this->ensureAssigneeIsProjectMember(
+                (int) $task->project_id,
+                $uid,
+                $task->project_role_id ? (int) $task->project_role_id : null
+            );
+        }
+
+        $task->refresh();
+        if (!empty($newIds)) {
+            $newUsers = User::whereIn('id', $newIds)->get();
+            foreach ($newUsers as $newAssignee) {
+                $this->sendTaskAssignedEmail($task, $newAssignee);
+            }
+        }
+
+        $this->log('Project', 'Updated Task Assignees', "Updated assignees for task '{$task->title}' (ID: {$task->id}).");
+
+        return response()->json([
+            'assignee_id' => $task->assignee_id,
+            'estimated_hours' => $task->estimated_hours,
+            'assignees' => $task->assignees()->get(['users.id', 'users.name'])->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'is_active' => (bool) $u->pivot->is_active,
+                'mh' => (float) $u->pivot->mh,
+            ]),
+        ]);
     }
 
     public function update(Request $request, $id)
@@ -845,6 +1095,40 @@ class TaskController extends Controller
         $this->log('Project', 'Deleted Task', "Deleted task ID: {$id}");
 
         return response()->json(['message' => 'Task deleted']);
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $ids = $request->input('ids');
+        if (!$ids || !is_array($ids) || empty($ids)) {
+            return response()->json(['error' => 'Please provide an array of task IDs to delete.'], 400);
+        }
+
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $tasks = Task::whereIn('id', $ids)->get();
+        if ($tasks->isEmpty()) {
+            return response()->json(['error' => 'No matching tasks found.'], 404);
+        }
+
+        $user = $request->user();
+        foreach ($tasks as $task) {
+            if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
+                return response()->json(['error' => 'Forbidden'], 403);
+            }
+        }
+
+        $parentIds = $tasks->pluck('parent_task_id')->filter()->unique()->all();
+        $deletedIds = $tasks->pluck('id')->all();
+
+        $deletedCount = Task::whereIn('id', $ids)->delete();
+
+        foreach ($parentIds as $parentId) {
+            TaskAggregationService::syncParentEstimatedHours((int) $parentId);
+        }
+
+        $this->log('Project', 'Bulk Deleted Tasks', 'Deleted ' . $deletedCount . ' task(s): ID ' . implode(', ', $deletedIds));
+
+        return response()->json(['message' => 'Tasks deleted successfully', 'deletedCount' => $deletedCount]);
     }
 
     public function backlog(Request $request)
@@ -978,5 +1262,26 @@ class TaskController extends Controller
         $this->log('Project', 'Send Task to Backlog', "Task #{$task->id} dikembalikan ke backlog.");
 
         return response()->json(['message' => 'Task berhasil dikembalikan ke backlog.']);
+    }
+
+    /**
+     * Store an image pasted/dropped into a task or subtask description editor and
+     * return its public URL so the frontend can embed it inline (<img src>).
+     */
+    public function uploadDescriptionImage(Request $request)
+    {
+        $validated = $request->validate([
+            'project_id' => 'required|integer|exists:projects,id',
+            'image' => 'required|image|max:5120',
+        ]);
+
+        $user = $request->user();
+        if (!ProjectAccess::canAccessProject($user, (int) $validated['project_id'])) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $path = $request->file('image')->store('task-description-images/' . $validated['project_id'], 'public');
+
+        return response()->json(['url' => PublicStorageUrl::for($path)]);
     }
 }

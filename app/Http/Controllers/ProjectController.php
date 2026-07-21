@@ -452,18 +452,13 @@ class ProjectController extends Controller
         $user = request()->user();
         ProjectAccess::assertCanAccessProject($user, (int) $id);
 
-        $usersQuery = User::query()
+        // Anyone reaching this endpoint already holds `list_project.update` (route middleware) and
+        // passed the project-access check above — they can search the full user directory to add
+        // genuinely new members, same as a privileged (Admin/superuser) user.
+        $users = User::query()
             ->select('id', 'name', 'email')
-            ->orderBy('name', 'asc');
-
-        if (!ProjectAccess::isPrivileged($user)) {
-            $memberUserIds = DB::table('project_members')
-                ->where('project_id', $id)
-                ->pluck('user_id');
-            $usersQuery->whereIn('id', $memberUserIds);
-        }
-
-        $users = $usersQuery->get();
+            ->orderBy('name', 'asc')
+            ->get();
 
         $roles = ProjectRole::query()
             ->select('id', 'name')
