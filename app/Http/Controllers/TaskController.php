@@ -352,8 +352,12 @@ class TaskController extends Controller
         $user = $request->user();
         $query = Task::query()
             ->leftJoin('users', 'users.id', '=', 'tasks.assignee_id')
+            ->leftJoin('users as creators', 'creators.id', '=', 'tasks.created_by_id')
+            ->leftJoin('users as updaters', 'updaters.id', '=', 'tasks.updated_by_id')
             ->select('tasks.*')
             ->selectRaw('users.name as assignee_name')
+            ->selectRaw('creators.name as created_by_name')
+            ->selectRaw('updaters.name as updated_by_name')
             ->orderBy('tasks.sort_order')
             ->orderBy('tasks.id');
 
@@ -380,8 +384,12 @@ class TaskController extends Controller
             if ($taskIds->isNotEmpty()) {
                 $subtasks = Task::query()
                     ->leftJoin('users', 'users.id', '=', 'tasks.assignee_id')
+                    ->leftJoin('users as creators', 'creators.id', '=', 'tasks.created_by_id')
+                    ->leftJoin('users as updaters', 'updaters.id', '=', 'tasks.updated_by_id')
                     ->select('tasks.*')
                     ->selectRaw('users.name as assignee_name')
+                    ->selectRaw('creators.name as created_by_name')
+                    ->selectRaw('updaters.name as updated_by_name')
                     ->whereIn('parent_task_id', $taskIds)
                     ->orderBy('sort_order')
                     ->orderBy('tasks.id')
@@ -498,7 +506,8 @@ class TaskController extends Controller
                 $columnMap,
                 $project,
                 $isWaterfall,
-                $isFreelance
+                $isFreelance,
+                $authUser
             ) {
                 $rowIndex++;
                 if (count($row) < 1 || trim((string) ($row[0] ?? '')) === '') {
@@ -607,6 +616,9 @@ class TaskController extends Controller
 
                 unset($data['assignee_email'], $data['role_name'], $data['project_role_quota']);
 
+                $data['created_by_id'] = $authUser->id;
+                $data['updated_by_id'] = $authUser->id;
+
                 $task = Task::create($data);
                 $this->ensureAssigneeIsProjectMember(
                     (int) $project->id,
@@ -704,6 +716,8 @@ class TaskController extends Controller
         }
 
         $validated['project_sequence'] = (int) Task::where('project_id', $validated['project_id'])->max('project_sequence') + 1;
+        $validated['created_by_id'] = $user->id;
+        $validated['updated_by_id'] = $user->id;
 
         $task = Task::create($validated);
         $this->ensureAssigneeIsProjectMember(
@@ -746,7 +760,7 @@ class TaskController extends Controller
         ]);
         $includeSubtasks = (bool) ($validated['include_subtasks'] ?? false);
 
-        $newTask = DB::transaction(function () use ($task, $includeSubtasks) {
+        $newTask = DB::transaction(function () use ($task, $includeSubtasks, $user) {
             $projectId = (int) $task->project_id;
 
             // Duplicated card always lands on top of "To Do" — it hasn't been started yet.
@@ -774,6 +788,8 @@ class TaskController extends Controller
                 'is_backlog' => false,
                 'project_sequence' => (int) Task::where('project_id', $projectId)->max('project_sequence') + 1,
                 'duplicated_from_id' => $task->id,
+                'created_by_id' => $user->id,
+                'updated_by_id' => $user->id,
             ]);
 
             if ($includeSubtasks) {
@@ -799,6 +815,8 @@ class TaskController extends Controller
                         'due_date' => $subtask->due_date,
                         'start_date' => $subtask->start_date,
                         'duplicated_from_id' => $subtask->id,
+                        'created_by_id' => $user->id,
+                        'updated_by_id' => $user->id,
                     ]);
                 }
                 TaskAggregationService::syncParentEstimatedHours($clone->id);
@@ -852,6 +870,7 @@ class TaskController extends Controller
         }
         $oldStatus = $task->status;
         $movedColumns = $oldStatus !== $validated['status'];
+        $validated['updated_by_id'] = $user->id;
 
         $changes = DB::transaction(function () use ($task, $validated, $movedColumns) {
             if ($movedColumns && !$task->parent_task_id) {
@@ -913,7 +932,7 @@ class TaskController extends Controller
         $existingIds = $task->assignees()->pluck('users.id')->map(fn ($v) => (int) $v)->all();
         $newIds = array_values(array_diff($assigneeIds, $existingIds));
 
-        DB::transaction(function () use ($task, $assigneeIds, $activeIds, $primaryId, $mhByAssignee, $splitEvenly, $hasSubtasks) {
+        DB::transaction(function () use ($task, $assigneeIds, $activeIds, $primaryId, $mhByAssignee, $splitEvenly, $hasSubtasks, $user) {
             $syncData = [];
             $newTotal = null;
 
@@ -947,7 +966,7 @@ class TaskController extends Controller
 
             $task->assignees()->sync($syncData);
 
-            $updateData = ['assignee_id' => $primaryId];
+            $updateData = ['assignee_id' => $primaryId, 'updated_by_id' => $user->id];
             if ($newTotal !== null && !$hasSubtasks) {
                 $updateData['estimated_hours'] = $newTotal;
             }
@@ -1039,6 +1058,11 @@ class TaskController extends Controller
         } elseif (!$task->parent_task_id) {
             TaskAggregationService::stripParentFieldsWhenHasSubtasks($validated, $task);
         }
+
+        if ($task->duplicated_from_id) {
+            $validated['duplicated_from_id'] = null;
+        }
+        $validated['updated_by_id'] = $user->id;
 
         $changes = $task->update($validated) ? 1 : 0;
 
@@ -1152,7 +1176,7 @@ class TaskController extends Controller
             'parent_task_id' => 'nullable|integer|exists:tasks,id',
         ]);
 
-        $update = ['is_backlog' => false, 'status' => 'To Do'];
+        $update = ['is_backlog' => false, 'status' => 'To Do', 'updated_by_id' => $user->id];
 
         if (!empty($validated['parent_task_id'])) {
             $parentTaskId = (int) $validated['parent_task_id'];
@@ -1218,6 +1242,8 @@ class TaskController extends Controller
             return response()->json(['message' => 'No changes provided.', 'changes' => 0]);
         }
 
+        $updateData['updated_by_id'] = $user->id;
+
         $changes = Task::whereIn('id', $validated['task_ids'])->update($updateData);
 
         // Re-sync parent estimated_hours for any subtask that was bulk-edited
@@ -1250,7 +1276,7 @@ class TaskController extends Controller
             return response()->json(['error' => 'Hanya task dengan status To Do yang bisa dikembalikan ke backlog.'], 422);
         }
 
-        $task->update(['is_backlog' => true]);
+        $task->update(['is_backlog' => true, 'updated_by_id' => $user->id]);
 
         $this->log('Project', 'Send Task to Backlog', "Task #{$task->id} dikembalikan ke backlog.");
 

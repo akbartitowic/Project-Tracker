@@ -22,6 +22,8 @@ class Task extends Model
         'project_id',
         'parent_task_id',
         'duplicated_from_id',
+        'created_by_id',
+        'updated_by_id',
         'sort_order',
         'assignee_id',
         'estimated_hours',
@@ -63,6 +65,16 @@ class Task extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_id');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by_id');
     }
 
     /** All users attached to this task, with an `is_active` flag and their own `mh` (manhour) share of the task. */

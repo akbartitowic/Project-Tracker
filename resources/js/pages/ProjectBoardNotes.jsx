@@ -435,10 +435,13 @@ export default function ProjectBoardNotes() {
         : bodyIsEmpty;
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-50 dark:bg-background-dark">
+        <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-50 dark:bg-[#000040]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
 
             {/* ── Top bar ── */}
-            <div className="shrink-0 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3">
+            <div className="relative shrink-0 bg-white/70 backdrop-blur-xl dark:bg-[#151b28]/90 border-b border-white/60 dark:border-white/10 px-4 sm:px-6 py-3">
                 <div className="w-full flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 min-w-0">
                         <button
@@ -474,7 +477,7 @@ export default function ProjectBoardNotes() {
             </div>
 
             {/* ── Category tab bar ── */}
-            <div className="shrink-0 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6">
+            <div className="relative shrink-0 bg-white/70 backdrop-blur-xl dark:bg-[#151b28]/90 border-b border-white/60 dark:border-white/10 px-4 sm:px-6">
                 <div className="w-full flex gap-1 overflow-x-auto">
                     {PROJECT_NOTE_CATEGORY_LIST.map((cat) => {
                         const Icon   = CATEGORY_ICON[cat.key] || BookOpen;
@@ -508,7 +511,7 @@ export default function ProjectBoardNotes() {
             </div>
 
             {/* ── Body: two-column ── */}
-            <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+            <div className="relative flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
 
                 {/* ── Left: notes list (scrolls independently) ── */}
                 <div className="flex-1 min-h-0 overflow-y-auto order-2 lg:order-1">
@@ -529,7 +532,7 @@ export default function ProjectBoardNotes() {
                                 <Loader2 className="size-6 animate-spin text-primary" />
                             </div>
                         ) : notesInCategory.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900/50">
+                            <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-300/70 dark:border-white/10 rounded-xl bg-white/50 backdrop-blur-sm dark:bg-white/5">
                                 {(() => { const Icon = CATEGORY_ICON[activeCategory] || BookOpen; return <Icon className="size-10 mb-3 opacity-20" />; })()}
                                 <p className="text-sm font-medium">Belum ada {getProjectNoteCategoryLabel(activeCategory).toLowerCase()}</p>
                                 <p className="text-xs mt-1">
@@ -546,10 +549,10 @@ export default function ProjectBoardNotes() {
                                     <div
                                         key={note.id}
                                         className={cn(
-                                            'bg-white dark:bg-slate-900 rounded-xl border shadow-sm transition-shadow hover:shadow-md',
+                                            'bg-white/70 backdrop-blur-xl dark:bg-[#151b28] rounded-xl border shadow-sm dark:shadow-xl transition-shadow hover:shadow-md',
                                             isEditThis
                                                 ? 'border-primary/40 ring-2 ring-primary/15'
-                                                : 'border-slate-200 dark:border-slate-800',
+                                                : 'border-white/60 dark:border-white/10',
                                         )}
                                     >
                                         <div className="p-4">
@@ -636,8 +639,8 @@ export default function ProjectBoardNotes() {
 
                 {/* ── Right: add / edit form (fixed panel, always visible) ── */}
                 {canUpdate && (
-                    <div className="shrink-0 w-full lg:w-80 xl:w-96 border-b lg:border-b-0 lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col min-h-0 order-1 lg:order-2">
-                        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between shrink-0">
+                    <div className="shrink-0 w-full lg:w-80 xl:w-96 border-b lg:border-b-0 lg:border-t-0 lg:border-l border-white/60 dark:border-white/10 bg-white/70 backdrop-blur-xl dark:bg-[#151b28]/90 flex flex-col min-h-0 order-1 lg:order-2">
+                        <div className="px-4 py-3 border-b border-white/50 dark:border-white/10 bg-white/40 dark:bg-white/5 flex items-center justify-between shrink-0">
                             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                                 {editingId
                                     ? <><Pencil className="size-4 text-primary" /> Edit</>

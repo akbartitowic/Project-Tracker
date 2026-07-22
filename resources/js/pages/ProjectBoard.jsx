@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
-import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star, Inbox, ChevronDown, Copy } from 'lucide-react';
+import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star, Inbox, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../utils/taskDates';
 import { hasPermission } from '../utils/permissions';
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,7 +28,7 @@ import {
     TaskBillingBadges,
     taskIsEffectivelyNonBillable,
 } from '../utils/taskBillable.jsx';
-import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, DragOverlay, closestCorners, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import PaginationControls from '../components/ui/PaginationControls';
 
@@ -123,7 +123,7 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
         : null;
 
     return (
-        <div ref={setNodeRef} style={style} className="relative group touch-none" {...attributes} {...listeners}>
+        <div ref={setNodeRef} style={style} className="relative group touch-manipulation" {...attributes} {...listeners}>
             {bulkMode && (
                 <div
                     className="absolute left-2 top-2 z-10"
@@ -329,6 +329,41 @@ function TaskDragOverlayCard({ task, assigneeName }) {
     );
 }
 
+function formatTaskTimestamp(value) {
+    if (!value) return null;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function TaskMetaSection({ task }) {
+    const [expanded, setExpanded] = useState(false);
+    const createdBy = task.created_by_name || 'Tidak diketahui';
+    const updatedBy = task.updated_by_name || 'Tidak diketahui';
+    const createdAt = formatTaskTimestamp(task.created_at);
+    const updatedAt = formatTaskTimestamp(task.updated_at);
+
+    return (
+        <div className="px-6 pb-5">
+            <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="flex w-full items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+                {expanded ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
+                <span>Dibuat oleh <span className="font-medium text-slate-600 dark:text-slate-300">{createdBy}</span></span>
+            </button>
+            {expanded && (
+                <div className="mt-2 ml-5 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                    {createdAt && <p>Dibuat: {createdAt}</p>}
+                    <p>Diperbarui oleh <span className="font-medium text-slate-600 dark:text-slate-300">{updatedBy}</span></p>
+                    {updatedAt && <p>Terakhir diperbarui: {updatedAt}</p>}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
     const { isOver, setNodeRef } = useDroppable({ id: title });
     const perc = totalCount > 0 ? Math.round((count / totalCount) * 100) : 0;
@@ -337,13 +372,13 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
         <div
             ref={setNodeRef}
             className={cn(
-                'flex max-h-[70vh] min-h-[240px] w-[min(18rem,88vw)] shrink-0 snap-start flex-col rounded-xl border bg-slate-50/90 transition-colors duration-200 dark:bg-[#151b28]/60 sm:w-72',
+                'flex max-h-[70vh] min-h-[240px] w-[min(18rem,88vw)] shrink-0 snap-start flex-col rounded-xl border bg-white/70 shadow-sm backdrop-blur-xl transition-colors duration-200 dark:bg-[#151b28]/70 dark:shadow-xl sm:w-72',
                 isOver
-                    ? 'border-primary/40 bg-primary/5 shadow-sm dark:bg-primary/5'
-                    : 'border-slate-200/80 dark:border-slate-800/60',
+                    ? 'border-primary/40 bg-primary/5 shadow-sm dark:bg-primary/10'
+                    : 'border-white/60 dark:border-white/10',
             )}
         >
-            <div className="flex shrink-0 items-center justify-between gap-2 rounded-t-xl border-b border-slate-200/80 bg-slate-50/90 px-3 py-2.5 dark:border-slate-800/50 dark:bg-[#151b28]/95">
+            <div className="flex shrink-0 items-center justify-between gap-2 rounded-t-xl border-b border-white/50 bg-white/40 px-3 py-2.5 dark:border-white/10 dark:bg-white/5">
                 <div className="flex min-w-0 items-center gap-2">
                     <span className={cn('size-2 shrink-0 rounded-full', color)} />
                     <h3 className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</h3>
@@ -360,7 +395,7 @@ function BoardColumn({ title, color, count, totalCount, children, onAddTask }) {
                 )}
             </div>
             {title === 'To Do' && onAddTask && (
-                <div className="shrink-0 rounded-b-xl border-t border-slate-200/80 p-2 dark:border-slate-800/50">
+                <div className="shrink-0 rounded-b-xl border-t border-white/50 p-2 dark:border-white/10">
                     <Button variant="outline" size="sm" className="h-8 w-full border-dashed text-xs" onClick={onAddTask}>
                         <Plus className="mr-1.5 size-3.5" />
                         Add Task
@@ -479,8 +514,13 @@ export default function ProjectBoard() {
     });
 
     const sensors = useSensors(
-        useSensor(PointerSensor, {
+        useSensor(MouseSensor, {
             activationConstraint: { distance: 5 },
+        }),
+        useSensor(TouchSensor, {
+            // Delay-based activation lets a quick swipe scroll the column normally;
+            // drag only kicks in after a short press-and-hold.
+            activationConstraint: { delay: 200, tolerance: 8 },
         })
     );
 
@@ -2073,9 +2113,15 @@ export default function ProjectBoard() {
     };
 
     return (
-        <div className="flex flex-col bg-background-light dark:bg-background-dark transition-colors duration-200">
+        <div className="relative min-h-full overflow-hidden bg-slate-50 transition-colors duration-200 dark:bg-[#000040]">
+            {/* Decorative gradient + soft blurred accents — mirrors the login page / dashboard visual language */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
+
+            <div className="relative z-10 flex flex-col">
             {/* Project Header & Stats */}
-            <div className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
+            <div className="border-b border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28]/90">
                 <div className="flex flex-col gap-3 p-4 sm:p-5">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0 flex-1">
@@ -2391,7 +2437,7 @@ export default function ProjectBoard() {
                                         {waterfallProgressCards.map((item) => (
                                             <div
                                                 key={item.status}
-                                                className="w-[148px] shrink-0 snap-start rounded-lg border border-slate-200/80 bg-white px-3 py-2 dark:border-slate-700/80 dark:bg-slate-900/40"
+                                                className="w-[148px] shrink-0 snap-start rounded-lg border border-white/60 bg-white/70 backdrop-blur-sm px-3 py-2 dark:border-white/10 dark:bg-white/5"
                                             >
                                                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.status}</p>
                                                 <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{item.percentage}%</p>
@@ -2406,7 +2452,7 @@ export default function ProjectBoard() {
                             ) : (
                                 <div className="mt-2 space-y-2">
                                     {!isFreelance && headerTotalManhours != null && Number(headerTotalManhours) > 0 && (
-                                        <div className="rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700/80 dark:bg-slate-800/30">
+                                        <div className="rounded-lg border border-white/60 bg-white/60 backdrop-blur-sm px-3 py-2.5 dark:border-white/10 dark:bg-white/5">
                                             <div className="mb-2 grid grid-cols-[1fr_auto_1fr] items-end gap-2">
                                                 <div>
                                                     <p className="tabular-nums text-base font-bold text-slate-900 dark:text-white">
@@ -2469,7 +2515,7 @@ export default function ProjectBoard() {
             {viewMode === 'kanban' ? (
                 <div className="flex flex-col">
                     {/* Mobile: status tab bar */}
-                    <div className="sm:hidden flex overflow-x-auto border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28] shrink-0 scrollbar-none">
+                    <div className="sm:hidden flex overflow-x-auto border-b border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28]/90 shrink-0 scrollbar-none">
                         {COLUMNS.map((col, idx) => {
                             const count = getTasksByStatus(col.title).length;
                             const active = mobileKanbanCol === col.title;
@@ -2508,7 +2554,7 @@ export default function ProjectBoard() {
                     {/* Kanban scroll area */}
                     <div
                         ref={kanbanScrollRef}
-                        className="board-scroll-x relative overflow-x-auto bg-slate-100/50 p-3 sm:p-4 dark:bg-[#0d1118]/50"
+                        className="board-scroll-x relative overflow-x-auto p-3 sm:p-4"
                         onScroll={(e) => {
                             // Update active tab based on scroll position (mobile only)
                             if (window.innerWidth >= 640) return;
@@ -2576,10 +2622,10 @@ export default function ProjectBoard() {
                                 key={task.id}
                                 onClick={() => navigate(`/board/${projectId}/task/${task.id}`)}
                                 className={cn(
-                                    'rounded-xl border bg-white dark:bg-[#151b28] p-3 cursor-pointer transition-colors active:bg-slate-50 dark:active:bg-slate-800',
+                                    'rounded-xl border bg-white/70 shadow-sm backdrop-blur-xl p-3 cursor-pointer transition-colors active:bg-slate-50 dark:bg-[#151b28] dark:shadow-xl dark:active:bg-slate-800',
                                     isTaskBulkEditMode && selectedTaskIds.includes(task.id)
                                         ? 'border-primary/50 bg-primary/5'
-                                        : 'border-slate-200 dark:border-slate-800',
+                                        : 'border-white/60 dark:border-white/10',
                                 )}
                                 onClickCapture={(e) => {
                                     if (isTaskBulkEditMode) { e.preventDefault(); toggleTaskSelection(task.id); }
@@ -2639,7 +2685,7 @@ export default function ProjectBoard() {
                     </div>
 
                     {/* ── Desktop: table ── */}
-                    <div className="hidden sm:block bg-white dark:bg-[#151b28] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                    <div className="hidden sm:block bg-white/70 backdrop-blur-xl border border-white/60 dark:bg-[#151b28] dark:border-white/10 rounded-xl overflow-hidden shadow-sm dark:shadow-xl">
                         <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                                 <tr>
@@ -3142,6 +3188,8 @@ export default function ProjectBoard() {
                             Save the task first, then edit it again to add subtasks and notes.
                         </p>
                     )}
+
+                    {editingTaskId && editingTask && <TaskMetaSection task={editingTask} />}
                     </div>
 
                     <DialogFooter className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 bg-slate-50/80 dark:bg-slate-900/40">
@@ -3571,6 +3619,7 @@ export default function ProjectBoard() {
                 </DialogContent>
             </Dialog>
 
+            </div>
         </div>
     );
 }

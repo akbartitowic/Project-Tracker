@@ -237,8 +237,11 @@ export default function ProjectBoardGantt() {
     if (!project) return null;
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-50/50 dark:bg-background-dark">
-            <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151b28] px-5 py-4">
+        <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-50 dark:bg-[#000040]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
+            <div className="relative shrink-0 border-b border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28]/90 px-5 py-4">
                 <Button
                     variant="ghost"
                     className="-ml-2 mb-3 text-slate-500"
@@ -284,9 +287,9 @@ export default function ProjectBoardGantt() {
                 </div>
             </div>
 
-            <div className="flex-1 min-h-0 p-4 sm:p-5 overflow-hidden flex flex-col">
+            <div className="relative flex-1 min-h-0 p-4 sm:p-5 overflow-hidden flex flex-col">
                 {scheduledCount === 0 ? (
-                    <Card className="border-slate-200 dark:border-slate-800 max-w-lg mx-auto mt-12">
+                    <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl max-w-lg mx-auto mt-12 dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                         <CardContent className="p-8 text-center">
                             <GanttChart className="size-12 mx-auto text-slate-300 mb-4" />
                             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
@@ -304,11 +307,11 @@ export default function ProjectBoardGantt() {
                 ) : (
                     <Card
                         id="gantt-chart-container"
-                        className="flex-1 min-h-0 flex flex-col border-slate-200 dark:border-slate-800 overflow-hidden"
+                        className="flex-1 min-h-0 flex flex-col border-white/60 bg-white/70 shadow-sm backdrop-blur-xl overflow-hidden dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl"
                     >
                         <div className="flex flex-1 min-h-0 overflow-hidden">
                             <div
-                                className="shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/50 z-20"
+                                className="shrink-0 border-r border-white/60 bg-white/60 backdrop-blur-sm dark:border-white/10 dark:bg-white/5 z-20"
                                 style={{ width: GANTT_LABEL_WIDTH }}
                             >
                                 <div
@@ -369,7 +372,7 @@ export default function ProjectBoardGantt() {
                             <div className="flex-1 overflow-x-auto overflow-y-auto min-w-0">
                                 <div style={{ width: chartWidth, minWidth: '100%' }}>
                                     <div
-                                        className="sticky top-0 z-10 bg-white dark:bg-[#151b28] border-b border-slate-200 dark:border-slate-800"
+                                        className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm dark:bg-[#151b28]/95 border-b border-slate-200/80 dark:border-white/10"
                                         style={{ height: 52 }}
                                     >
                                         <div className="flex h-6 border-b border-slate-100 dark:border-slate-800">
@@ -456,7 +459,7 @@ export default function ProjectBoardGantt() {
                                 </div>
                             </div>
                         </div>
-                        <div className="shrink-0 px-4 py-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/40 flex flex-wrap gap-3 text-[10px] text-slate-500">
+                        <div className="shrink-0 px-4 py-2 border-t border-white/50 dark:border-white/10 bg-white/40 dark:bg-white/5 flex flex-wrap gap-3 text-[10px] text-slate-500">
                             <span className="flex items-center gap-1">
                                 <span className="size-2.5 rounded-sm bg-slate-400" /> To Do
                             </span>

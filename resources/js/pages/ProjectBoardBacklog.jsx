@@ -333,10 +333,13 @@ export default function ProjectBoardBacklog() {
     if (!project) return null;
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-50 dark:bg-background-dark">
+        <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-50 dark:bg-[#000040]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
 
             {/* ── Top bar ── */}
-            <div className="shrink-0 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3">
+            <div className="relative shrink-0 bg-white/70 backdrop-blur-xl dark:bg-[#151b28]/90 border-b border-white/60 dark:border-white/10 px-4 sm:px-6 py-3">
                 <div className="w-full flex items-center justify-between gap-4">
                     {/* Left: breadcrumb */}
                     <div className="flex items-center gap-3 min-w-0">
@@ -391,7 +394,7 @@ export default function ProjectBoardBacklog() {
             </div>
 
             {/* ── Body ── */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="relative flex-1 min-h-0 overflow-y-auto">
                 <div className="w-full px-4 sm:px-6 py-5 space-y-3">
 
                     {/* List header */}
@@ -417,7 +420,7 @@ export default function ProjectBoardBacklog() {
 
                     {/* Empty state */}
                     {!backlogLoading && backlogItems.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900/50">
+                        <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-300/70 dark:border-white/10 rounded-xl bg-white/50 backdrop-blur-sm dark:bg-white/5">
                             <Inbox className="size-12 mb-3 opacity-20" />
                             <p className="text-sm font-medium">Backlog masih kosong</p>
                             <p className="text-xs mt-1 text-slate-400">
@@ -430,10 +433,10 @@ export default function ProjectBoardBacklog() {
 
                     {/* Table */}
                     {backlogItems.length > 0 && (
-                        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                        <div className="bg-white/70 backdrop-blur-xl dark:bg-[#151b28] rounded-xl border border-white/60 dark:border-white/10 shadow-sm dark:shadow-xl overflow-hidden">
 
                             {/* Table header row */}
-                            <div className="grid items-center gap-0 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-4 py-2"
+                            <div className="grid items-center gap-0 border-b border-white/50 dark:border-white/10 bg-white/40 dark:bg-white/5 px-4 py-2"
                                 style={{ gridTemplateColumns: canUpdate ? '36px 1fr 100px 80px 100px' : '1fr 100px 80px' }}>
                                 {canUpdate && (
                                     <div className="flex items-center">
@@ -595,7 +598,7 @@ export default function ProjectBoardBacklog() {
                             })}
 
                             {/* Footer: total MH */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/50 dark:border-white/10 bg-white/40 dark:bg-white/5 px-4 py-2.5">
                                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                                     Total {backlogItems.length} task
                                 </span>
@@ -632,7 +635,7 @@ export default function ProjectBoardBacklog() {
 
             {/* ── Bulk action bar ── */}
             {canUpdate && selectedIds.size > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] px-4 sm:px-6 py-3 animate-in slide-in-from-bottom-4 duration-200">
+                <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl dark:bg-[#151b28]/95 border-t border-white/60 dark:border-white/10 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] px-4 sm:px-6 py-3 animate-in slide-in-from-bottom-4 duration-200">
                     <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4">
                         <div className="flex items-center gap-2.5">
                             <span className="inline-flex items-center justify-center rounded-full bg-primary text-white text-[11px] font-bold px-2 h-5 min-w-[20px]">

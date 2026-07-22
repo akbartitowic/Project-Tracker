@@ -59,7 +59,7 @@ function ProjectCompanyIcon({ logoUrl, projectName, size = 'lg' }) {
 
 function StatCard({ label, value, sub, icon: Icon, accent }) {
     return (
-        <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+        <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
             <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -91,7 +91,7 @@ function QuotaProgressRow({ title, allocated, quota, taskCount, buckets, topupHo
     const isOver = alloc > qh && qh > 0;
 
     return (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-4 space-y-3">
+        <div className="rounded-xl border border-white/60 bg-white/70 backdrop-blur-sm p-4 space-y-3 dark:border-white/10 dark:bg-white/5">
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                     <h4 className="font-semibold text-slate-900 dark:text-white">{title}</h4>
@@ -266,8 +266,11 @@ export default function ProjectBoardDashboard() {
     const usagePct = stats?.perc ?? project.usage_percentage;
 
     return (
-        <div className="flex-1 w-full overflow-y-auto bg-slate-50/50 dark:bg-background-dark">
-            <div className="w-full px-4 py-5 sm:px-6 sm:py-8 lg:px-8 space-y-8">
+        <div className="relative flex-1 w-full overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-[#000040]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
+            <div className="relative w-full px-4 py-5 sm:px-6 sm:py-8 lg:px-8 space-y-8">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div className="flex gap-4 min-w-0">
                         <ProjectCompanyIcon
@@ -367,7 +370,7 @@ export default function ProjectBoardDashboard() {
                     </h2>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         {BOARD_STATUSES.map((status) => (
-                            <Card key={status} className="border-slate-200 dark:border-slate-800">
+                            <Card key={status} className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                                 <CardContent className="p-4 text-center">
                                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                                         {status}
@@ -382,7 +385,7 @@ export default function ProjectBoardDashboard() {
                 </section>
 
                 <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <Card className="border-slate-200 dark:border-slate-800">
+                    <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-base flex items-center gap-2">
                                 <PiggyBank className="size-4 text-primary" />
@@ -399,7 +402,7 @@ export default function ProjectBoardDashboard() {
                         </CardContent>
                     </Card>
 
-                    <Card className="border-slate-200 dark:border-slate-800">
+                    <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-base flex items-center gap-2">
                                 <Users className="size-4 text-primary" />
@@ -473,7 +476,7 @@ export default function ProjectBoardDashboard() {
                         </h2>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                             {waterfallCards.map((item) => (
-                                <Card key={item.status} className="border-slate-200 dark:border-slate-800">
+                                <Card key={item.status} className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                                     <CardContent className="p-5">
                                         <p className="text-xs font-bold text-slate-500 uppercase">{item.status}</p>
                                         <p className="text-2xl font-bold mt-2">{item.percentage}%</p>
@@ -525,7 +528,7 @@ export default function ProjectBoardDashboard() {
                         </div>
 
                         {stats?.manhour_buckets?.length > 0 && (
-                            <Card className="border-slate-200 dark:border-slate-800">
+                            <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                                 <CardHeader>
                                     <CardTitle className="text-base">Project manhour buckets (FIFO)</CardTitle>
                                 </CardHeader>
@@ -575,7 +578,7 @@ export default function ProjectBoardDashboard() {
                         <Layers className="size-4" />
                         All tasks
                     </h2>
-                    <Card className="border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl overflow-hidden dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-500 text-xs uppercase">
