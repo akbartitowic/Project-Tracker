@@ -3,7 +3,6 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import {
     Wallet,
-    Briefcase,
     Plus,
     Trash2,
     Pencil,
@@ -52,10 +51,16 @@ const formatHours = (val) => {
     return Number.isInteger(num) ? `${num}` : num.toFixed(1);
 };
 
+function getProjectInitials(name) {
+    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return '?';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 function ProjectCompanyIcon({ logoUrl, projectName, size = 'sm' }) {
     const imgClass = size === 'lg' ? 'size-12 rounded-xl' : 'size-9 rounded-lg';
-    const iconWrapClass = size === 'lg' ? 'p-3 rounded-xl' : 'size-9 rounded-lg flex items-center justify-center';
-    const iconClass = size === 'lg' ? 'size-6' : 'size-4';
+    const textClass = size === 'lg' ? 'text-base' : 'text-xs';
 
     if (logoUrl) {
         return (
@@ -68,8 +73,8 @@ function ProjectCompanyIcon({ logoUrl, projectName, size = 'sm' }) {
     }
 
     return (
-        <div className={`${iconWrapClass} bg-primary/10 text-primary shrink-0`}>
-            <Briefcase className={iconClass} />
+        <div className={`${imgClass} ${textClass} flex items-center justify-center bg-primary/10 font-black text-primary shrink-0`}>
+            {getProjectInitials(projectName)}
         </div>
     );
 }

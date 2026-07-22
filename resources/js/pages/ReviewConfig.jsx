@@ -526,14 +526,14 @@ function EvaluationBlock({ evaluation, canConfig, onDeleted }) {
 
     return (
         <div className={cn(
-            'rounded-xl border overflow-hidden shadow-sm transition-opacity',
+            'rounded-xl border overflow-hidden shadow-sm dark:shadow-xl transition-opacity',
             isActive
-                ? 'border-slate-200 dark:border-slate-700'
-                : 'border-slate-200 dark:border-slate-700 opacity-60',
+                ? 'border-white/60 dark:border-white/10'
+                : 'border-white/60 dark:border-white/10 opacity-60',
         )}>
             {/* Header */}
             <div
-                className="flex items-center gap-3 px-4 py-3.5 bg-white dark:bg-slate-900 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors select-none"
+                className="flex items-center gap-3 px-4 py-3.5 bg-white/70 backdrop-blur-xl dark:bg-[#151b28] cursor-pointer hover:bg-white/90 dark:hover:bg-white/5 transition-colors select-none"
                 onClick={() => setExpanded(v => !v)}
             >
                 <div className={cn(
@@ -615,7 +615,7 @@ function EvaluationBlock({ evaluation, canConfig, onDeleted }) {
 
             {/* Expanded body */}
             {expanded && (
-                <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30 px-4 py-5 space-y-4">
+                <div className="border-t border-white/50 dark:border-white/10 bg-white/50 dark:bg-white/5 px-4 py-5 space-y-4">
 
                     {/* Meta info + edit */}
                     {editingMeta ? (
@@ -889,7 +889,11 @@ export default function ReviewConfig() {
     }, {});
 
     return (
-        <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16 space-y-5">
+        <div className="relative min-h-full overflow-hidden bg-slate-50 dark:bg-[#000040]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
+            <div className="relative w-full px-4 py-5 sm:px-6 lg:px-8 pb-16 space-y-5">
             {/* Header */}
             <div className="flex items-center gap-3">
                 <Button variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => navigate('/review')}>
@@ -964,6 +968,7 @@ export default function ReviewConfig() {
                     })}
                 </div>
             )}
+            </div>
         </div>
     );
 }

@@ -96,11 +96,11 @@ export default function Sidebar({ mobileOpen = false }) {
     return (
         <aside
             className={cn(
-                'fixed inset-y-0 left-0 z-50 flex h-screen w-64 max-w-[min(18rem,88vw)] flex-col overflow-y-auto',
+                'fixed inset-y-0 left-0 z-50 flex h-screen w-64 max-w-[min(18rem,88vw)] flex-col overflow-visible',
                 'border-r border-slate-200 bg-white transition-[transform,width] duration-200 ease-out',
                 'dark:border-white/10 dark:bg-[#000040]',
                 mobileOpen ? 'translate-x-0' : '-translate-x-full',
-                'lg:relative lg:inset-auto lg:z-auto lg:max-w-none lg:shrink-0 lg:translate-x-0',
+                'lg:relative lg:inset-auto lg:z-20 lg:max-w-none lg:shrink-0 lg:translate-x-0',
                 collapsed ? 'lg:w-20' : 'lg:w-64',
             )}
         >
@@ -114,6 +114,7 @@ export default function Sidebar({ mobileOpen = false }) {
                 {collapsed ? <ChevronRight className="size-3.5" /> : <ChevronLeft className="size-3.5" />}
             </button>
 
+            <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto overflow-x-hidden">
             <div className={cn('flex items-center gap-3 p-6', collapsed && 'lg:justify-center lg:px-3')}>
                 <div className="size-11 shrink-0 rounded-xl flex items-center justify-center p-1.5 bg-slate-50 dark:bg-[#151b28] shadow-sm border border-slate-100 dark:border-white/10">
                     <AppLogo alt="Application logo" className="size-full" />
@@ -189,6 +190,7 @@ export default function Sidebar({ mobileOpen = false }) {
                         <LogOut className="size-4" />
                     </button>
                 )}
+            </div>
             </div>
         </aside>
     );

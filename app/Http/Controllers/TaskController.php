@@ -124,6 +124,18 @@ class TaskController extends Controller
         return null;
     }
 
+    /**
+     * Stamps `updated_by_id`; if the task predates the created/updated-by tracking
+     * (legacy row, `created_by_id` is null), the first person to touch it becomes the creator.
+     */
+    private function markUpdatedBy(Task $task, array &$data, User $user): void
+    {
+        if (!$task->created_by_id) {
+            $data['created_by_id'] = $user->id;
+        }
+        $data['updated_by_id'] = $user->id;
+    }
+
     private function normalizeBillableFlag(array &$validated): void
     {
         $validated['is_billable'] = filter_var($validated['is_billable'] ?? true, FILTER_VALIDATE_BOOLEAN);
@@ -870,7 +882,7 @@ class TaskController extends Controller
         }
         $oldStatus = $task->status;
         $movedColumns = $oldStatus !== $validated['status'];
-        $validated['updated_by_id'] = $user->id;
+        $this->markUpdatedBy($task, $validated, $user);
 
         $changes = DB::transaction(function () use ($task, $validated, $movedColumns) {
             if ($movedColumns && !$task->parent_task_id) {
@@ -966,7 +978,8 @@ class TaskController extends Controller
 
             $task->assignees()->sync($syncData);
 
-            $updateData = ['assignee_id' => $primaryId, 'updated_by_id' => $user->id];
+            $updateData = ['assignee_id' => $primaryId];
+            $this->markUpdatedBy($task, $updateData, $user);
             if ($newTotal !== null && !$hasSubtasks) {
                 $updateData['estimated_hours'] = $newTotal;
             }
@@ -1062,7 +1075,7 @@ class TaskController extends Controller
         if ($task->duplicated_from_id) {
             $validated['duplicated_from_id'] = null;
         }
-        $validated['updated_by_id'] = $user->id;
+        $this->markUpdatedBy($task, $validated, $user);
 
         $changes = $task->update($validated) ? 1 : 0;
 
@@ -1176,7 +1189,8 @@ class TaskController extends Controller
             'parent_task_id' => 'nullable|integer|exists:tasks,id',
         ]);
 
-        $update = ['is_backlog' => false, 'status' => 'To Do', 'updated_by_id' => $user->id];
+        $update = ['is_backlog' => false, 'status' => 'To Do'];
+        $this->markUpdatedBy($task, $update, $user);
 
         if (!empty($validated['parent_task_id'])) {
             $parentTaskId = (int) $validated['parent_task_id'];
@@ -1244,7 +1258,13 @@ class TaskController extends Controller
 
         $updateData['updated_by_id'] = $user->id;
 
-        $changes = Task::whereIn('id', $validated['task_ids'])->update($updateData);
+        // Legacy tasks with no creator on record: the first person to touch them becomes the creator.
+        $changes = Task::whereIn('id', $validated['task_ids'])
+            ->whereNull('created_by_id')
+            ->update([...$updateData, 'created_by_id' => $user->id]);
+        $changes += Task::whereIn('id', $validated['task_ids'])
+            ->whereNotNull('created_by_id')
+            ->update($updateData);
 
         // Re-sync parent estimated_hours for any subtask that was bulk-edited
         if (array_key_exists('estimated_hours', $updateData)) {
@@ -1276,7 +1296,9 @@ class TaskController extends Controller
             return response()->json(['error' => 'Hanya task dengan status To Do yang bisa dikembalikan ke backlog.'], 422);
         }
 
-        $task->update(['is_backlog' => true, 'updated_by_id' => $user->id]);
+        $backlogUpdate = ['is_backlog' => true];
+        $this->markUpdatedBy($task, $backlogUpdate, $user);
+        $task->update($backlogUpdate);
 
         $this->log('Project', 'Send Task to Backlog', "Task #{$task->id} dikembalikan ke backlog.");
 

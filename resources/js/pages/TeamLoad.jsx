@@ -218,7 +218,12 @@ export default function TeamLoad() {
     const hasActiveFilter = selectedUserIds.length > 0 || selectedRoleIds.length > 0 || searchQuery.trim();
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-4 sm:p-6 gap-4">
+        <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-50 dark:bg-[#000040]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
+
+            <div className="relative z-10 flex flex-1 flex-col min-h-0 overflow-hidden p-4 sm:p-6 gap-4">
 
             {/* ── Header ── */}
             <div className="shrink-0 flex items-center justify-between gap-3">
@@ -279,7 +284,7 @@ export default function TeamLoad() {
                     'md:w-52 md:min-h-0',
                     // Mobile: hidden by default, slide in as overlay when open
                     mobileSidebarOpen
-                        ? 'fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 p-4 shadow-2xl overflow-y-auto'
+                        ? 'fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-xl dark:bg-[#151b28]/95 p-4 shadow-2xl overflow-y-auto'
                         : 'hidden md:flex',
                 )}>
 
@@ -554,7 +559,7 @@ export default function TeamLoad() {
                             <div style={{ minWidth: chartWidth + userColWidth }}>
 
                                 {/* Sticky header */}
-                                <div className="sticky top-0 z-20 bg-white dark:bg-[#151b28] border-b border-slate-200 dark:border-slate-800">
+                                <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm dark:bg-[#151b28]/95 border-b border-slate-200 dark:border-slate-800">
                                     <div className="flex h-6 border-b border-slate-100 dark:border-slate-800" style={{ marginLeft: userColWidth }}>
                                         {monthBands.map((m) => (
                                             <div key={m.key}
@@ -565,7 +570,7 @@ export default function TeamLoad() {
                                         ))}
                                     </div>
                                     <div className="flex border-b border-slate-100 dark:border-slate-800">
-                                        <div className="shrink-0 sticky left-0 z-30 bg-white dark:bg-[#151b28] border-r border-slate-200 dark:border-slate-800 px-2 flex items-center text-[10px] font-bold uppercase text-slate-400"
+                                        <div className="shrink-0 sticky left-0 z-30 bg-white/90 backdrop-blur-sm dark:bg-[#151b28]/95 border-r border-slate-200 dark:border-slate-800 px-2 flex items-center text-[10px] font-bold uppercase text-slate-400"
                                             style={{ width: userColWidth, height: rowHeight }}>
                                             Nama / MH
                                         </div>
@@ -596,7 +601,7 @@ export default function TeamLoad() {
                                             'flex border-b border-slate-100 dark:border-slate-800',
                                             selectedUserIds.includes(user.id) && 'bg-primary/5 dark:bg-primary/8',
                                         )}>
-                                        <div className="shrink-0 sticky left-0 z-10 bg-white dark:bg-[#151b28] border-r border-slate-200 dark:border-slate-800 px-2 flex items-center gap-1.5"
+                                        <div className="shrink-0 sticky left-0 z-10 bg-white/90 backdrop-blur-sm dark:bg-[#151b28]/95 border-r border-slate-200 dark:border-slate-800 px-2 flex items-center gap-1.5"
                                             style={{ width: userColWidth, height: rowHeight }}>
                                             <span className={cn('size-1.5 rounded-full shrink-0', loadPeakDotClass(user.peak_mh))} />
                                             <span className="text-xs font-medium truncate text-slate-800 dark:text-slate-200">
@@ -762,6 +767,7 @@ export default function TeamLoad() {
                     )}
                 </DialogContent>
             </Dialog>
+            </div>
         </div>
     );
 }

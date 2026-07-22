@@ -8,7 +8,6 @@ import {
     ArrowLeft,
     Bold,
     BookOpen,
-    Briefcase,
     CalendarDays,
     ExternalLink,
     Italic,
@@ -84,6 +83,13 @@ function UserAvatar({ name }) {
     );
 }
 
+function getProjectInitials(name) {
+    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return '?';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 function ProjectCompanyIcon({ logoUrl, projectName }) {
     if (logoUrl) {
         return (
@@ -95,8 +101,8 @@ function ProjectCompanyIcon({ logoUrl, projectName }) {
         );
     }
     return (
-        <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
-            <Briefcase className="size-5" />
+        <div className="size-9 rounded-lg flex items-center justify-center bg-primary/10 text-xs font-black text-primary shrink-0">
+            {getProjectInitials(projectName)}
         </div>
     );
 }

@@ -287,9 +287,12 @@ export default function GenerateReport() {
 
     // ── Render ─────────────────────────────────────────────────────────────
     return (
-        <div className="flex h-full min-h-0 flex-1 flex-col bg-slate-50/50 pb-8 dark:bg-background-dark sm:pb-10">
+        <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-slate-50 pb-8 dark:bg-[#000040] sm:pb-10">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
 
-            <header className="flex items-start gap-3 border-b border-slate-200 bg-white p-4 sm:items-center sm:p-6 dark:border-slate-800 dark:bg-[#151b28]">
+            <header className="relative flex items-start gap-3 border-b border-white/60 bg-white/70 backdrop-blur-xl p-4 sm:items-center sm:p-6 dark:border-white/10 dark:bg-[#151b28]/90">
                 <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
                     <Button variant="ghost" size="icon" onClick={() => navigate('/reports')} className="mt-0.5 shrink-0 rounded-full sm:mt-0">
                         <ChevronLeft className="size-5" />
@@ -301,13 +304,13 @@ export default function GenerateReport() {
                 </div>
             </header>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 sm:p-6 lg:flex-row lg:overflow-hidden">
+            <div className="relative flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 sm:p-6 lg:flex-row lg:overflow-hidden">
 
                 {/* ── Left sidebar ── */}
                 <div className="w-full lg:w-80 flex flex-col gap-6 shrink-0 lg:overflow-y-auto lg:pb-4">
 
                     {/* Manual report filter */}
-                    <Card className="border-none shadow-xl shadow-slate-200/50 dark:shadow-none dark:bg-[#1e2532]">
+                    <Card className="border border-white/60 bg-white/70 shadow-xl shadow-slate-200/50 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                         <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">
                                 <Filter className="size-4 text-primary" />
@@ -387,7 +390,7 @@ export default function GenerateReport() {
                     </Card>
 
                     {/* ── Schedule card ── */}
-                    <Card className="border-none shadow-xl shadow-slate-200/50 dark:shadow-none dark:bg-[#1e2532]">
+                    <Card className="border border-white/60 bg-white/70 shadow-xl shadow-slate-200/50 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                         <CardHeader className="pb-3">
                             <div className="flex items-center justify-between">
                                 <CardTitle className="text-base flex items-center gap-2">
@@ -450,7 +453,7 @@ export default function GenerateReport() {
                 </div>
 
                 {/* ── Preview area ── */}
-                <div className="flex-1 h-full min-h-[500px] lg:min-h-0 bg-white dark:bg-[#151b28] rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col shadow-2xl shadow-slate-200/50 dark:shadow-none relative overflow-hidden">
+                <div className="flex-1 h-full min-h-[500px] lg:min-h-0 bg-white/70 backdrop-blur-xl dark:bg-[#151b28] rounded-2xl border border-white/60 dark:border-white/10 flex flex-col shadow-2xl shadow-slate-200/50 dark:shadow-xl relative overflow-hidden">
                     {previewUrl ? (
                         <iframe src={previewUrl} className="w-full h-full border-none rounded-xl" title="Report Preview" />
                     ) : (

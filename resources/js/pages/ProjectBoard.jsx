@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI, getApiUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { isFreelanceUser } from '../utils/permissions';
-import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, Briefcase, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star, Inbox, ChevronDown, ChevronRight, Copy } from 'lucide-react';
+import { Clock, Plus, PiggyBank, Loader2, ArrowLeft, FileText, LayoutGrid, List, Trash2, Upload, Download, AlertCircle, UserPlus, CheckCircle2, RotateCcw, Activity, CalendarRange, BarChart3, GanttChart, BookOpen, Search, ArrowUpDown, Star, Inbox, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { toDateInputValue, formatTaskDateRange, validateTaskDateRange } from '../utils/taskDates';
 import { hasPermission } from '../utils/permissions';
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,10 +34,16 @@ import PaginationControls from '../components/ui/PaginationControls';
 
 const RUSH_HOUR_FACTOR = 1.3;
 
+function getProjectInitials(name) {
+    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return '?';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 function ProjectCompanyIcon({ logoUrl, projectName, size = 'lg' }) {
     const imgClass = size === 'lg' ? 'size-12 rounded-xl' : 'size-8 rounded-lg';
-    const iconWrapClass = size === 'lg' ? 'p-3 rounded-xl' : 'p-2 rounded-lg';
-    const iconClass = size === 'lg' ? 'size-6' : 'size-4';
+    const textClass = size === 'lg' ? 'text-base' : 'text-xs';
 
     if (logoUrl) {
         return (
@@ -50,8 +56,8 @@ function ProjectCompanyIcon({ logoUrl, projectName, size = 'lg' }) {
     }
 
     return (
-        <div className={`${iconWrapClass} bg-primary/10 text-primary shrink-0`}>
-            <Briefcase className={iconClass} />
+        <div className={`${imgClass} ${textClass} flex items-center justify-center bg-primary/10 font-black text-primary shrink-0`}>
+            {getProjectInitials(projectName)}
         </div>
     );
 }
@@ -338,8 +344,8 @@ function formatTaskTimestamp(value) {
 
 function TaskMetaSection({ task }) {
     const [expanded, setExpanded] = useState(false);
-    const createdBy = task.created_by_name || 'Tidak diketahui';
-    const updatedBy = task.updated_by_name || 'Tidak diketahui';
+    const createdBy = task.created_by_name || 'Unknown';
+    const updatedBy = task.updated_by_name || 'Unknown';
     const createdAt = formatTaskTimestamp(task.created_at);
     const updatedAt = formatTaskTimestamp(task.updated_at);
 
@@ -351,13 +357,13 @@ function TaskMetaSection({ task }) {
                 className="flex w-full items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
             >
                 {expanded ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
-                <span>Dibuat oleh <span className="font-medium text-slate-600 dark:text-slate-300">{createdBy}</span></span>
+                <span>Created by <span className="font-medium text-slate-600 dark:text-slate-300">{createdBy}</span></span>
             </button>
             {expanded && (
                 <div className="mt-2 ml-5 space-y-1 text-xs text-slate-500 dark:text-slate-400">
-                    {createdAt && <p>Dibuat: {createdAt}</p>}
-                    <p>Diperbarui oleh <span className="font-medium text-slate-600 dark:text-slate-300">{updatedBy}</span></p>
-                    {updatedAt && <p>Terakhir diperbarui: {updatedAt}</p>}
+                    {createdAt && <p>Created: {createdAt}</p>}
+                    <p>Updated by <span className="font-medium text-slate-600 dark:text-slate-300">{updatedBy}</span></p>
+                    {updatedAt && <p>Last updated: {updatedAt}</p>}
                 </div>
             )}
         </div>

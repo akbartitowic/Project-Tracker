@@ -436,8 +436,11 @@ export default function Reports() {
     const s = stats || {};
 
     return (
-        <div className="flex-1 flex flex-col overflow-y-auto w-full">
-            <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
+        <div className="relative flex-1 flex flex-col overflow-y-auto overflow-x-hidden w-full bg-slate-50 dark:bg-[#000040]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
+            <div className="relative w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-5">
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
@@ -467,7 +470,7 @@ export default function Reports() {
 
                     <TabsContent value="overview" className="space-y-6">
                 {/* Executive summary */}
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold">Executive summary</CardTitle>
                         <CardDescription>Key metrics across the entire workspace</CardDescription>
@@ -611,7 +614,7 @@ export default function Reports() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Quick KPI strip */}
-                    <Card className="lg:col-span-3 border-slate-200 dark:border-slate-800 shadow-sm">
+                    <Card className="lg:col-span-3 border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                         <CardContent className="p-0">
                             <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800">
                                 {[
@@ -638,7 +641,7 @@ export default function Reports() {
 
                     <TabsContent value="portfolio" className="space-y-6">
                 {/* Company project summary */}
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold">Projects by company</CardTitle>
                         <CardDescription>
@@ -729,7 +732,7 @@ export default function Reports() {
 
                     <TabsContent value="financials" className="space-y-6">
                 {/* Company financial breakdown */}
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold">Company financial breakdown</CardTitle>
                         <CardDescription>
@@ -915,7 +918,7 @@ export default function Reports() {
 
                     <TabsContent value="expenses" className="space-y-6">
                 {/* Expense paid / unpaid by user & category */}
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold flex items-center gap-2">
                             <Wallet className="size-4 text-primary" />
@@ -1199,7 +1202,7 @@ export default function Reports() {
 
                     <TabsContent value="tasks" className="space-y-6">
                 {/* Task status table */}
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold">Task status distribution</CardTitle>
                         <CardDescription>Workload breakdown by kanban status</CardDescription>
@@ -1238,7 +1241,7 @@ export default function Reports() {
 
                     <TabsContent value="portfolio" className="space-y-6">
                 {/* Project portfolio table */}
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold">Project portfolio &amp; manhour health</CardTitle>
                         <CardDescription>
@@ -1501,7 +1504,7 @@ export default function Reports() {
 
                     <TabsContent value="financials" className="space-y-6">
                 {/* Revenue trend table */}
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base font-semibold">Monthly financial trend</CardTitle>
                         <CardDescription>

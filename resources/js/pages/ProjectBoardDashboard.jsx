@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft,
-    Briefcase,
     Clock,
     LayoutGrid,
     Loader2,
@@ -35,10 +34,16 @@ import {
     normalizeBoardTaskStatus,
 } from '../utils/projectBoardMetrics';
 
+function getProjectInitials(name) {
+    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return '?';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 function ProjectCompanyIcon({ logoUrl, projectName, size = 'lg' }) {
     const imgClass = size === 'lg' ? 'size-14 rounded-xl' : 'size-10 rounded-lg';
-    const iconWrapClass = size === 'lg' ? 'p-3.5 rounded-xl' : 'p-2.5 rounded-lg';
-    const iconClass = size === 'lg' ? 'size-7' : 'size-5';
+    const textClass = size === 'lg' ? 'text-lg' : 'text-sm';
 
     if (logoUrl) {
         return (
@@ -51,8 +56,8 @@ function ProjectCompanyIcon({ logoUrl, projectName, size = 'lg' }) {
     }
 
     return (
-        <div className={`${iconWrapClass} bg-primary/10 text-primary shrink-0`}>
-            <Briefcase className={iconClass} />
+        <div className={`${imgClass} ${textClass} flex items-center justify-center bg-primary/10 font-black text-primary shrink-0`}>
+            {getProjectInitials(projectName)}
         </div>
     );
 }

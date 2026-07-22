@@ -131,7 +131,12 @@ export default function ProjectList() {
     );
 
     return (
-        <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
+        <div className="relative min-h-full overflow-hidden bg-slate-50 transition-colors duration-200 dark:bg-[#000040]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
+
+            <div className="relative z-10 w-full px-4 py-5 sm:px-6 lg:px-8 pb-16">
             <div className="flex flex-col gap-2 mb-8">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">List Project</h1>
                 <p className="text-slate-500 dark:text-text-secondary">
@@ -342,6 +347,7 @@ export default function ProjectList() {
                     </div>
                 </CardContent>
             </Card>
+            </div>
         </div>
     );
 }

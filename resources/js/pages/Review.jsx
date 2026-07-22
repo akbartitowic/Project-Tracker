@@ -662,7 +662,7 @@ function ReviewDashboard({ summaries, projects }) {
     return (
         <div className="space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
+                <div className="rounded-xl border border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl p-4">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Sudah Review</p>
                     <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
                         {withReview.length}
@@ -673,7 +673,7 @@ function ReviewDashboard({ summaries, projects }) {
 
                 <div className={cn(
                     'rounded-xl border p-4',
-                    avgScore != null ? getLevel(avgScore)?.bg : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900',
+                    avgScore != null ? getLevel(avgScore)?.bg : 'border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl',
                 )}>
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Rata-rata Skor</p>
                     {avgScore != null ? (
@@ -747,7 +747,7 @@ function ReviewDashboard({ summaries, projects }) {
 function ProjectGridCard({ project, onOpenSummary, summaryData }) {
     const s = summaryData;
     return (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden">
+        <div className="rounded-xl border border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] shadow-sm hover:shadow-md dark:shadow-xl hover:border-primary/30 transition-all overflow-hidden">
             <div className="p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                     <div className={cn(
@@ -791,7 +791,7 @@ function ProjectGridCard({ project, onOpenSummary, summaryData }) {
 function ProjectListRow({ project, onOpenSummary, summaryData }) {
     const s = summaryData;
     return (
-        <div className="px-4 py-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-primary/20 transition-colors space-y-2.5">
+        <div className="px-4 py-3.5 bg-white/70 backdrop-blur-xl dark:bg-[#151b28] rounded-xl border border-white/60 dark:border-white/10 shadow-sm dark:shadow-xl hover:border-primary/20 transition-colors space-y-2.5">
             <div className="flex items-center gap-4">
                 <div className={cn(
                     'size-9 rounded-lg flex items-center justify-center shrink-0',
@@ -891,7 +891,11 @@ export default function Review() {
     );
 
     return (
-        <div className="w-full px-4 py-5 sm:px-6 lg:px-8 pb-16 space-y-5">
+        <div className="relative min-h-full overflow-hidden bg-slate-50 dark:bg-[#000040]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
+            <div className="relative w-full px-4 py-5 sm:px-6 lg:px-8 pb-16 space-y-5">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div>
@@ -958,7 +962,7 @@ export default function Review() {
                     <Button variant="outline" size="sm" className="ml-2 h-7 text-xs" onClick={load}>Coba lagi</Button>
                 </div>
             ) : projects.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900/50">
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-300/70 dark:border-white/10 rounded-xl bg-white/50 backdrop-blur-sm dark:bg-white/5">
                     <Star className="size-12 mb-3 opacity-20" />
                     <p className="text-sm font-medium">Belum ada project</p>
                 </div>
@@ -1004,6 +1008,7 @@ export default function Review() {
                 canSubmit={canSubmit}
                 canConfig={canConfig}
             />
+            </div>
         </div>
     );
 }
