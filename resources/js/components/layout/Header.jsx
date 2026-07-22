@@ -1,4 +1,4 @@
-import { Menu, Search, Bell, Loader2 } from "lucide-react";
+import { Menu, Search, Bell, Loader2, UserPlus, CalendarClock, AtSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,48 @@ function formatNotificationTime(iso) {
     });
 }
 
+function describeNotification(data) {
+    if (data.type === "task_assigned") {
+        return {
+            Icon: UserPlus,
+            iconClass: "bg-primary/10 text-primary",
+            title: (
+                <>
+                    Kamu di-assign ke task{" "}
+                    <span className="font-semibold">{data.task_title}</span>
+                </>
+            ),
+            subtitle: data.project_name || null,
+        };
+    }
+    if (data.type === "task_due_reminder") {
+        return {
+            Icon: CalendarClock,
+            iconClass: "bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
+            title: (
+                <>
+                    Task <span className="font-semibold">{data.task_title}</span> sudah jatuh tempo
+                </>
+            ),
+            subtitle: data.due_date ? `Due date: ${data.due_date}` : null,
+        };
+    }
+    // task_mention (default)
+    return {
+        Icon: AtSign,
+        iconClass: "bg-primary/10 text-primary",
+        title: (
+            <>
+                <span className="font-semibold text-slate-900 dark:text-white">
+                    {data.mentioned_by_name || "Seseorang"}
+                </span>{" "}
+                mention kamu di task <span className="font-semibold">{data.task_title}</span>
+            </>
+        ),
+        subtitle: data.note_excerpt || null,
+    };
+}
+
 export default function Header({ title = "Executive Overview", onMenuClick }) {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -42,7 +84,7 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
     };
 
     return (
-        <header className="sticky top-0 z-30 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md px-4 py-3 sm:px-6 lg:px-8 sm:py-4 flex items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 transition-colors duration-200">
+        <header className="sticky top-0 z-30 bg-background-light/80 dark:bg-[#000040]/85 backdrop-blur-md px-4 py-3 sm:px-6 lg:px-8 sm:py-4 flex items-center justify-between gap-2 border-b border-slate-200 dark:border-white/10 transition-colors duration-200">
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
                 <Button
                     type="button"
@@ -60,7 +102,7 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                 <div className="relative hidden md:block">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 size-4" />
                     <Input type="text" placeholder="Search projects or logs..."
-                        className="w-48 lg:w-64 pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-lg text-sm focus-visible:ring-primary focus-visible:border-primary text-slate-900 dark:text-white transition-colors duration-200" />
+                        className="w-48 lg:w-64 pl-10 pr-4 py-2 bg-white dark:bg-[#151b28] border-slate-200 dark:border-white/10 rounded-lg text-sm focus-visible:ring-accent focus-visible:border-accent text-slate-900 dark:text-white transition-colors duration-200" />
                 </div>
 
                 <DropdownMenu onOpenChange={(open) => open && loadNotifications()}>
@@ -68,7 +110,7 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                         <Button
                             variant="outline"
                             size="icon"
-                            className="relative size-10 rounded-lg border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors duration-200"
+                            className="relative size-10 rounded-lg border-slate-200 dark:border-white/10 dark:bg-[#151b28] text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors duration-200"
                             aria-label="Notifikasi"
                         >
                             <Bell className="size-5" />
@@ -82,13 +124,13 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                             )}
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-[360px] p-0">
+                    <DropdownMenuContent align="end" className="w-[360px] p-0 dark:border-white/10 dark:bg-[#151b28]">
                         <div className="flex items-center justify-between px-3 py-2">
                             <DropdownMenuLabel className="p-0 text-sm">Notifikasi</DropdownMenuLabel>
                             {unreadCount > 0 && (
                                 <button
                                     type="button"
-                                    className="text-xs text-primary hover:underline"
+                                    className="text-xs text-accent hover:underline"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         markAllAsRead();
@@ -110,33 +152,30 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                                     Tidak ada notifikasi.
                                 </p>
                             ) : (
-                                <ul className="divide-y divide-slate-200/80 dark:divide-slate-700/80">
+                                <ul className="divide-y divide-slate-200/80 dark:divide-white/10">
                                     {notifications.map((n) => {
                                         const data = n.data || {};
                                         const isUnread = !n.read_at;
+                                        const { Icon, iconClass, title, subtitle } = describeNotification(data);
                                         return (
                                             <li key={n.id}>
                                                 <button
                                                     type="button"
                                                     onClick={() => handleNotificationClick(n)}
-                                                    className={`w-full text-left px-3 py-2.5 flex items-start gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 ${
-                                                        isUnread ? "bg-primary/5" : ""
+                                                    className={`w-full text-left px-3 py-2.5 flex items-start gap-2.5 hover:bg-slate-50 dark:hover:bg-white/5 ${
+                                                        isUnread ? "bg-accent/5 dark:bg-accent/10" : ""
                                                     }`}
                                                 >
-                                                    <div className="size-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-                                                        {(data.mentioned_by_name || "U").charAt(0).toUpperCase()}
+                                                    <div className={`size-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${iconClass}`}>
+                                                        <Icon className="size-4" />
                                                     </div>
                                                     <div className="min-w-0 flex-1">
                                                         <p className="text-xs text-slate-700 dark:text-slate-300">
-                                                            <span className="font-semibold text-slate-900 dark:text-white">
-                                                                {data.mentioned_by_name || "Seseorang"}
-                                                            </span>{" "}
-                                                            mention kamu di task{" "}
-                                                            <span className="font-semibold">{data.task_title}</span>
+                                                            {title}
                                                         </p>
-                                                        {data.note_excerpt && (
+                                                        {subtitle && (
                                                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                                                {data.note_excerpt}
+                                                                {subtitle}
                                                             </p>
                                                         )}
                                                         <span className="text-[10px] text-slate-400">
@@ -144,7 +183,7 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                                                         </span>
                                                     </div>
                                                     {isUnread && (
-                                                        <span className="size-2 rounded-full bg-primary shrink-0 mt-1.5" />
+                                                        <span className="size-2 rounded-full bg-accent shrink-0 mt-1.5" />
                                                     )}
                                                 </button>
                                             </li>

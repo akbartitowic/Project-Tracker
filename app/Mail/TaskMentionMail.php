@@ -5,6 +5,7 @@ namespace App\Mail;
 use App\Models\Task;
 use App\Models\TaskNote;
 use App\Models\User;
+use App\Support\AppBranding;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -35,6 +36,7 @@ class TaskMentionMail extends Mailable
     {
         return new Content(
             view: 'emails.task-mention',
+            with: ['appName' => AppBranding::appName()],
         );
     }
 

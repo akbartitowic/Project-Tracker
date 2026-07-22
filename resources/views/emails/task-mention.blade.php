@@ -1,23 +1,33 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>You were mentioned</title>
-</head>
-<body style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.5;">
-    <p>Hi {{ $recipient->name }},</p>
+@extends('emails.layout')
 
-    <p>{{ $mentionedBy->name }} mentioned you in a note on task <strong>{{ $task->title }}</strong>
-        (project: {{ $task->project?->name ?? '-' }}):</p>
+@section('title', 'Kamu di-mention')
 
-    <blockquote style="margin: 0; padding: 8px 12px; border-left: 3px solid #94a3b8; color: #334155;">
-        {{ $note->body }}
-    </blockquote>
+@section('content')
+    <p style="margin:0 0 16px; font-size:15px; color:#0f172a;">Hai {{ $recipient->name }},</p>
+
+    <p style="margin:0 0 20px; color:#374151;">
+        <strong style="color:#0f172a;">{{ $mentionedBy->name }}</strong> mention kamu di catatan task
+        <strong style="color:#0f172a;">{{ $task->title }}</strong>
+        <span style="color:#64748b;">({{ $task->project?->name ?? '-' }})</span>:
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:24px; border-left:3px solid #0f9c8f;">
+        <tr>
+            <td style="padding:16px 20px; font-size:13px; color:#374151; font-style:italic;">
+                &ldquo;{{ $note->body }}&rdquo;
+            </td>
+        </tr>
+    </table>
 
     @if($boardUrl)
-        <p>Open task: <a href="{{ $boardUrl }}">{{ $boardUrl }}</a></p>
+        <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+                <td style="border-radius:8px; background-color:#0f9c8f;">
+                    <a href="{{ $boardUrl }}" style="display:inline-block; padding:11px 22px; font-size:13px; font-weight:700; color:#04302b; text-decoration:none;">Buka Task &rarr;</a>
+                </td>
+            </tr>
+        </table>
     @endif
 
-    <p>Regards,<br>Noohtify Project Tracker</p>
-</body>
-</html>
+    <p style="margin:24px 0 0; font-size:12px; color:#8a8fa3;">Salam,<br>{{ $appName ?? 'HubTask' }}</p>
+@endsection

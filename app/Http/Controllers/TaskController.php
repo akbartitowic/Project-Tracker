@@ -5,10 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\ProjectMember;
 use App\Models\Task;
 use App\Models\Project;
-use App\Mail\TaskAssignedMail;
+use App\Notifications\TaskAssignedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Throwable;
 use App\Services\TaskAggregationService;
 use App\Support\ProjectAccess;
@@ -28,35 +27,29 @@ class TaskController extends Controller
 
     private const RUSH_HOUR_FACTOR = 1.3;
 
+    /**
+     * Notifies the assignee in-app (always) and by email (if they haven't disabled it).
+     */
     private function sendTaskAssignedEmail(Task $task, ?User $recipient = null): void
     {
         $task->loadMissing(['assignee', 'project']);
         $assignee = $recipient ?? $task->assignee;
-        if (!$assignee || !$assignee->email) {
-            return;
-        }
-        if (!$assignee->task_email_notifications_enabled) {
-            $this->log(
-                'Project',
-                'Task Assignment Email Skipped',
-                "Email skipped for task '{$task->title}' because assignee '{$assignee->email}' disabled notifications."
-            );
+        if (!$assignee) {
             return;
         }
 
-        $boardUrl = $task->project_id ? url('/board/' . $task->project_id) : null;
         try {
-            Mail::to($assignee->email)->send(new TaskAssignedMail($task, $boardUrl));
+            $assignee->notify(new TaskAssignedNotification($task));
             $this->log(
                 'Project',
-                'Task Assignment Email Sent',
-                "Assignment email sent to '{$assignee->email}' for task '{$task->title}' (project ID: {$task->project_id})."
+                'Task Assignment Notification Sent',
+                "Assignment notification sent to '{$assignee->name}' for task '{$task->title}' (project ID: {$task->project_id})."
             );
         } catch (Throwable $e) {
             $this->log(
                 'Project',
-                'Task Assignment Email Failed',
-                "Failed sending assignment email to '{$assignee->email}' for task '{$task->title}': {$e->getMessage()}"
+                'Task Assignment Notification Failed',
+                "Failed sending assignment notification to '{$assignee->name}' for task '{$task->title}': {$e->getMessage()}"
             );
         }
     }

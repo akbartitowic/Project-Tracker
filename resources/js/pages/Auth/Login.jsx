@@ -1,19 +1,113 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
+import { Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getDefaultLandingPath } from '../../utils/permissions';
 import AppLogo from '../../components/AppLogo';
+
+// Resting position (relative 0..1) blobs settle into before/without any mouse input —
+// placed near the bottom-left brand text so the liquid "pools" there by default.
+const LIQUID_REST = { x: 0.32, y: 0.74 };
+
+// Each blob chases the cursor at its own ease speed/offset so they trail one another
+// like fluid with inertia, instead of moving as one rigid group.
+const LIQUID_BLOBS = [
+    { size: 520, ease: 0.055, offset: { x: 0, y: 0 }, color: '#EE5D2B', opacity: 0.5 },
+    { size: 440, ease: 0.032, offset: { x: 70, y: -50 }, color: '#fff7ec', opacity: 0.45 },
+    { size: 600, ease: 0.02, offset: { x: -80, y: 60 }, color: '#1e2a52', opacity: 0.4 },
+];
+
+function LiquidBackdrop({ containerRef }) {
+    const blobElsRef = useRef([]);
+    const posRef = useRef(LIQUID_BLOBS.map(() => ({ ...LIQUID_REST })));
+    const targetRef = useRef({ ...LIQUID_REST });
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return undefined;
+
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        const handleMove = (e) => {
+            const rect = container.getBoundingClientRect();
+            targetRef.current = {
+                x: (e.clientX - rect.left) / rect.width,
+                y: (e.clientY - rect.top) / rect.height,
+            };
+        };
+        const handleLeave = () => {
+            targetRef.current = { ...LIQUID_REST };
+        };
+        container.addEventListener('mousemove', handleMove);
+        container.addEventListener('mouseleave', handleLeave);
+
+        let rafId;
+        let frame = 0;
+        const tick = () => {
+            frame += 1;
+            const rect = container.getBoundingClientRect();
+
+            LIQUID_BLOBS.forEach((cfg, i) => {
+                const pos = posRef.current[i];
+                // Subtle idle drift keeps the liquid gently alive even at rest.
+                const idleX = reduceMotion ? 0 : Math.sin(frame / 260 + i * 2) * 0.015;
+                const idleY = reduceMotion ? 0 : Math.cos(frame / 220 + i * 2) * 0.015;
+                const tx = targetRef.current.x + idleX;
+                const ty = targetRef.current.y + idleY;
+                pos.x += (tx - pos.x) * cfg.ease;
+                pos.y += (ty - pos.y) * cfg.ease;
+
+                const el = blobElsRef.current[i];
+                if (el) {
+                    const px = pos.x * rect.width + cfg.offset.x;
+                    const py = pos.y * rect.height + cfg.offset.y;
+                    el.style.transform = `translate3d(${px}px, ${py}px, 0) translate(-50%, -50%)`;
+                }
+            });
+
+            rafId = requestAnimationFrame(tick);
+        };
+        rafId = requestAnimationFrame(tick);
+
+        return () => {
+            container.removeEventListener('mousemove', handleMove);
+            container.removeEventListener('mouseleave', handleLeave);
+            cancelAnimationFrame(rafId);
+        };
+    }, [containerRef]);
+
+    return (
+        <div className="absolute inset-0 pointer-events-none" style={{ filter: 'blur(30px)' }}>
+            {LIQUID_BLOBS.map((cfg, i) => (
+                <div
+                    key={i}
+                    ref={(el) => { blobElsRef.current[i] = el; }}
+                    className="absolute top-0 left-0 rounded-full"
+                    style={{
+                        width: cfg.size,
+                        height: cfg.size,
+                        opacity: cfg.opacity,
+                        mixBlendMode: 'soft-light',
+                        background: `radial-gradient(circle at center, ${cfg.color} 0%, ${cfg.color} 35%, transparent 72%)`,
+                    }}
+                />
+            ))}
+        </div>
+    );
+}
 
 export default function Login() {
     const { login } = useAuth();
     const navigate = useNavigate();
     const [credentials, setCredentials] = useState({ email: '', password: '' });
+    const [rememberMe, setRememberMe] = useState(true);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const leftPanelRef = useRef(null);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -35,72 +129,108 @@ export default function Login() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#000040] relative overflow-hidden font-sans">
-            {/* Background Decorative Elements */}
-            <div className="absolute top-[-10%] left-[-10%] size-96 bg-accent/20 rounded-full blur-[100px] animate-pulse"></div>
-            <div className="absolute bottom-[-10%] right-[-10%] size-96 bg-primary/30 rounded-full blur-[100px] animate-pulse delay-700"></div>
+        <div className="min-h-screen flex bg-[#000040] font-sans">
+            {/* Left panel — brand, hidden on small screens */}
+            <div ref={leftPanelRef} className="hidden md:flex relative w-1/2 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#f4e9da] via-[#dcc3ac] to-[#4b5568]" />
+                <LiquidBackdrop containerRef={leftPanelRef} />
 
-            <div className="relative z-10 w-full max-w-md p-4 sm:p-8">
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
-                    <div className="flex flex-col items-center mb-10">
-                        <div className="size-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 border border-white/20 shadow-inner">
-                            <AppLogo alt="Application logo" className="size-10" />
+                <div className="relative z-10 flex flex-col justify-end h-full px-12 pb-14 lg:px-16 lg:pb-20">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="size-12 bg-white/15 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
+                            <AppLogo alt="Application logo" className="size-8" />
                         </div>
-                        <h2 className="text-3xl font-black text-white tracking-tight">Welcome Back</h2>
-                        <p className="text-slate-400 font-medium mt-1">Login to Noohtify Software Management</p>
+                        <span className="text-4xl font-black text-white tracking-wide">HubTask</span>
+                    </div>
+                    <p className="text-white/75 font-medium text-base max-w-[18rem] leading-relaxed tracking-wide">
+                        Task management connected to your world.
+                    </p>
+                </div>
+            </div>
+
+            {/* Right panel — sign-in card */}
+            <div className="relative flex-1 flex items-center justify-center overflow-hidden">
+                <div className="absolute inset-0 bg-[#3d4759]" />
+                <div className="absolute top-[-15%] left-[10%] size-[32rem] bg-slate-400/25 rounded-full blur-[120px]" />
+                <div className="absolute top-[10%] right-[-10%] size-96 bg-primary/40 rounded-full blur-[110px]" />
+                <div className="absolute bottom-[-20%] left-[-10%] size-[28rem] bg-[#232a38]/80 rounded-full blur-[110px]" />
+                <div className="absolute bottom-[-15%] right-[5%] size-96 bg-accent/10 rounded-full blur-[120px]" />
+
+                <div className="relative z-10 w-full max-w-md p-4 sm:p-8">
+                    {/* Compact brand mark for small screens where the left panel is hidden */}
+                    <div className="flex md:hidden items-center justify-center gap-2.5 mb-6">
+                        <div className="size-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
+                            <AppLogo alt="Application logo" className="size-6" />
+                        </div>
+                        <span className="text-xl font-black text-white tracking-tight">HubTask</span>
                     </div>
 
-                    {error && (
-                        <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center gap-3 text-rose-200 text-sm animate-in fade-in slide-in-from-top-2">
-                            <AlertCircle className="size-5 shrink-0" />
-                            {error}
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
+                        <div className="text-center mb-8">
+                            <h2 className="text-2xl font-black text-white tracking-tight">Welcome back</h2>
+                            <p className="text-slate-400 font-medium mt-1 text-sm">Sign in to continue</p>
                         </div>
-                    )}
 
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Email Address</label>
-                            <div className="relative group">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-500 group-focus-within:text-accent transition-colors" />
-                                <Input
-                                    type="email"
-                                    required
-                                    placeholder="name@company.com"
-                                    className="pl-12 h-13 bg-white/5 border-white/10 text-white placeholder:text-slate-600 rounded-2xl focus:ring-accent focus:border-accent transition-all"
-                                    value={credentials.email}
-                                    onChange={e => setCredentials({ ...credentials, email: e.target.value })}
-                                />
+                        {error && (
+                            <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center gap-3 text-rose-200 text-sm animate-in fade-in slide-in-from-top-2">
+                                <AlertCircle className="size-5 shrink-0" />
+                                {error}
                             </div>
-                        </div>
+                        )}
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Password</label>
-                            <div className="relative group">
-                                <Lock className="pointer-events-none absolute left-4 top-1/2 z-10 size-5 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-accent" />
-                                <PasswordInput
-                                    required
-                                    placeholder="••••••••"
-                                    className="h-13 rounded-2xl border-white/10 bg-white/5 pl-12 text-white placeholder:text-slate-600 transition-all focus:border-accent focus:ring-accent"
-                                    toggleButtonClassName="text-slate-400 hover:bg-white/10 hover:text-white dark:hover:bg-white/10"
-                                    value={credentials.password}
-                                    onChange={e => setCredentials({ ...credentials, password: e.target.value })}
-                                />
+                        <form onSubmit={handleSubmit} className="space-y-5">
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Email</label>
+                                <div className="relative group">
+                                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-500 group-focus-within:text-accent transition-colors" />
+                                    <Input
+                                        type="email"
+                                        required
+                                        placeholder="you@company.com"
+                                        className="pl-12 h-13 bg-white/5 border-white/10 text-white placeholder:text-slate-400 rounded-2xl focus:ring-accent focus:border-accent transition-all"
+                                        value={credentials.email}
+                                        onChange={e => setCredentials({ ...credentials, email: e.target.value })}
+                                    />
+                                </div>
                             </div>
-                        </div>
 
-                        <Button
-                            type="submit"
-                            disabled={isLoading}
-                            className="w-full h-13 bg-accent hover:bg-orange-600 text-white font-bold rounded-2xl shadow-lg shadow-accent/20 transition-all hover:scale-[1.02] active:scale-[0.98] mt-4"
-                        >
-                            {isLoading ? (
-                                <RefreshCcw className="size-5 animate-spin mr-2" />
-                            ) : (
-                                <LogIn className="size-5 mr-2" />
-                            )}
-                            Sign In to Dashboard
-                        </Button>
-                    </form>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Password</label>
+                                <div className="relative group">
+                                    <Lock className="pointer-events-none absolute left-4 top-1/2 z-10 size-5 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-accent" />
+                                    <PasswordInput
+                                        required
+                                        placeholder="••••••••"
+                                        className="h-13 rounded-2xl border-white/10 bg-white/5 pl-12 text-white placeholder:text-slate-400 transition-all focus:border-accent focus:ring-accent"
+                                        toggleButtonClassName="text-slate-400 hover:bg-white/10 hover:text-white dark:hover:bg-white/10"
+                                        value={credentials.password}
+                                        onChange={e => setCredentials({ ...credentials, password: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <label className="flex items-center gap-2.5 select-none cursor-pointer">
+                                <Checkbox
+                                    checked={rememberMe}
+                                    onCheckedChange={(checked) => setRememberMe(checked === true)}
+                                />
+                                <span className="text-sm font-medium text-slate-300">Remember me</span>
+                            </label>
+
+                            <Button
+                                type="submit"
+                                disabled={isLoading}
+                                className="w-full h-13 bg-accent hover:bg-orange-600 text-white font-bold rounded-2xl shadow-lg shadow-accent/20 transition-all hover:scale-[1.02] active:scale-[0.98] mt-2"
+                            >
+                                {isLoading ? (
+                                    <RefreshCcw className="size-5 animate-spin mr-2" />
+                                ) : (
+                                    <LogIn className="size-5 mr-2" />
+                                )}
+                                Sign in
+                            </Button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>

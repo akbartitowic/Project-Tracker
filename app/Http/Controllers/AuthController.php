@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\LoginNotificationMail;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\MenuItem;
+use App\Support\ClientInfo;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use App\Traits\LogActivity;
+use Throwable;
 
 class AuthController extends Controller
 {
@@ -103,6 +107,7 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         $this->log('Auth', 'User Login', "User logged in: {$user->email}");
+        $this->sendLoginNotification($request, $user);
 
         return response()->json([
             'status' => 'success',
@@ -110,6 +115,38 @@ class AuthController extends Controller
             'token_type' => 'Bearer',
             'user' => $this->serializeUser($user),
         ]);
+    }
+
+    /**
+     * Best-effort security alert — never blocks or fails the login response itself.
+     */
+    private function sendLoginNotification(Request $request, User $user): void
+    {
+        if (!$user->email) {
+            return;
+        }
+
+        try {
+            $tz = $user->timezone ?: 'Asia/Jakarta';
+            $now = now()->timezone($tz);
+            $ip = (string) $request->ip();
+
+            Mail::to($user->email)->send(new LoginNotificationMail(
+                $user,
+                $now->translatedFormat('d M Y'),
+                $now->format('H:i') . ' (' . $tz . ')',
+                $ip,
+                ClientInfo::device($request->userAgent()),
+                ClientInfo::location($ip),
+                url('/profile'),
+            ));
+        } catch (Throwable $e) {
+            $this->log(
+                'Auth',
+                'Login Notification Failed',
+                "Failed sending login notification to '{$user->email}': {$e->getMessage()}"
+            );
+        }
     }
 
     public function logout(Request $request)
@@ -153,17 +190,26 @@ class AuthController extends Controller
             $user->timezone = $validated['timezone'] ?: 'Asia/Jakarta';
         }
 
-        if (!empty($validated['password'])) {
+        $passwordChanged = !empty($validated['password']);
+        if ($passwordChanged) {
             $user->password = Hash::make($validated['password']);
         }
 
         $user->save();
         $this->log('Auth', 'Updated Profile', "User name: {$user->name}, Email: {$user->email}");
 
+        if ($passwordChanged) {
+            // Force logout everywhere (including this request's own token) so a
+            // leaked/stolen session can't keep riding on the old password.
+            $user->tokens()->delete();
+            $this->log('Auth', 'Password Changed', "Password changed for {$user->email} — all sessions revoked.");
+        }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Profile updated successfully',
-            'user' => $this->serializeUser($user)
+            'user' => $this->serializeUser($user),
+            'force_logout' => $passwordChanged,
         ]);
     }
 }

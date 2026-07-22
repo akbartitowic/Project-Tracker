@@ -4,7 +4,9 @@ import { useEffect } from 'react';
 export function useTheme() {
     useEffect(() => {
         const initTheme = () => {
-            if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            // Default to light regardless of OS preference — dark mode only applies
+            // once the user explicitly picks it via the sidebar toggle.
+            if (localStorage.getItem('color-theme') === 'dark') {
                 document.documentElement.classList.add('dark');
                 document.documentElement.classList.remove('light');
             } else {

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
@@ -5,6 +6,7 @@ import {
     LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, BarChart3, Settings, Moon, Sun,
     Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, PieChart, ClipboardCheck,
     Building2, Handshake, Layers, Plug, Cable, Gauge, Star, LayoutGrid, HelpCircle,
+    ChevronLeft, ChevronRight,
 } from "lucide-react";
 import AppLogo from '../AppLogo';
 import { hasPermission, getModuleSortOrder } from '../../utils/permissions';
@@ -20,26 +22,36 @@ const ICONS = {
 /** Sidebar section header display order — not part of `menu_items` data since it's a fixed, stable taxonomy. */
 const SECTION_ORDER = ['Bisnis', 'Operation', 'Report', 'Finance', 'API Monitoring', 'User Management', 'System Settings'];
 
-const navLinkClass = (isActive, variant = 'primary') => cn(
-    'flex items-center gap-3 rounded-lg transition-colors',
+const COLLAPSE_STORAGE_KEY = 'sidebar-collapsed';
+
+// `lg:hidden` (rather than a plain conditional render) so a collapsed desktop sidebar
+// hides labels only at the lg breakpoint — the mobile drawer stays fully labeled
+// regardless of whatever collapsed state desktop last left behind.
+const collapsedLabelClass = (collapsed) => (collapsed ? 'lg:hidden' : '');
+
+const navLinkClass = (isActive, variant = 'primary', collapsed = false) => cn(
+    'flex items-center gap-3 rounded-xl transition-colors',
     variant === 'sub' ? 'px-6 py-2' : 'px-3 py-2.5',
+    collapsed && 'lg:justify-center lg:px-2',
     isActive
-        ? 'bg-primary/10 text-primary font-medium'
+        ? 'bg-accent/15 text-accent font-medium dark:bg-accent/20'
         : variant === 'sub'
-            ? 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+            ? 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5',
 );
 
-function SidebarNavItem({ item }) {
+function SidebarNavItem({ item, collapsed }) {
     const Icon = ICONS[item.icon] || HelpCircle;
     return (
         <NavLink
             to={item.path}
             title={item.label}
-            className={({ isActive }) => navLinkClass(isActive, item.variant)}
+            className={({ isActive }) => navLinkClass(isActive, item.variant, collapsed)}
         >
-            <Icon className={item.variant === 'sub' ? 'size-4' : 'size-5'} />
-            <span className={item.variant === 'sub' ? 'text-xs' : 'text-sm'}>{item.label}</span>
+            <Icon className={cn(item.variant === 'sub' ? 'size-4' : 'size-5', 'shrink-0')} />
+            <span className={cn(item.variant === 'sub' ? 'text-xs' : 'text-sm', 'truncate', collapsedLabelClass(collapsed))}>
+                {item.label}
+            </span>
         </NavLink>
     );
 }
@@ -59,6 +71,18 @@ export default function Sidebar({ mobileOpen = false }) {
     const { toggleTheme } = useTheme();
     const { user, logout } = useAuth();
     const menuItems = user?.menu_items || [];
+    const [collapsed, setCollapsed] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === 'true';
+    });
+
+    const toggleCollapsed = () => {
+        setCollapsed((prev) => {
+            const next = !prev;
+            window.localStorage.setItem(COLLAPSE_STORAGE_KEY, String(next));
+            return next;
+        });
+    };
 
     const dashboardItem = menuItems.find((item) => !item.section);
     const sections = SECTION_ORDER
@@ -73,64 +97,98 @@ export default function Sidebar({ mobileOpen = false }) {
         <aside
             className={cn(
                 'fixed inset-y-0 left-0 z-50 flex h-screen w-64 max-w-[min(18rem,88vw)] flex-col overflow-y-auto',
-                'border-r border-slate-200 bg-white transition-transform duration-200 ease-out',
-                'dark:border-slate-800 dark:bg-slate-900',
+                'border-r border-slate-200 bg-white transition-[transform,width] duration-200 ease-out',
+                'dark:border-white/10 dark:bg-[#000040]',
                 mobileOpen ? 'translate-x-0' : '-translate-x-full',
                 'lg:relative lg:inset-auto lg:z-auto lg:max-w-none lg:shrink-0 lg:translate-x-0',
+                collapsed ? 'lg:w-20' : 'lg:w-64',
             )}
         >
-            <div className="p-6 flex items-center gap-3">
-                <div className="size-11 rounded-xl flex items-center justify-center p-1.5 bg-slate-50 dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-800">
+            <button
+                type="button"
+                onClick={toggleCollapsed}
+                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                className="absolute top-6 -right-3 z-10 hidden size-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:bg-slate-50 hover:text-slate-700 lg:flex dark:border-white/10 dark:bg-[#151b28] dark:text-slate-300 dark:hover:bg-white/10"
+            >
+                {collapsed ? <ChevronRight className="size-3.5" /> : <ChevronLeft className="size-3.5" />}
+            </button>
+
+            <div className={cn('flex items-center gap-3 p-6', collapsed && 'lg:justify-center lg:px-3')}>
+                <div className="size-11 shrink-0 rounded-xl flex items-center justify-center p-1.5 bg-slate-50 dark:bg-[#151b28] shadow-sm border border-slate-100 dark:border-white/10">
                     <AppLogo alt="Application logo" className="size-full" />
                 </div>
-                <div>
-                    <h1 className="font-extrabold text-xl leading-tight tracking-tight text-primary dark:text-white">Noohtify</h1>
-                    <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">Software Management</p>
+                <div className={cn('min-w-0', collapsedLabelClass(collapsed))}>
+                    <h1 className="font-extrabold text-xl leading-tight tracking-tight text-primary dark:text-white truncate">Noohtify</h1>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider truncate">Software Management</p>
                 </div>
             </div>
 
             <nav className="flex-1 px-4 space-y-1">
                 {dashboardItem && hasPermission(user, dashboardItem.permission_slug) && (
-                    <SidebarNavItem item={dashboardItem} />
+                    <SidebarNavItem item={dashboardItem} collapsed={collapsed} />
                 )}
 
                 {sections.map((section) => (
                     <div key={section.key}>
-                        <div className="pt-4 pb-2 px-3">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{section.label}</p>
+                        <div className={cn('pt-4 pb-2 px-3', collapsed && 'lg:px-0 lg:text-center')}>
+                            <p className={cn('text-[10px] font-bold text-slate-400 uppercase tracking-wider', collapsed && 'lg:hidden')}>
+                                {section.label}
+                            </p>
+                            {collapsed && <div className="hidden lg:block lg:mx-2 lg:border-t lg:border-slate-200 dark:lg:border-white/10" />}
                         </div>
                         {section.items.map((item) => (
-                            <SidebarNavItem key={item.path} item={item} />
+                            <SidebarNavItem key={item.path} item={item} collapsed={collapsed} />
                         ))}
                     </div>
                 ))}
             </nav>
 
-            <div className="p-4 mt-auto border-t border-slate-200 dark:border-slate-800 transition-colors duration-200">
-                <div className="mt-4 flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 transition-colors duration-200 overflow-hidden text-ellipsis">
+            <div className="p-4 mt-auto border-t border-slate-200 dark:border-white/10 transition-colors duration-200">
+                <div className={cn(
+                    'mt-4 flex items-center justify-between gap-2 rounded-xl bg-slate-50 dark:bg-[#151b28] p-2 transition-colors duration-200 overflow-hidden text-ellipsis',
+                    collapsed && 'lg:justify-center',
+                )}>
                     <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-black text-sm shrink-0">
+                        <div className="size-9 shrink-0 rounded-lg bg-accent/15 flex items-center justify-center text-accent font-black text-sm dark:bg-accent/20">
                             {user?.name?.charAt(0)}
                         </div>
-                        <div className="overflow-hidden">
+                        <div className={cn('overflow-hidden', collapsedLabelClass(collapsed))}>
                             <p className="text-xs font-bold text-slate-700 dark:text-white truncate">{user?.name}</p>
                             <p className="text-[10px] text-slate-400 font-medium truncate uppercase tracking-tighter">{user?.role?.name || 'Member'}</p>
                         </div>
                     </div>
-                    <button onClick={logout} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/10 rounded-lg transition-colors shrink-0" title="Logout">
+                    <button
+                        onClick={logout}
+                        className={cn(
+                            'p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors shrink-0',
+                            collapsed && 'lg:hidden',
+                        )}
+                        title="Logout"
+                    >
                         <LogOut className="size-4" />
                     </button>
                 </div>
 
-                <div className="mt-2 flex items-center justify-between p-2">
-                    <span className="text-xs font-medium text-slate-400">Dark Mode</span>
+                <div className={cn('mt-2 flex items-center justify-between p-2', collapsed && 'lg:justify-center')}>
+                    <span className={cn('text-xs font-medium text-slate-400', collapsedLabelClass(collapsed))}>Dark Mode</span>
                     <button
                         onClick={toggleTheme}
-                        className="p-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 shadow-sm">
+                        title="Toggle dark mode"
+                        className="p-1.5 rounded-lg bg-white dark:bg-[#1e2532] border border-slate-200 dark:border-white/10 shadow-sm shrink-0">
                         <Sun className="size-4 text-amber-500 dark:hidden" />
                         <Moon className="size-4 text-slate-300 hidden dark:block" />
                     </button>
                 </div>
+                {collapsed && (
+                    <button
+                        onClick={logout}
+                        title="Logout"
+                        className="mt-2 hidden w-full items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 lg:flex dark:hover:bg-rose-500/10"
+                    >
+                        <LogOut className="size-4" />
+                    </button>
+                )}
             </div>
         </aside>
     );

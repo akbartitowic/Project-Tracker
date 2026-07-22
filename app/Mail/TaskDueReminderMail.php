@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\Task;
+use App\Support\AppBranding;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -30,6 +31,7 @@ class TaskDueReminderMail extends Mailable
     {
         return new Content(
             view: 'emails.task-due-reminder',
+            with: ['appName' => AppBranding::appName()],
         );
     }
 

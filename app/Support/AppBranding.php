@@ -26,6 +26,11 @@ class AppBranding
         return PublicStorageUrl::for(self::logoPath()) ?? '/logo.png';
     }
 
+    public static function appName(): string
+    {
+        return Setting::where('key', 'app_name')->value('value') ?: 'HubTask';
+    }
+
     public static function faviconUrl(): ?string
     {
         return PublicStorageUrl::for(self::faviconPath()) ?? '/favicon.png';

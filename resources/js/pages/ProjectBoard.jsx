@@ -1528,21 +1528,24 @@ export default function ProjectBoard() {
 
     if (!selectedProject) {
         return (
-            <div className="min-h-full overflow-y-auto bg-slate-50/80 dark:bg-background-dark">
-                <div className="w-full space-y-5 px-4 py-5 sm:px-6 lg:px-8 pb-16">
+            <div className="relative min-h-full overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-[#000040]">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+                <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+                <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
+                <div className="relative w-full space-y-5 px-4 py-5 sm:px-6 lg:px-8 pb-16">
                     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Project Board</h1>
+                            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Project Board</h1>
                             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                                 Pilih project untuk membuka kanban dan mengelola task.
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <div className="flex gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
+                            <div className="flex gap-0.5 rounded-xl border border-slate-200 bg-white/70 p-0.5 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28]">
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className={cn('h-8 px-2.5', listViewMode === 'grid' && 'bg-slate-100 dark:bg-slate-800')}
+                                    className={cn('h-8 px-2.5', listViewMode === 'grid' && 'bg-slate-100 dark:bg-white/10')}
                                     onClick={() => setListViewMode('grid')}
                                     title="Grid"
                                 >
@@ -1551,7 +1554,7 @@ export default function ProjectBoard() {
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className={cn('h-8 px-2.5', listViewMode === 'table' && 'bg-slate-100 dark:bg-slate-800')}
+                                    className={cn('h-8 px-2.5', listViewMode === 'table' && 'bg-slate-100 dark:bg-white/10')}
                                     onClick={() => setListViewMode('table')}
                                     title="Table"
                                 >
@@ -1582,12 +1585,12 @@ export default function ProjectBoard() {
                     </header>
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
+                        <div className="inline-flex rounded-xl border border-slate-200 bg-white/70 p-0.5 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28]">
                             <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className={cn('h-8 gap-1.5 px-3', projectListTab === 'active' && 'bg-primary text-white hover:bg-primary hover:text-white')}
+                                className={cn('h-8 gap-1.5 px-3', projectListTab === 'active' && 'bg-accent text-white hover:bg-accent hover:text-white')}
                                 onClick={() => {
                                     setProjectListTab('active');
                                     setSelectedProjectIds([]);
@@ -1600,7 +1603,7 @@ export default function ProjectBoard() {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className={cn('h-8 gap-1.5 px-3', projectListTab === 'done' && 'bg-primary text-white hover:bg-primary hover:text-white')}
+                                className={cn('h-8 gap-1.5 px-3', projectListTab === 'done' && 'bg-accent text-white hover:bg-accent hover:text-white')}
                                 onClick={() => {
                                     setProjectListTab('done');
                                     setSelectedProjectIds([]);
@@ -1613,7 +1616,7 @@ export default function ProjectBoard() {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className={cn('h-8 gap-1.5 px-3', projectListTab === 'favorite' && 'bg-primary text-white hover:bg-primary hover:text-white')}
+                                className={cn('h-8 gap-1.5 px-3', projectListTab === 'favorite' && 'bg-accent text-white hover:bg-accent hover:text-white')}
                                 onClick={() => {
                                     setProjectListTab('favorite');
                                     setSelectedProjectIds([]);
@@ -1631,12 +1634,12 @@ export default function ProjectBoard() {
                                     value={projectListSearch}
                                     onChange={(e) => setProjectListSearch(e.target.value)}
                                     placeholder="Cari project..."
-                                    className="h-9 pl-8 bg-white dark:bg-slate-900"
+                                    className="h-9 pl-8 bg-white/70 backdrop-blur-xl focus-visible:ring-accent focus-visible:border-accent dark:border-white/10 dark:bg-[#151b28]"
                                 />
                             </div>
                             <div className="w-full sm:w-52">
                                 <Select value={projectSortBy} onValueChange={setProjectSortBy}>
-                                    <SelectTrigger className="h-9 bg-white dark:bg-slate-900">
+                                    <SelectTrigger className="h-9 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28]">
                                         <ArrowUpDown className="mr-2 size-3.5 text-slate-500" />
                                         <SelectValue placeholder="Sort by" />
                                     </SelectTrigger>
@@ -1654,7 +1657,7 @@ export default function ProjectBoard() {
                     </div>
 
                     {sortedDisplayedProjects.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-slate-200 py-16 text-center text-sm text-slate-500 dark:border-slate-700">
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-white/40 py-16 text-center text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
                             {displayedProjects.length === 0
                                 ? projectListTab === 'done'
                                     ? 'Belum ada project Done.'
@@ -1670,7 +1673,7 @@ export default function ProjectBoard() {
                                 <Card
                                     key={project.id}
                                     className={cn(
-                                        'group relative cursor-pointer border-slate-200/90 bg-white shadow-none transition-colors hover:border-primary/40 dark:border-slate-800 dark:bg-[#151b28]',
+                                        'group relative cursor-pointer border-white/60 bg-white/70 shadow-sm backdrop-blur-xl transition-colors hover:border-accent/40 dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl',
                                         isEditMode && selectedProjectIds.includes(project.id) && 'border-rose-400 ring-1 ring-rose-200',
                                     )}
                                     onClick={(e) => {
@@ -1809,9 +1812,9 @@ export default function ProjectBoard() {
                         />
                         </div>
                     ) : (
-                        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#151b28]">
+                        <div className="overflow-x-auto rounded-xl border border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                             <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                                <thead className="bg-slate-50/80 dark:bg-white/5 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/10">
                                     <tr>
                                         {isEditMode && <th className="px-6 py-4 w-10"></th>}
                                         <th className="px-6 py-4 font-medium">Project Name</th>
@@ -1821,11 +1824,11 @@ export default function ProjectBoard() {
                                         {!isEditMode && <th className="px-6 py-4 w-10 text-right">Actions</th>}
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                                <tbody className="divide-y divide-slate-200 dark:divide-white/10">
                                     {pagedProjectList.map((project) => (
                                         <tr
                                             key={project.id}
-                                            className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedProjectIds.includes(project.id) ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
+                                            className={`hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors ${selectedProjectIds.includes(project.id) ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
                                             onClick={() => {
                                                 if (isEditMode) {
                                                     toggleProjectSelection(project.id);

@@ -77,6 +77,11 @@ export function AuthProvider({ children }) {
         });
 
         if (res.status === 'success') {
+            if (res.force_logout) {
+                localStorage.removeItem('auth_token');
+                setUser(null);
+                return { success: true, message: res.message, forceLogout: true };
+            }
             setUser(res.user);
             return { success: true, message: res.message };
         }

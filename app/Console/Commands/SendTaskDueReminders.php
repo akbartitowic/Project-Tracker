@@ -2,19 +2,18 @@
 
 namespace App\Console\Commands;
 
-use App\Mail\TaskDueReminderMail;
 use App\Models\ActivityLog;
 use App\Models\Task;
+use App\Notifications\TaskDueReminderNotification;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 class SendTaskDueReminders extends Command
 {
     protected $signature = 'tasks:send-due-reminders';
 
-    protected $description = 'Send daily email reminders for due/overdue tasks not done/hold';
+    protected $description = 'Send daily reminders (in-app + email) for due/overdue tasks not done/hold';
 
     public function handle(): int
     {
@@ -42,7 +41,7 @@ class SendTaskDueReminders extends Command
 
                     $dueDateReminded = false;
                     foreach ($assignees as $assignee) {
-                        if (!$assignee || !$assignee->email || !$assignee->task_email_notifications_enabled) {
+                        if (!$assignee) {
                             $skipped++;
                             continue;
                         }
@@ -77,23 +76,22 @@ class SendTaskDueReminders extends Command
                             continue;
                         }
 
-                        $boardUrl = $task->project_id ? url('/board/' . $task->project_id) : null;
                         try {
-                            Mail::to($assignee->email)->send(new TaskDueReminderMail($task, $boardUrl));
+                            $assignee->notify(new TaskDueReminderNotification($task));
                             $sent++;
                             $dueDateReminded = true;
                             ActivityLog::create([
                                 'user_id' => $assignee->id,
                                 'type' => 'Project',
-                                'activity' => 'Task Reminder Email Sent',
-                                'description' => "Reminder email sent to '{$assignee->email}' for task '{$task->title}' (project ID: {$task->project_id}).",
+                                'activity' => 'Task Reminder Notification Sent',
+                                'description' => "Reminder sent to '{$assignee->name}' for task '{$task->title}' (project ID: {$task->project_id}).",
                             ]);
                         } catch (Throwable $e) {
                             ActivityLog::create([
                                 'user_id' => $assignee->id,
                                 'type' => 'Project',
-                                'activity' => 'Task Reminder Email Failed',
-                                'description' => "Failed sending reminder to '{$assignee->email}' for task '{$task->title}': {$e->getMessage()}",
+                                'activity' => 'Task Reminder Notification Failed',
+                                'description' => "Failed sending reminder to '{$assignee->name}' for task '{$task->title}': {$e->getMessage()}",
                             ]);
                         }
                     }

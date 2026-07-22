@@ -36,6 +36,11 @@ export default function Profile() {
         try {
             const res = await updateProfile(data);
             if (res.success) {
+                if (res.forceLogout) {
+                    alert('Password berhasil diubah. Semua sesi/device akan logout — silakan login kembali.');
+                    window.location.href = '/login';
+                    return;
+                }
                 setMessage({ type: 'success', text: res.message });
                 setData(prev => ({ ...prev, password: '', password_confirmation: '' }));
             } else {

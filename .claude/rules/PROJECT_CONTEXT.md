@@ -44,6 +44,7 @@
 - [x] Project Board — Notes
 - [x] Task Management (CRUD, subtask, assignee, due date, priority, billable, rush hour, duplicate/clone task dengan opsi ikut subtask, multi-assignee dengan status aktif per task)
 - [x] Task Notes (@mention anggota project di komentar + notifikasi email & in-app bell ke yang di-mention)
+- [x] Notifikasi in-app (bell) + email untuk 3 aktivitas: @mention di task notes, task-assigned, due-date reminder — semua via Laravel Notification (`database` + `mail` channel), in-app selalu tercatat walau user matiin toggle email personal
 - [x] Manhour Logging
 - [x] Project Members & Role Quotas
 - [x] Team Load Monitoring

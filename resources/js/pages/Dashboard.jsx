@@ -23,10 +23,10 @@ const STATUS_COLORS = {
 
 function KpiCard({ label, value, hint, icon: Icon, iconClass }) {
     return (
-        <Card className="border-slate-200/90 shadow-none dark:border-slate-800">
+        <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl transition-colors dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
             <CardContent className="flex items-start gap-3 p-4 sm:p-5">
                 {Icon && (
-                    <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-lg', iconClass)}>
+                    <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-2xl', iconClass)}>
                         <Icon className="size-5" />
                     </div>
                 )}
@@ -94,11 +94,16 @@ export default function Dashboard() {
     const criticalProjects = efficiencyData.filter((p) => p.burn_percentage > 85);
 
     return (
-        <div className="min-h-full bg-slate-50/80 dark:bg-background-dark">
-            <div className="w-full space-y-6 px-4 py-5 sm:px-6 lg:px-8 pb-16">
+        <div className="relative min-h-full overflow-hidden bg-slate-50 dark:bg-[#000040]">
+            {/* Decorative gradient + soft blurred accents — mirrors the login page's visual language, tuned down for a data-dense dashboard */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-50/70 via-white to-slate-50 dark:from-[#000040] dark:via-[#0a0e2e] dark:to-background-dark" />
+            <div className="pointer-events-none absolute -top-24 -left-24 size-[28rem] rounded-full bg-accent/10 blur-[120px] dark:bg-accent/15" />
+            <div className="pointer-events-none absolute -bottom-32 -right-24 size-[32rem] rounded-full bg-primary/10 blur-[130px] dark:bg-accent/10" />
+
+            <div className="relative w-full space-y-6 px-4 py-5 sm:px-6 lg:px-8 pb-16">
                 <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                        <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
                             {shouldShowMemberDashboard ? 'Ringkasan kerja saya' : 'Dashboard'}
                         </h1>
                         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -109,11 +114,11 @@ export default function Dashboard() {
                     </div>
                     {!shouldShowMemberDashboard && (
                         <div className="flex flex-wrap gap-2">
-                            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate('/board')}>
+                            <Button variant="outline" size="sm" className="!rounded-xl gap-1.5 backdrop-blur-sm" onClick={() => navigate('/board')}>
                                 <LayoutGrid className="size-4" />
                                 Project Board
                             </Button>
-                            <Button size="sm" className="gap-1.5" onClick={() => navigate('/reports')}>
+                            <Button size="sm" className="!rounded-xl gap-1.5 bg-accent font-bold text-white shadow-lg shadow-accent/20 hover:bg-orange-600" onClick={() => navigate('/reports')}>
                                 Laporan
                                 <ArrowRight className="size-3.5" />
                             </Button>
@@ -183,7 +188,7 @@ export default function Dashboard() {
                             <div
                                 key={status}
                                 className={cn(
-                                    'rounded-lg border px-3 py-3 text-center',
+                                    'rounded-2xl border px-3 py-3 text-center backdrop-blur-sm transition-colors',
                                     STATUS_COLORS[status] || STATUS_COLORS['To Do'],
                                 )}
                             >
@@ -196,7 +201,7 @@ export default function Dashboard() {
 
                 {!shouldShowMemberDashboard && (
                     <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                        <Card className="border-slate-200/90 shadow-none dark:border-slate-800 lg:col-span-2">
+                        <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl lg:col-span-2">
                             <CardContent className="p-4 sm:p-5">
                                 <div className="mb-4 flex items-center justify-between gap-2">
                                     <div>
@@ -208,7 +213,7 @@ export default function Dashboard() {
                                     </div>
                                 </div>
                                 {criticalProjects.length === 0 ? (
-                                    <p className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500 dark:border-slate-700">
+                                    <p className="rounded-2xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500 dark:border-slate-700">
                                         Semua project dalam batas aman.
                                     </p>
                                 ) : (
@@ -216,7 +221,7 @@ export default function Dashboard() {
                                         {criticalProjects.map((proj) => (
                                             <li
                                                 key={proj.id || proj.name}
-                                                className="flex items-center justify-between gap-3 rounded-lg border border-rose-100 bg-rose-50/50 px-3 py-2.5 dark:border-rose-900/30 dark:bg-rose-950/20"
+                                                className="flex items-center justify-between gap-3 rounded-2xl border border-rose-100 bg-rose-50/50 px-3 py-2.5 backdrop-blur-sm dark:border-rose-900/30 dark:bg-rose-950/20"
                                             >
                                                 <div className="min-w-0">
                                                     <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
@@ -244,18 +249,18 @@ export default function Dashboard() {
                                 )}
                             </CardContent>
                         </Card>
-                        <Card className="border-slate-200/90 shadow-none dark:border-slate-800">
+                        <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                             <CardContent className="flex h-full flex-col p-4 sm:p-5">
                                 <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Aksi cepat</h2>
                                 <p className="mt-1 text-xs text-slate-500">Navigasi ke area yang sering dipakai.</p>
                                 <div className="mt-4 flex flex-1 flex-col gap-2">
-                                    <Button variant="outline" className="justify-start h-10" onClick={() => navigate('/board')}>
+                                    <Button variant="outline" className="!rounded-xl justify-start h-10 backdrop-blur-sm" onClick={() => navigate('/board')}>
                                         Buka Project Board
                                     </Button>
-                                    <Button variant="outline" className="justify-start h-10" onClick={() => navigate('/reports')}>
+                                    <Button variant="outline" className="!rounded-xl justify-start h-10 backdrop-blur-sm" onClick={() => navigate('/reports')}>
                                         Laporan &amp; portfolio
                                     </Button>
-                                    <Button variant="outline" className="justify-start h-10" onClick={() => navigate('/team-load')}>
+                                    <Button variant="outline" className="!rounded-xl justify-start h-10 backdrop-blur-sm" onClick={() => navigate('/team-load')}>
                                         Team Load
                                     </Button>
                                 </div>
