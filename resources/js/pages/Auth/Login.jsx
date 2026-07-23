@@ -33,17 +33,16 @@ function LiquidBackdrop({ containerRef }) {
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
         const handleMove = (e) => {
-            const rect = container.getBoundingClientRect();
             targetRef.current = {
-                x: (e.clientX - rect.left) / rect.width,
-                y: (e.clientY - rect.top) / rect.height,
+                x: e.clientX / window.innerWidth,
+                y: e.clientY / window.innerHeight,
             };
         };
         const handleLeave = () => {
             targetRef.current = { ...LIQUID_REST };
         };
-        container.addEventListener('mousemove', handleMove);
-        container.addEventListener('mouseleave', handleLeave);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseleave', handleLeave);
 
         let rafId;
         let frame = 0;
@@ -74,8 +73,8 @@ function LiquidBackdrop({ containerRef }) {
         rafId = requestAnimationFrame(tick);
 
         return () => {
-            container.removeEventListener('mousemove', handleMove);
-            container.removeEventListener('mouseleave', handleLeave);
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseleave', handleLeave);
             cancelAnimationFrame(rafId);
         };
     }, [containerRef]);

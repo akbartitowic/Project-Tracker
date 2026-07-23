@@ -4,12 +4,10 @@ namespace App\Console\Commands;
 
 use App\Models\Manhour;
 use App\Models\ReportSchedule;
-use App\Models\Setting;
 use App\Models\Task;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -29,8 +27,6 @@ class SendScheduledReports extends Command
         if ($schedules->isEmpty()) {
             return;
         }
-
-        $this->applyMailSettings();
 
         foreach ($schedules as $schedule) {
             $this->runSchedule($schedule);
@@ -176,26 +172,4 @@ class SendScheduledReports extends Command
         };
     }
 
-    private function applyMailSettings(): void
-    {
-        $settings = Setting::whereIn('key', [
-            'mail_host', 'mail_port', 'mail_username', 'mail_password',
-            'mail_encryption', 'mail_from_address', 'mail_from_name',
-        ])->get()->pluck('value', 'key');
-
-        if (! $settings->has('mail_host')) {
-            return;
-        }
-
-        Config::set('mail.default', 'smtp');
-        Config::set('mail.mailers.smtp.transport', 'smtp');
-        Config::set('mail.mailers.smtp.host', $settings['mail_host']);
-        Config::set('mail.mailers.smtp.port', $settings['mail_port']);
-        Config::set('mail.mailers.smtp.username', $settings['mail_username']);
-        Config::set('mail.mailers.smtp.password', $settings['mail_password']);
-        Config::set('mail.mailers.smtp.encryption', $settings['mail_encryption']);
-        Config::set('mail.from.address', $settings['mail_from_address']);
-        Config::set('mail.from.name', $settings['mail_from_name']);
-        Mail::purge('smtp');
-    }
 }

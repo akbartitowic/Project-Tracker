@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchAPI } from '../../services/api';
+import { useParams } from 'react-router-dom';
+import { fetchAPI, getApiUrl } from '../../services/api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, MessageSquare, Trash2 } from 'lucide-react';
+import { Loader2, MessageSquare, Trash2, Paperclip, X } from 'lucide-react';
 
 function formatNoteTime(iso) {
     if (!iso) return '';
@@ -41,29 +42,68 @@ function detectMentionTrigger(text, cursor) {
 // Wraps "@Name" occurrences (matched against this note's recorded mentions) in a highlighted span.
 // Longest names are matched first so a shorter name can't shadow a longer one that starts the same way.
 function renderMentionHighlights(body, mentions) {
-    if (!mentions || mentions.length === 0) return body;
+    if (!body) return null;
 
-    const sorted = [...mentions].sort((a, b) => b.name.length - a.name.length);
-    const pattern = new RegExp(`@(${sorted.map((m) => escapeRegExp(m.name)).join('|')})(?![A-Za-z0-9])`, 'g');
+    const imgRegex = /!\[(.*?)\]\((.*?)\)/g;
+    let sortedMentions = [];
+    let mentionRegex = null;
+    
+    if (mentions && mentions.length > 0) {
+        sortedMentions = [...mentions].sort((a, b) => b.name.length - a.name.length);
+        mentionRegex = new RegExp(`@(${sortedMentions.map((m) => escapeRegExp(m.name)).join('|')})(?![A-Za-z0-9])`, 'g');
+    }
+
+    const parseMentionsInText = (text, baseKey) => {
+        if (!mentionRegex) return [text];
+        const p = [];
+        let li = 0;
+        let m;
+        let k = baseKey;
+        mentionRegex.lastIndex = 0;
+        while ((m = mentionRegex.exec(text)) !== null) {
+            if (m.index > li) {
+                p.push(text.slice(li, m.index));
+            }
+            p.push(
+                <span key={`mention-${k++}`} className="text-primary font-semibold">
+                    @{m[1]}
+                </span>
+            );
+            li = m.index + m[0].length;
+        }
+        if (li < text.length) {
+            p.push(text.slice(li));
+        }
+        return p;
+    };
 
     const parts = [];
     let lastIndex = 0;
     let match;
     let key = 0;
-    while ((match = pattern.exec(body)) !== null) {
+
+    while ((match = imgRegex.exec(body)) !== null) {
         if (match.index > lastIndex) {
-            parts.push(body.slice(lastIndex, match.index));
+            const textPart = body.slice(lastIndex, match.index);
+            parts.push(...parseMentionsInText(textPart, key));
+            key += 1000;
         }
         parts.push(
-            <span key={`mention-${key++}`} className="text-primary font-semibold">
-                @{match[1]}
-            </span>
+            <a href={match[2]} target="_blank" rel="noopener noreferrer" key={`img-${key++}`} className="block my-2">
+                <img src={match[2]} alt={match[1]} className="max-w-full max-h-80 object-contain rounded-md border border-slate-200 dark:border-slate-700 shadow-sm" />
+            </a>
         );
         lastIndex = match.index + match[0].length;
     }
+
     if (lastIndex < body.length) {
-        parts.push(body.slice(lastIndex));
+        parts.push(...parseMentionsInText(body.slice(lastIndex), key));
     }
+
+    if (parts.length === 1 && typeof parts[0] === 'string') {
+        return body;
+    }
+
     return parts;
 }
 
@@ -75,6 +115,7 @@ export default function TaskNotesSection({
     compact = false,
     mentionableUsers = [],
 }) {
+    const { projectId } = useParams();
     const [notes, setNotes] = useState([]);
     const [loading, setLoading] = useState(false);
     const [body, setBody] = useState('');
@@ -83,7 +124,10 @@ export default function TaskNotesSection({
     const [error, setError] = useState('');
     const [mentionState, setMentionState] = useState(null); // { start, query } | null
     const [mentionIndex, setMentionIndex] = useState(0);
+    const [uploadingImages, setUploadingImages] = useState(false);
+    const [attachedImages, setAttachedImages] = useState([]);
     const textareaRef = useRef(null);
+    const fileInputRef = useRef(null);
 
     const loadNotes = useCallback(async () => {
         if (!taskId) return;
@@ -143,8 +187,16 @@ export default function TaskNotesSection({
     };
 
     const handlePost = async () => {
-        const text = body.trim();
+        let text = body.trim();
+        if (!text && attachedImages.length === 0) return;
+        
+        if (attachedImages.length > 0) {
+            const mdImages = attachedImages.map(url => `![image](${url})`).join('\n\n');
+            text = text ? `${text}\n\n${mdImages}` : mdImages;
+        }
+        
         if (!text || !taskId) return;
+        
         setPosting(true);
         setError('');
         try {
@@ -158,12 +210,46 @@ export default function TaskNotesSection({
                 await loadNotes();
             }
             setBody('');
+            setAttachedImages([]);
             setMentionState(null);
         } catch (err) {
             setError(err.message || 'Gagal menyimpan catatan.');
         } finally {
             setPosting(false);
         }
+    };
+
+    const handleImageUpload = async (imageFiles) => {
+        setUploadingImages(true);
+        const newAttachments = [];
+        for (const file of imageFiles) {
+            try {
+                const formData = new FormData();
+                formData.append('image', file);
+                if (projectId) formData.append('project_id', projectId);
+                
+                const token = localStorage.getItem('auth_token');
+                const res = await fetch(`${getApiUrl()}/tasks/description-images`, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+                    body: formData,
+                });
+                const data = await res.json();
+                if (res.ok && data.url) {
+                    newAttachments.push(data.url);
+                } else {
+                    console.error('Failed to upload image', data);
+                    setError(data.message || data.error || 'Gagal mengunggah gambar.');
+                }
+            } catch (err) {
+                console.error('Upload failed', err);
+                setError('Gagal mengunggah gambar.');
+            }
+        }
+        if (newAttachments.length > 0) {
+            setAttachedImages(prev => [...prev, ...newAttachments]);
+        }
+        setUploadingImages(false);
     };
 
     const handleDelete = async (noteId) => {
@@ -280,6 +366,22 @@ export default function TaskNotesSection({
                             // Delay so a mousedown selection on the dropdown below still registers first.
                             window.setTimeout(() => setMentionState(null), 150);
                         }}
+                        onPaste={async (e) => {
+                            const files = Array.from(e.clipboardData?.files || []);
+                            const imageFiles = files.filter(f => f.type.startsWith('image/'));
+                            if (imageFiles.length > 0) {
+                                e.preventDefault();
+                                await handleImageUpload(imageFiles);
+                            }
+                        }}
+                        onDrop={async (e) => {
+                            const files = Array.from(e.dataTransfer?.files || []);
+                            const imageFiles = files.filter(f => f.type.startsWith('image/'));
+                            if (imageFiles.length > 0) {
+                                e.preventDefault();
+                                await handleImageUpload(imageFiles);
+                            }
+                        }}
                         onKeyDown={(e) => {
                             if (mentionState && filteredMentions.length > 0) {
                                 if (e.key === 'ArrowDown') {
@@ -308,10 +410,15 @@ export default function TaskNotesSection({
                                 handlePost();
                             }
                         }}
-                        placeholder="Tulis catatan atau komentar… (ketik @ untuk mention, Ctrl+Enter untuk kirim)"
+                        placeholder="Tulis catatan atau komentar… (ketik @ untuk mention, Ctrl+Enter untuk kirim, Paste gambar di sini)"
                         className="min-h-[72px] resize-y text-sm"
                         maxLength={5000}
                     />
+                    {uploadingImages && (
+                        <div className="absolute right-2 top-2 flex items-center gap-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-slate-500 shadow dark:bg-slate-800/90 dark:text-slate-300">
+                            <Loader2 className="size-3 animate-spin" /> Mengunggah...
+                        </div>
+                    )}
                     {mentionState && filteredMentions.length > 0 && (
                         <ul className="absolute left-0 right-0 top-full mt-1 z-20 max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg text-sm">
                             {filteredMentions.map((u, idx) => (
@@ -337,13 +444,54 @@ export default function TaskNotesSection({
                             ))}
                         </ul>
                     )}
+                    {attachedImages.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            {attachedImages.map((url, idx) => (
+                                <div key={idx} className="relative group rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 w-16 h-16 shrink-0">
+                                    <img src={url} alt="Attachment" className="w-full h-full object-cover" />
+                                    <button
+                                        type="button"
+                                        className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => setAttachedImages(prev => prev.filter((_, i) => i !== idx))}
+                                    >
+                                        <X className="size-3" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
-                <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-slate-400">{body.length}/5000</span>
+                <div className="flex items-center justify-between gap-2 mt-1">
+                    <div className="flex items-center gap-2">
+                        <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-400 hover:text-primary"
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            <Paperclip className="size-4" />
+                        </Button>
+                        <span className="text-[10px] text-slate-400">{body.length}/5000</span>
+                    </div>
+                    <input 
+                        type="file"
+                        className="hidden"
+                        ref={fileInputRef}
+                        multiple
+                        accept="image/*"
+                        onChange={async (e) => {
+                            const files = Array.from(e.target.files || []);
+                            if (files.length > 0) {
+                                await handleImageUpload(files);
+                                e.target.value = null; // reset
+                            }
+                        }}
+                    />
                     <Button
                         type="button"
                         size="sm"
-                        disabled={posting || !body.trim()}
+                        disabled={posting || (!body.trim() && attachedImages.length === 0)}
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Phone, Lock, Save, CheckCircle2, Shield } from 'lucide-react';
+import { User, Mail, Phone, Lock, Save, CheckCircle2, Shield, Code, Bug } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -68,10 +68,33 @@ export default function Profile() {
                     </h1>
                     <p className="text-slate-500 font-medium mt-1">Manage your personal information and security settings.</p>
                 </div>
-                <div className="px-4 py-2 bg-primary/10 rounded-2xl flex items-center gap-2 border border-primary/20">
-                    <Shield className="size-4 text-primary" />
-                    <span className="text-xs font-bold text-primary uppercase tracking-wider">{user?.role?.name || 'Member'}</span>
-                </div>
+                {(() => {
+                    const roleName = user?.role_name || user?.role?.name || 'Member';
+                    let RoleIcon = User;
+                    let roleClass = 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+                    let iconClass = 'text-slate-500';
+                    
+                    if (roleName.includes('Manager') || roleName.includes('Admin')) { 
+                        RoleIcon = Shield; 
+                        roleClass = 'bg-purple-100/80 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20'; 
+                        iconClass = 'text-purple-600 dark:text-purple-400';
+                    } else if (roleName.includes('Developer') || roleName.includes('Programmer')) { 
+                        RoleIcon = Code; 
+                        roleClass = 'bg-blue-100/80 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'; 
+                        iconClass = 'text-blue-600 dark:text-blue-400';
+                    } else if (roleName.includes('QA') || roleName.includes('Tester')) { 
+                        RoleIcon = Bug; 
+                        roleClass = 'bg-amber-100/80 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'; 
+                        iconClass = 'text-amber-600 dark:text-amber-400';
+                    }
+
+                    return (
+                        <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 border ${roleClass}`}>
+                            <RoleIcon className={`size-4 ${iconClass}`} />
+                            <span className="text-xs font-bold uppercase tracking-wider">{roleName}</span>
+                        </div>
+                    );
+                })()}
             </header>
 
             {message.text && (

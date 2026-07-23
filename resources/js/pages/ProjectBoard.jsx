@@ -202,17 +202,18 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                         </div>
                     )}
 
-                    <h4 className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-100">{task.title}</h4>
+                    <h4 className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-100 truncate" title={task.title}>{task.title}</h4>
+
+                    {formatTaskDateRange(task.start_date, task.due_date) && (
+                        <div className="mt-2 flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-medium text-slate-700 dark:border-slate-700/60 dark:bg-slate-800/60 dark:text-slate-200">
+                            <CalendarRange className="size-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
+                            <span>{formatTaskDateRange(task.start_date, task.due_date)}</span>
+                        </div>
+                    )}
 
                     {/* Expandable details */}
                     {expanded && (
                         <>
-                            {formatTaskDateRange(task.start_date, task.due_date) && (
-                                <p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
-                                    <CalendarRange className="size-3 shrink-0" />
-                                    {formatTaskDateRange(task.start_date, task.due_date)}
-                                </p>
-                            )}
 
                             {task.subtasks?.length > 0 && (() => {
                                 const WEIGHTS = { 'Done': 100, 'Review': 75, 'In Progress': 50, 'Re-open': 25, 'To Do': 0 };

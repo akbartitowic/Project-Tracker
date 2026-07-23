@@ -4,14 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Manhour;
 use App\Models\Project;
-use App\Models\Setting;
 use App\Models\Task;
 use App\Support\ProjectAccess;
 use App\Support\UserAccess;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -102,8 +100,6 @@ class ReportController extends Controller
         );
         $pdf = Pdf::loadView('reports.project_report', $data);
         $pdfContent = $pdf->output();
-
-        $this->applyMailSettings();
 
         $emails = array_map('trim', explode(',', $validated['emails']));
         $subject = $validated['subject'];
@@ -256,30 +252,6 @@ class ReportController extends Controller
             'stats' => $stats,
             'categoryProgress' => $categoryProgress,
         ];
-    }
-
-    private function applyMailSettings()
-    {
-        $settings = Setting::whereIn('key', [
-            'mail_host', 'mail_port', 'mail_username', 'mail_password',
-            'mail_encryption', 'mail_from_address', 'mail_from_name',
-        ])->get()->pluck('value', 'key');
-
-        if ($settings->has('mail_host')) {
-            Config::set('mail.default', 'smtp');
-            Config::set('mail.mailers.smtp.transport', 'smtp');
-
-            Config::set('mail.mailers.smtp.host', $settings['mail_host']);
-            Config::set('mail.mailers.smtp.port', $settings['mail_port']);
-            Config::set('mail.mailers.smtp.username', $settings['mail_username']);
-            Config::set('mail.mailers.smtp.password', $settings['mail_password']);
-            Config::set('mail.mailers.smtp.encryption', $settings['mail_encryption']);
-
-            Config::set('mail.from.address', $settings['mail_from_address']);
-            Config::set('mail.from.name', $settings['mail_from_name']);
-
-            Mail::purge('smtp');
-        }
     }
 
     public function getProjects(Request $request)
