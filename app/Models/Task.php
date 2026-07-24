@@ -12,6 +12,19 @@ class Task extends Model
 {
     use HasFactory;
 
+    const UPDATED_AT = null;
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($task) {
+            if (empty($task->updated_at)) {
+                $task->updated_at = $task->freshTimestamp();
+            }
+        });
+    }
+
     protected $fillable = [
         'title',
         'feature_title',
