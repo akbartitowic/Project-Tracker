@@ -13,6 +13,7 @@ use App\Services\TaskAggregationService;
 use App\Support\ProjectAccess;
 use App\Support\PublicStorageUrl;
 use App\Support\TaskBillable;
+use App\Support\TaskChangeLogger;
 use App\Support\UserAccess;
 use App\Traits\LogActivity;
 
@@ -54,21 +55,26 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Header aliases the importer recognizes, matched case-insensitively. Keep the labels
+     * used in downloadTemplate() (and any past template labels, for backward compatibility
+     * with older exported files) listed here.
+     */
     private const CSV_COLUMN_ALIASES = [
-        'title' => ['title'],
-        'feature_title' => ['feature title', 'feature_title'],
+        'title' => ['title', 'task title'],
+        'feature_title' => ['feature title', 'feature_title', 'epic'],
         'description' => ['description'],
         'status' => ['status'],
         'priority' => ['priority'],
-        'assignee_email' => ['assignee email', 'assignee_email'],
-        'estimated_hours' => ['estimated hours', 'estimated_hours'],
+        'assignee_email' => ['assignee email', 'assignee_email', 'assignee', 'assignee (email)'],
+        'estimated_hours' => ['estimated hours', 'estimated_hours', 'mh', 'estimated manhours', 'mh (estimated manhours)'],
         'project_role_quota' => ['project role quota', 'project_role_quota'],
         'role_name' => ['role name', 'role_name'],
         'category' => ['category'],
-        'due_date' => ['due date', 'due_date'],
+        'due_date' => ['due date', 'due_date', 'end date'],
         'start_date' => ['start date', 'start_date'],
         'rush_hour' => ['rush hour', 'rush_hour'],
-        'is_billable' => ['billable', 'is_billable', 'billable type'],
+        'is_billable' => ['billable', 'is_billable', 'billable type', 'billing type'],
     ];
 
     /**
@@ -166,11 +172,26 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * A header row is recognized by content, not position — at least 2 cells match known
+     * column aliases somewhere in the row. This stays correct regardless of column order,
+     * so the template's column order can be changed freely without breaking detection.
+     */
     private function csvRowLooksLikeHeader(array $row): bool
     {
-        $first = strtolower(trim((string) ($row[0] ?? '')));
+        $normalized = array_map(fn ($h) => strtolower(trim($this->stripBom((string) $h))), $row);
+        $matchedFields = 0;
 
-        return $first === 'title';
+        foreach (self::CSV_COLUMN_ALIASES as $aliases) {
+            foreach ($aliases as $alias) {
+                if (in_array($alias, $normalized, true)) {
+                    $matchedFields++;
+                    break;
+                }
+            }
+        }
+
+        return $matchedFields >= 2;
     }
 
     private function legacyCsvColumnMap(): array
@@ -193,9 +214,15 @@ class TaskController extends Controller
         ];
     }
 
+    /** A CSV saved as "UTF-8 with BOM" (what Excel produces) prefixes the very first cell with 3 BOM bytes. */
+    private function stripBom(string $value): string
+    {
+        return str_starts_with($value, "\xEF\xBB\xBF") ? substr($value, 3) : $value;
+    }
+
     private function buildCsvColumnMap(array $header): array
     {
-        $normalized = array_map(fn ($h) => strtolower(trim((string) $h)), $header);
+        $normalized = array_map(fn ($h) => strtolower(trim($this->stripBom((string) $h))), $header);
         $map = [];
 
         foreach (self::CSV_COLUMN_ALIASES as $field => $aliases) {
@@ -208,12 +235,10 @@ class TaskController extends Controller
             }
         }
 
-        $legacy = $this->legacyCsvColumnMap();
-        foreach ($legacy as $field => $index) {
-            if (!array_key_exists($field, $map)) {
-                $map[$field] = $index;
-            }
-        }
+        // Deliberately no fallback to legacyCsvColumnMap()'s fixed positions here: this method
+        // only runs once a real header row was detected, so a field with no matching alias
+        // anywhere in that header should be treated as absent (extractTaskFromCsvRow already
+        // handles a missing map entry), not silently mapped to an unrelated legacy column index.
 
         return $map;
     }
@@ -433,35 +458,52 @@ class TaskController extends Controller
             // Add BOM for Excel UTF-8 compatibility
             fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
             
+            // Column labels mirror the task form in the board UI (Epic, Task Title, Billing
+            // type, etc. — see ProjectBoard.jsx) so the template reads the same as the app.
             fputcsv($file, [
-                'Title',
-                'Feature Title',
+                'Epic',
+                'Task Title',
                 'Description',
-                'Status',
+                'Billing Type',
                 'Priority',
-                'Assignee Email',
-                'Estimated Hours',
-                'Project Role Quota',
-                'Category',
-                'Due Date',
                 'Start Date',
+                'Due Date',
+                'Assignee (Email)',
+                'MH (Estimated Manhours)',
+                'Status',
+                'Category',
+                'Project Role Quota',
                 'Rush Hour',
-                'Billable',
             ]);
             fputcsv($file, [
-                'Example Task',
                 'Auth',
                 'User login implementation',
-                'To Do',
+                'Implement login form with email/password and session handling',
+                'Billable',
                 'High',
+                '2026-06-01',
+                '2026-06-30',
                 'dev@example.com',
                 '4',
+                'To Do',
                 'Developer',
                 'Developer',
-                '2026-06-30',
-                '2026-06-01',
                 'Yes',
-                'Yes',
+            ]);
+            fputcsv($file, [
+                'Reporting',
+                'Export monthly report to PDF',
+                '',
+                'Non-Billable',
+                'Medium',
+                '2026-06-05',
+                '2026-06-10',
+                '',
+                '2',
+                'To Do',
+                '',
+                'General',
+                'No',
             ]);
             fclose($file);
         }, 'task_import_template.csv');
@@ -899,6 +941,15 @@ class TaskController extends Controller
 
         $this->log('Project', 'Updated Task Status', "Changed task '{$task->title}' from {$oldStatus} to {$validated['status']}");
 
+        if ($movedColumns) {
+            TaskChangeLogger::logFieldChanges(
+                $task,
+                ['status' => $oldStatus],
+                ['status' => $validated['status']],
+                $user,
+            );
+        }
+
         return response()->json(['changes' => $changes]);
     }
 
@@ -943,6 +994,9 @@ class TaskController extends Controller
 
         $existingIds = $task->assignees()->pluck('users.id')->map(fn ($v) => (int) $v)->all();
         $newIds = array_values(array_diff($assigneeIds, $existingIds));
+        $oldAssignees = $task->assignees()->get(['users.id', 'users.name'])
+            ->map(fn ($u) => ['id' => (int) $u->id, 'name' => $u->name])
+            ->all();
 
         DB::transaction(function () use ($task, $assigneeIds, $activeIds, $primaryId, $mhByAssignee, $splitEvenly, $hasSubtasks, $user) {
             $syncData = [];
@@ -1004,10 +1058,14 @@ class TaskController extends Controller
 
         $this->log('Project', 'Updated Task Assignees', "Updated assignees for task '{$task->title}' (ID: {$task->id}).");
 
+        $currentAssignees = $task->assignees()->get(['users.id', 'users.name']);
+        $newAssignees = $currentAssignees->map(fn ($u) => ['id' => (int) $u->id, 'name' => $u->name])->all();
+        TaskChangeLogger::logAssigneeChange($task, $oldAssignees, $newAssignees, $user);
+
         return response()->json([
             'assignee_id' => $task->assignee_id,
             'estimated_hours' => $task->estimated_hours,
-            'assignees' => $task->assignees()->get(['users.id', 'users.name'])->map(fn ($u) => [
+            'assignees' => $currentAssignees->map(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'is_active' => (bool) $u->pivot->is_active,
@@ -1021,6 +1079,7 @@ class TaskController extends Controller
         $user = $request->user();
         $task = Task::findOrFail($id);
         $previousAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
+        $fieldsBefore = $task->only(TaskChangeLogger::TRACKABLE_FIELDS);
         if (!ProjectAccess::canAccessProject($user, (int) $task->project_id)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
@@ -1078,6 +1137,10 @@ class TaskController extends Controller
         $this->markUpdatedBy($task, $validated, $user);
 
         $changes = $task->update($validated) ? 1 : 0;
+
+        if ($changes) {
+            TaskChangeLogger::logFieldChanges($task, $fieldsBefore, $task->fresh()->only(TaskChangeLogger::TRACKABLE_FIELDS), $user);
+        }
 
         if ($customUpdatedAt) {
             // Query builder update() doesn't auto-touch timestamps, so this

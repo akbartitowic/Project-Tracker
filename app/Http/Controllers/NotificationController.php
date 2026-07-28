@@ -8,9 +8,16 @@ class NotificationController extends Controller
 {
     public function index(Request $request)
     {
-        $notifications = $request->user()->notifications()->latest()->limit(30)->get();
+        $notifications = $request->user()->notifications()->latest()->paginate(10);
 
-        return response()->json(['data' => $notifications]);
+        return response()->json([
+            'data' => $notifications->items(),
+            'meta' => [
+                'current_page' => $notifications->currentPage(),
+                'last_page'    => $notifications->lastPage(),
+                'total'        => $notifications->total(),
+            ],
+        ]);
     }
 
     public function unreadCount(Request $request)

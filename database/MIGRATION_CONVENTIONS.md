@@ -44,6 +44,7 @@ Keep total length **&lt; 48 chars** when possible.
 | project_favorites | `pf` |
 | task_assignees | `tka` |
 | task_note_mentions | `tnm` |
+| task_field_changes | `tfc` |
 
 Add a new row here when you introduce a new table.
 

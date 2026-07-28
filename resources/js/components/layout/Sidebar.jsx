@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -70,6 +70,7 @@ function visibleSortedItems(items, user) {
 export default function Sidebar({ mobileOpen = false }) {
     const { toggleTheme } = useTheme();
     const { user, logout } = useAuth();
+    const navigate = useNavigate();
     const menuItems = user?.menu_items || [];
     const [collapsed, setCollapsed] = useState(() => {
         if (typeof window === 'undefined') return false;
@@ -146,33 +147,36 @@ export default function Sidebar({ mobileOpen = false }) {
             </nav>
 
             <div className="p-4 mt-auto border-t border-slate-200 dark:border-white/10 transition-colors duration-200">
-                <div className={cn(
-                    'mt-4 flex items-center justify-between gap-2 rounded-xl bg-slate-50 dark:bg-[#151b28] p-2 transition-colors duration-200 overflow-hidden text-ellipsis',
-                    collapsed && 'lg:justify-center',
-                )}>
-                    <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="size-9 shrink-0 rounded-lg bg-accent/15 flex items-center justify-center text-accent font-black text-sm dark:bg-accent/20">
-                            {user?.name?.charAt(0)}
-                        </div>
-                        <div className={cn('overflow-hidden', collapsedLabelClass(collapsed))}>
-                            <p className="text-xs font-bold text-slate-700 dark:text-white truncate">{user?.name}</p>
-                            <p className="text-[10px] text-slate-400 font-medium truncate uppercase tracking-tighter">{user?.role?.name || 'Member'}</p>
-                        </div>
+                <button
+                    type="button"
+                    onClick={() => navigate('/profile')}
+                    title="My Profile"
+                    className={cn(
+                        'mt-4 flex w-full items-center gap-3 overflow-hidden text-ellipsis rounded-xl bg-slate-50 p-2 text-left transition-colors duration-200 hover:bg-slate-100 dark:bg-[#151b28] dark:hover:bg-white/5',
+                        collapsed && 'lg:justify-center',
+                    )}
+                >
+                    <div className="size-9 shrink-0 rounded-lg bg-accent/15 flex items-center justify-center text-accent font-black text-sm dark:bg-accent/20">
+                        {(user?.nickname || user?.name)?.charAt(0)}
                     </div>
+                    <div className={cn('overflow-hidden', collapsedLabelClass(collapsed))}>
+                        <p className="text-xs font-bold text-slate-700 dark:text-white truncate">{user?.nickname || user?.name}</p>
+                        <p className="text-[10px] text-slate-400 font-medium truncate uppercase tracking-tighter">{user?.role_name || user?.role?.name || 'Member'}</p>
+                    </div>
+                </button>
+
+                <div className={cn(
+                    'mt-2 flex items-center gap-2 px-1',
+                    collapsed ? 'lg:flex-col lg:justify-center' : 'justify-between',
+                )}>
                     <button
                         onClick={logout}
-                        className={cn(
-                            'p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors shrink-0',
-                            collapsed && 'lg:hidden',
-                        )}
                         title="Logout"
+                        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10"
                     >
-                        <LogOut className="size-4" />
+                        <LogOut className="size-4 shrink-0" />
+                        <span className={cn('text-xs font-medium', collapsedLabelClass(collapsed))}>Logout</span>
                     </button>
-                </div>
-
-                <div className={cn('mt-2 flex items-center justify-between p-2', collapsed && 'lg:justify-center')}>
-                    <span className={cn('text-xs font-medium text-slate-400', collapsedLabelClass(collapsed))}>Dark Mode</span>
                     <button
                         onClick={toggleTheme}
                         title="Toggle dark mode"
@@ -181,15 +185,6 @@ export default function Sidebar({ mobileOpen = false }) {
                         <Moon className="size-4 text-slate-300 hidden dark:block" />
                     </button>
                 </div>
-                {collapsed && (
-                    <button
-                        onClick={logout}
-                        title="Logout"
-                        className="mt-2 hidden w-full items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500 lg:flex dark:hover:bg-rose-500/10"
-                    >
-                        <LogOut className="size-4" />
-                    </button>
-                )}
             </div>
             </div>
         </aside>

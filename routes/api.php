@@ -8,6 +8,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ProjectRoleController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\TaskHistoryController;
 use App\Http\Controllers\TaskNoteController;
 use App\Http\Controllers\ManhourController;
 use App\Http\Controllers\PresaleController;
@@ -134,6 +135,7 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/tasks/{taskId}/notes', [TaskNoteController::class, 'index'])->middleware('permission:project_board.read');
     Route::post('/tasks/{taskId}/notes', [TaskNoteController::class, 'store'])->middleware('permission:project_board.read');
     Route::delete('/tasks/{taskId}/notes/{noteId}', [TaskNoteController::class, 'destroy'])->middleware('permission:project_board.read');
+    Route::get('/tasks/{taskId}/history', [TaskHistoryController::class, 'index'])->middleware('permission:project_board.read');
     Route::put('/tasks/{id}', [TaskController::class, 'update'])->middleware('permission:project_board.update');
     Route::delete('/tasks/{id}', [TaskController::class, 'destroy'])->middleware('permission:project_board.update');
     Route::put('/tasks/{id}/status', [TaskController::class, 'updateStatus'])->middleware('permission:project_board.update');

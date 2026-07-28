@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ReviewEvaluation;
 use App\Models\ReviewQuestion;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ReviewController extends Controller
 {
@@ -73,14 +74,16 @@ class ReviewController extends Controller
     public function storeQuestion(Request $request, int $id)
     {
         $eval      = ReviewEvaluation::findOrFail($id);
+        $hasWeight = $request->boolean('has_weight', true);
         $validated = $request->validate([
             'question'    => 'required|string|max:500',
-            'description' => 'nullable|string',
-            'weight'      => 'required|numeric|min:0|max:100',
+            'description' => ['nullable', 'string', Rule::requiredIf(!$hasWeight)],
+            'weight'      => [Rule::requiredIf($hasWeight), 'nullable', 'numeric', 'min:0', 'max:100'],
         ]);
+        $weight = $hasWeight ? $validated['weight'] : 0;
 
         $currentTotal = (float) $eval->questions()->sum('weight');
-        if ($currentTotal + $validated['weight'] > 100) {
+        if ($currentTotal + $weight > 100) {
             return response()->json([
                 'message' => 'Total bobot pertanyaan tidak boleh melebihi 100%.',
                 'errors'  => ['weight' => ['Sisa bobot yang tersedia: ' . round(100 - $currentTotal, 2) . '%']],
@@ -88,7 +91,14 @@ class ReviewController extends Controller
         }
 
         $order    = $eval->questions()->max('order') + 1;
-        $question = ReviewQuestion::create([...$validated, 'evaluation_id' => $eval->id, 'order' => $order]);
+        $question = ReviewQuestion::create([
+            'evaluation_id' => $eval->id,
+            'question'      => $validated['question'],
+            'description'   => $validated['description'] ?? null,
+            'weight'        => $weight,
+            'has_weight'    => $hasWeight,
+            'order'         => $order,
+        ]);
 
         return response()->json(['data' => $question], 201);
     }
@@ -97,18 +107,21 @@ class ReviewController extends Controller
     public function updateQuestion(Request $request, int $id)
     {
         $question  = ReviewQuestion::findOrFail($id);
+        $hasWeight = $request->has('has_weight') ? $request->boolean('has_weight') : $question->has_weight;
         $validated = $request->validate([
             'question'    => 'sometimes|string|max:500',
-            'description' => 'nullable|string',
-            'weight'      => 'sometimes|numeric|min:0|max:100',
+            'description' => ['nullable', 'string', Rule::requiredIf(!$hasWeight)],
+            'weight'      => [Rule::requiredIf($hasWeight), 'nullable', 'numeric', 'min:0', 'max:100'],
             'order'       => 'sometimes|integer|min:0',
         ]);
 
-        if (isset($validated['weight'])) {
+        $weight = $hasWeight ? ($validated['weight'] ?? $question->weight) : 0;
+
+        if ($hasWeight) {
             $otherTotal = (float) ReviewQuestion::where('evaluation_id', $question->evaluation_id)
                 ->where('id', '!=', $question->id)
                 ->sum('weight');
-            if ($otherTotal + $validated['weight'] > 100) {
+            if ($otherTotal + $weight > 100) {
                 return response()->json([
                     'message' => 'Total bobot pertanyaan tidak boleh melebihi 100%.',
                     'errors'  => ['weight' => ['Sisa bobot yang tersedia: ' . round(100 - $otherTotal, 2) . '%']],
@@ -116,7 +129,11 @@ class ReviewController extends Controller
             }
         }
 
-        $question->update($validated);
+        $question->update([
+            ...$validated,
+            'weight'     => $weight,
+            'has_weight' => $hasWeight,
+        ]);
         return response()->json(['data' => $question]);
     }
 

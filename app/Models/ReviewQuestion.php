@@ -7,9 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ReviewQuestion extends Model
 {
-    protected $fillable = ['evaluation_id', 'question', 'description', 'weight', 'order'];
+    protected $fillable = ['evaluation_id', 'question', 'description', 'weight', 'has_weight', 'order'];
 
-    protected $casts = ['weight' => 'float'];
+    protected $casts = ['weight' => 'float', 'has_weight' => 'boolean'];
 
     public function evaluation(): BelongsTo
     {

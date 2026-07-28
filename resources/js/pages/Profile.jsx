@@ -12,6 +12,7 @@ export default function Profile() {
     const { user, updateProfile } = useAuth();
     const [data, setData] = useState({
         name: user?.name || '',
+        nickname: user?.nickname || '',
         email: user?.email || '',
         phone_number: user?.phone_number || '',
         task_email_notifications_enabled: user?.task_email_notifications_enabled ?? true,
@@ -130,16 +131,31 @@ export default function Profile() {
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Phone Number</label>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                        Nickname <span className="normal-case text-slate-400 font-normal">(Optional)</span>
+                                    </label>
                                     <div className="relative group">
-                                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-slate-400 group-focus-within:text-primary transition-colors" />
+                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-slate-400 group-focus-within:text-primary transition-colors" />
                                         <Input
                                             className="pl-11 h-11 rounded-xl focus:ring-primary"
-                                            placeholder="+62 8xx xxxx xxxx"
-                                            value={data.phone_number}
-                                            onChange={e => setData({ ...data, phone_number: e.target.value })}
+                                            placeholder="Nama panggilan"
+                                            value={data.nickname}
+                                            onChange={e => setData({ ...data, nickname: e.target.value })}
                                         />
                                     </div>
+                                    <p className="text-[11px] text-slate-400 ml-1">Jika diisi, nama ini yang tampil di sidebar.</p>
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Phone Number</label>
+                                <div className="relative group">
+                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-slate-400 group-focus-within:text-primary transition-colors" />
+                                    <Input
+                                        className="pl-11 h-11 rounded-xl focus:ring-primary"
+                                        placeholder="+62 8xx xxxx xxxx"
+                                        value={data.phone_number}
+                                        onChange={e => setData({ ...data, phone_number: e.target.value })}
+                                    />
                                 </div>
                             </div>
                             <div className="space-y-1.5">

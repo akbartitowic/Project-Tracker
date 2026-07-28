@@ -5,6 +5,7 @@ import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext'
 import { AppBrandingProvider } from './context/AppBrandingContext'
 import ErrorBoundary from './components/ErrorBoundary'
+import RateLimitToast from './components/RateLimitToast'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -12,6 +13,7 @@ createRoot(document.getElementById('root')).render(
       <AppBrandingProvider>
         <AuthProvider>
           <App />
+          <RateLimitToast />
         </AuthProvider>
       </AppBrandingProvider>
     </ErrorBoundary>

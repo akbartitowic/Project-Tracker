@@ -7,7 +7,7 @@ import { hasPermission } from '../utils/permissions';
 import {
     Star, LayoutGrid, List, Loader2, X, Lock,
     KanbanSquare, ChevronRight, Settings2, Clock,
-    Send, ArrowLeft, Info, MessageSquare, Plus, AlertCircle, AlertTriangle,
+    Send, ArrowLeft, Info, MessageSquare, Plus, AlertCircle,
     Link as LinkIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -139,8 +139,9 @@ function ScoreInput({ value, onChange }) {
 
 /* ── Submit Review form ── */
 function ReviewSubmitForm({ project, evaluation, onSubmitted, onCancel }) {
+    const weightedQuestions = (evaluation.questions ?? []).filter(q => q.has_weight !== false);
     const [answers, setAnswers] = useState(() =>
-        (evaluation.questions ?? []).map(q => ({ question_id: q.id, score: 0, comment: '' }))
+        weightedQuestions.map(q => ({ question_id: q.id, score: 0, comment: '' }))
     );
     const [notes,       setNotes]       = useState('');
     const [saving,      setSaving]      = useState(false);
@@ -148,8 +149,8 @@ function ReviewSubmitForm({ project, evaluation, onSubmitted, onCancel }) {
 
     const allAnswered = answers.every(a => a.score > 0);
 
-    const setScore   = (idx, score)   => setAnswers(prev => prev.map((a, i) => i === idx ? { ...a, score } : a));
-    const setComment = (idx, comment) => setAnswers(prev => prev.map((a, i) => i === idx ? { ...a, comment } : a));
+    const setScore   = (qid, score)   => setAnswers(prev => prev.map(a => a.question_id === qid ? { ...a, score } : a));
+    const setComment = (qid, comment) => setAnswers(prev => prev.map(a => a.question_id === qid ? { ...a, comment } : a));
 
     const handleSubmit = async () => {
         if (!allAnswered) return;
@@ -187,34 +188,44 @@ function ReviewSubmitForm({ project, evaluation, onSubmitted, onCancel }) {
             )}
 
             <div className="space-y-4">
-                {(evaluation.questions ?? []).map((q, idx) => (
-                    <div key={q.id} className="space-y-2">
-                        <div className="flex items-start gap-2">
-                            <span className="size-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                                {idx + 1}
-                            </span>
-                            <div className="flex-1">
-                                <p className="text-sm font-medium text-slate-800 dark:text-white">{q.question}</p>
-                                {q.description && (
-                                    <p className="text-[11px] text-slate-400 mt-0.5 flex gap-1">
-                                        <Info className="size-3 shrink-0 mt-0.5" />{q.description}
-                                    </p>
-                                )}
-                                <p className="text-[10px] text-primary mt-0.5">Bobot: {q.weight}%</p>
+                {(evaluation.questions ?? []).map((q, idx) => {
+                    const isWeighted = q.has_weight !== false;
+                    const answer = answers.find(a => a.question_id === q.id);
+                    return (
+                        <div key={q.id} className="space-y-2">
+                            <div className="flex items-start gap-2">
+                                <span className="size-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                    {idx + 1}
+                                </span>
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium text-slate-800 dark:text-white">{q.question}</p>
+                                    {q.description && (
+                                        <p className="text-[11px] text-slate-400 mt-0.5 flex gap-1">
+                                            <Info className="size-3 shrink-0 mt-0.5" />{q.description}
+                                        </p>
+                                    )}
+                                    {isWeighted ? (
+                                        <p className="text-[10px] text-primary mt-0.5">Bobot: {q.weight}%</p>
+                                    ) : (
+                                        <p className="text-[10px] text-slate-400 mt-0.5">Informasi — tidak dinilai</p>
+                                    )}
+                                </div>
                             </div>
+                            {isWeighted && (
+                                <div className="pl-7 space-y-1.5">
+                                    <ScoreInput value={answer.score} onChange={s => setScore(q.id, s)} />
+                                    <textarea
+                                        rows={1}
+                                        placeholder="Komentar (opsional)…"
+                                        value={answer.comment}
+                                        onChange={e => setComment(q.id, e.target.value)}
+                                        className="w-full text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary text-slate-700 dark:text-slate-300"
+                                    />
+                                </div>
+                            )}
                         </div>
-                        <div className="pl-7 space-y-1.5">
-                            <ScoreInput value={answers[idx].score} onChange={s => setScore(idx, s)} />
-                            <textarea
-                                rows={1}
-                                placeholder="Komentar (opsional)…"
-                                value={answers[idx].comment}
-                                onChange={e => setComment(idx, e.target.value)}
-                                className="w-full text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary text-slate-700 dark:text-slate-300"
-                            />
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             <div className="space-y-1">
@@ -652,13 +663,6 @@ function ReviewDashboard({ summaries, projects }) {
         if (level) byLevel[level.label] = (byLevel[level.label] ?? 0) + 1;
     });
 
-    const lowScoreProjects  = projects.filter(p => summaries[p.id]?.overall != null && summaries[p.id].overall < 60);
-    const unreviewedActive  = projects.filter(p => p.status === 'In Progress' && summaries[p.id]?.overall == null);
-    const warnings = [
-        ...lowScoreProjects.map(p => ({ project: p, type: 'low',        label: `${summaries[p.id].overall.toFixed(1)}% — skor rendah` })),
-        ...unreviewedActive.map(p => ({ project: p, type: 'unreviewed', label: 'Aktif & belum direview' })),
-    ];
-
     return (
         <div className="space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -702,43 +706,6 @@ function ReviewDashboard({ summaries, projects }) {
                 </div>
             </div>
 
-            {warnings.length > 0 && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/10 p-4 space-y-2">
-                    <div className="flex items-center gap-2">
-                        <AlertTriangle className="size-4 text-amber-500 shrink-0" />
-                        <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-                            {warnings.length} project perlu perhatian
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {warnings.map(({ project, type, label }) => (
-                            <div
-                                key={`${type}-${project.id}`}
-                                className={cn(
-                                    'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs',
-                                    type === 'low'
-                                        ? 'border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-900/20'
-                                        : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900',
-                                )}
-                            >
-                                <span className={cn(
-                                    'size-1.5 rounded-full shrink-0',
-                                    type === 'low' ? 'bg-rose-400' : 'bg-slate-400',
-                                )} />
-                                <span className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-[140px]">
-                                    {project.name}
-                                </span>
-                                <span className={cn(
-                                    'text-[10px]',
-                                    type === 'low' ? 'text-rose-500' : 'text-slate-400',
-                                )}>
-                                    · {label}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

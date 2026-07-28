@@ -1,3 +1,26 @@
+import { RATE_LIMIT_EVENT } from '../components/RateLimitToast';
+
+// Most callers still fall back to native `alert(err.message)` on failure (this codebase
+// has no toast system). For 429s we already show a design-matched toast below, so briefly
+// shadow window.alert to avoid stacking a plain browser alert on top of it.
+let alertSuppressedUntil = 0;
+if (typeof window !== 'undefined' && !window.__hubtaskAlertPatched) {
+    window.__hubtaskAlertPatched = true;
+    const originalAlert = window.alert.bind(window);
+    window.alert = (msg) => {
+        if (Date.now() < alertSuppressedUntil) return;
+        originalAlert(msg);
+    };
+}
+
+function notifyRateLimited(message, retryAfter) {
+    if (typeof window === 'undefined') return;
+    alertSuppressedUntil = Date.now() + 800;
+    window.dispatchEvent(
+        new CustomEvent(RATE_LIMIT_EVENT, { detail: { message, retryAfter: Number(retryAfter) || 0 } })
+    );
+}
+
 function normalizeApiBase() {
     const raw =
         (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '/api';
@@ -67,6 +90,11 @@ export async function fetchAPI(endpoint, options = {}) {
             ) {
                 message +=
                     ' Pastikan permintaan ke URL API dengan awalan /api (bukan path halaman React seperti /sales/pitch/...).';
+            }
+            if (response.status === 429) {
+                const retryAfter =
+                    errorData.retry_after ?? Number(response.headers.get('Retry-After')) ?? 0;
+                notifyRateLimited(message, retryAfter);
             }
             throw new Error(message);
         }

@@ -41,13 +41,28 @@ return [
     | Expiration Minutes
     |--------------------------------------------------------------------------
     |
-    | This value controls the number of minutes until an issued token will be
-    | considered expired. This will override any values set in the token's
-    | "expires_at" attribute, but first-party sessions are not affected.
+    | Hard ceiling from token creation, regardless of activity. Kept generous
+    | (default 24h) since it's just a safety net — the real limits in practice
+    | are the idle timeout below and the same-calendar-day cutoff enforced by
+    | App\Http\Middleware\ValidateSanctumTokenLifetime.
     |
     */
 
-    'expiration' => (int) env('SANCTUM_TOKEN_EXPIRATION_MINUTES', 720),
+    'expiration' => (int) env('SANCTUM_TOKEN_EXPIRATION_MINUTES', 1440),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Idle Timeout Minutes
+    |--------------------------------------------------------------------------
+    |
+    | An actively-used token never hits this — ValidateSanctumTokenLifetime
+    | pushes the token's `expires_at` forward by this many minutes on every
+    | authenticated request. Once that many minutes pass with zero requests,
+    | Sanctum's own guard (Guard::isValidAccessToken) rejects the token.
+    |
+    */
+
+    'idle_expiration' => (int) env('SESSION_IDLE_TIMEOUT_MINUTES', 480),
 
     /*
     |--------------------------------------------------------------------------

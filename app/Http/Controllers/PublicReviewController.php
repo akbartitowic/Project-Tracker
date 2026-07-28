@@ -56,6 +56,7 @@ class PublicReviewController extends Controller
                     'question'    => $q->question,
                     'description' => $q->description,
                     'weight'      => $q->weight,
+                    'has_weight'  => $q->has_weight,
                 ])->values(),
             ],
         ]);

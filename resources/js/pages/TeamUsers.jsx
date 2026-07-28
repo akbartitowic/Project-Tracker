@@ -28,6 +28,7 @@ export default function TeamUsers() {
     const [roles, setRoles] = useState([]);
     const [newUser, setNewUser] = useState({
         name: '',
+        nickname: '',
         email: '',
         role_id: '',
         phone_number: '',
@@ -46,6 +47,7 @@ export default function TeamUsers() {
             const roleName = (user.role?.name || '').toLowerCase();
             return (
                 user.name?.toLowerCase().includes(q)
+                || (user.nickname || '').toLowerCase().includes(q)
                 || user.email?.toLowerCase().includes(q)
                 || roleName.includes(q)
                 || (user.phone_number || '').toLowerCase().includes(q)
@@ -88,7 +90,7 @@ export default function TeamUsers() {
                 body: JSON.stringify({ ...newUser, status: 'Active' })
             });
             setIsModalOpen(false);
-            setNewUser({ name: '', email: '', phone_number: '', role_id: '', password: '', status: 'Active' });
+            setNewUser({ name: '', nickname: '', email: '', phone_number: '', role_id: '', password: '', status: 'Active' });
             const [userRes, roleRes] = await Promise.all([
                 fetchAPI('/users'),
                 fetchAPI('/roles')
@@ -106,6 +108,7 @@ export default function TeamUsers() {
         setEditingUserId(user.id);
         setEditingUser({
             name: user.name,
+            nickname: user.nickname || '',
             email: user.email,
             phone_number: user.phone_number || '',
             role_id: user.role?.id || '',
@@ -122,6 +125,7 @@ export default function TeamUsers() {
         try {
             const payload = {
                 name: editingUser.name,
+                nickname: editingUser.nickname,
                 email: editingUser.email,
                 phone_number: editingUser.phone_number,
                 role_id: editingUser.role_id,
@@ -264,7 +268,12 @@ export default function TeamUsers() {
                                                         {user.name.charAt(0)}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{user.name}</p>
+                                                        <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                                            {user.name}
+                                                            {user.nickname && (
+                                                                <span className="ml-1.5 font-medium text-slate-400">"{user.nickname}"</span>
+                                                            )}
+                                                        </p>
                                                         <p className="text-xs text-slate-500">{user.email}</p>
                                                     </div>
                                                 </div>
@@ -316,6 +325,10 @@ export default function TeamUsers() {
                         <div className="flex flex-col gap-2">
                             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Full Name</label>
                             <Input type="text" id="user-name" value={newUser.name} onChange={handleInputChange} placeholder="John Doe" required className="py-6" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Nickname</label>
+                            <Input type="text" id="user-nickname" value={newUser.nickname} onChange={handleInputChange} placeholder="Johnny" className="py-6" />
                         </div>
                         <div className="flex flex-col gap-2">
                             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Email Address</label>
@@ -380,6 +393,10 @@ export default function TeamUsers() {
                             <div className="flex flex-col gap-2">
                                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Full Name</label>
                                 <Input type="text" id="user-name" value={editingUser.name} onChange={handleInputChange} placeholder="John Doe" required className="py-6" />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Nickname</label>
+                                <Input type="text" id="user-nickname" value={editingUser.nickname} onChange={handleInputChange} placeholder="Johnny" className="py-6" />
                             </div>
                             <div className="flex flex-col gap-2">
                                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Email Address</label>

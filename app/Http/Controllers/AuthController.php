@@ -173,6 +173,7 @@ class AuthController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'nickname' => 'nullable|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'phone_number' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8|confirmed',
@@ -181,6 +182,7 @@ class AuthController extends Controller
         ]);
 
         $user->name = $validated['name'];
+        $user->nickname = $validated['nickname'] ?: null;
         $user->email = $validated['email'];
         $user->phone_number = $validated['phone_number'] ?? $user->phone_number;
         if (array_key_exists('task_email_notifications_enabled', $validated)) {

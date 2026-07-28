@@ -21,6 +21,7 @@ import EpicSearchInput from '../components/board/EpicSearchInput';
 import DescriptionEditor from '../components/board/DescriptionEditor';
 import TaskAssigneesSection from '../components/board/TaskAssigneesSection';
 import TaskNotesSection from '../components/board/TaskNotesSection';
+import TaskHistorySection from '../components/board/TaskHistorySection';
 import {
     billableHoursForTask,
     loadHoursForTask,
@@ -343,7 +344,7 @@ function formatTaskTimestamp(value) {
     return d.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function TaskMetaSection({ task }) {
+function TaskMetaSection({ task, taskId }) {
     const [expanded, setExpanded] = useState(false);
     const createdBy = task.created_by_name || 'Unknown';
     const updatedBy = task.updated_by_name || 'Unknown';
@@ -361,10 +362,13 @@ function TaskMetaSection({ task }) {
                 <span>Created by <span className="font-medium text-slate-600 dark:text-slate-300">{createdBy}</span></span>
             </button>
             {expanded && (
-                <div className="mt-2 ml-5 space-y-1 text-xs text-slate-500 dark:text-slate-400">
-                    {createdAt && <p>Created: {createdAt}</p>}
-                    <p>Updated by <span className="font-medium text-slate-600 dark:text-slate-300">{updatedBy}</span></p>
-                    {updatedAt && <p>Last updated: {updatedAt}</p>}
+                <div className="mt-2 ml-5 space-y-3">
+                    <div className="space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                        {createdAt && <p>Created: {createdAt}</p>}
+                        <p>Updated by <span className="font-medium text-slate-600 dark:text-slate-300">{updatedBy}</span></p>
+                        {updatedAt && <p>Last updated: {updatedAt}</p>}
+                    </div>
+                    <TaskHistorySection taskId={taskId} />
                 </div>
             )}
         </div>
@@ -3149,9 +3153,25 @@ export default function ProjectBoard() {
                                 assigneeSelectOptions={assigneeSelectOptions}
                                 hasSubtasks={hasSubtasks}
                                 canManage={canUpdateBoard}
-                                onChanged={async () => {
-                                    await loadBoard(selectedProject.id);
-                                    await syncSelectedProjectFromList(selectedProject.id);
+                                onChanged={(res) => {
+                                    // Patch the task in place from the response the assignee PUT already
+                                    // returned, instead of refetching the whole board — the card behind
+                                    // this modal (and the modal itself, since editingTask is derived from
+                                    // `tasks`) reflects the change immediately, no extra round trip.
+                                    if (!res) return;
+                                    setTasks((prev) => prev.map((t) => {
+                                        if (Number(t.id) !== Number(editingTaskId)) return t;
+                                        const primary = (res.assignees || []).find(
+                                            (a) => Number(a.id) === Number(res.assignee_id),
+                                        );
+                                        return {
+                                            ...t,
+                                            assignee_id: res.assignee_id,
+                                            assignee_name: primary?.name ?? t.assignee_name,
+                                            estimated_hours: res.estimated_hours,
+                                            assignees: res.assignees,
+                                        };
+                                    }));
                                 }}
                             />
                         </div>
@@ -3196,7 +3216,7 @@ export default function ProjectBoard() {
                         </p>
                     )}
 
-                    {editingTaskId && editingTask && <TaskMetaSection task={editingTask} />}
+                    {editingTaskId && editingTask && <TaskMetaSection task={editingTask} taskId={editingTaskId} />}
                     </div>
 
                     <DialogFooter className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 px-6 py-4 shrink-0 bg-slate-50/80 dark:bg-slate-900/40">
@@ -3538,9 +3558,10 @@ export default function ProjectBoard() {
                     <DialogHeader>
                         <DialogTitle>Import Tasks</DialogTitle>
                         <DialogDescription>
-                            Upload a CSV file to import tasks. Columns: Title, Feature Title, Description, Status, Priority,
-                            Assignee Email, Estimated Hours (base input), Project Role Quota (role name on this project, or General),
-                            Category (optional; used if quota column empty), Due Date (YYYY-MM-DD), Rush Hour (Yes/No).
+                            Upload a CSV file to import tasks. Columns: Epic, Task Title, Description, Billing Type,
+                            Priority, Start Date (YYYY-MM-DD), Due Date (YYYY-MM-DD), Assignee (Email),
+                            MH (Estimated Manhours — base input), Status, Category (optional; used if quota column empty),
+                            Project Role Quota (role name on this project, or General), Rush Hour (Yes/No).
                             Rush hour multiplies estimated hours by 1.3 before saving.
                         </DialogDescription>
                     </DialogHeader>

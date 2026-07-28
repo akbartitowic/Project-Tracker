@@ -300,11 +300,14 @@ function QuestionForm({ initial, onSave, onCancel, saving, maxWeight }) {
     const [question,    setQuestion]    = useState(initial?.question    ?? '');
     const [description, setDescription] = useState(initial?.description ?? '');
     const [weight,      setWeight]      = useState(initial?.weight      ?? '');
+    const [hasWeight,   setHasWeight]   = useState(initial ? initial.has_weight !== false : true);
 
     const limit = maxWeight ?? 100;
     const weightNum = weight !== '' ? Number(weight) : null;
-    const overLimit = weightNum !== null && weightNum > limit;
-    const valid = question.trim() && weightNum !== null && weightNum >= 0 && !overLimit;
+    const overLimit = hasWeight && weightNum !== null && weightNum > limit;
+    const valid = hasWeight
+        ? question.trim() && weightNum !== null && weightNum >= 0 && !overLimit
+        : question.trim() && description.trim();
 
     return (
         <div className="rounded-lg border border-primary/30 bg-primary/[0.02] dark:bg-primary/[0.04] p-4 space-y-3">
@@ -320,43 +323,95 @@ function QuestionForm({ initial, onSave, onCancel, saving, maxWeight }) {
                     className="text-sm h-9"
                 />
             </div>
+
             <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Deskripsi / Panduan (opsional)</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Tipe Pertanyaan</label>
+                <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setHasWeight(true)}
+                        className={cn(
+                            'flex-1 rounded-md border px-3 py-2 text-xs font-medium text-left transition-colors',
+                            hasWeight
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-primary/40',
+                        )}
+                    >
+                        Dinilai dengan bobot
+                        <p className="text-[10px] font-normal text-slate-400 mt-0.5">Diberi skor 1–10, punya bobot % ke total skor</p>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setHasWeight(false)}
+                        className={cn(
+                            'flex-1 rounded-md border px-3 py-2 text-xs font-medium text-left transition-colors',
+                            !hasWeight
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-primary/40',
+                        )}
+                    >
+                        Tanpa bobot
+                        <p className="text-[10px] font-normal text-slate-400 mt-0.5">Cuma informasi/deskripsi, tidak dinilai skor</p>
+                    </button>
+                </div>
+            </div>
+
+            <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    {hasWeight ? 'Deskripsi / Panduan (opsional)' : 'Deskripsi'}
+                    {!hasWeight && <span className="text-rose-400"> *</span>}
+                </label>
                 <textarea
                     value={description}
                     onChange={e => setDescription(e.target.value)}
-                    placeholder="Panduan singkat untuk penilai dalam menjawab pertanyaan ini…"
+                    placeholder={hasWeight
+                        ? 'Panduan singkat untuk penilai dalam menjawab pertanyaan ini…'
+                        : 'Isi informasi/keterangan yang ingin ditampilkan ke penilai…'}
                     rows={2}
                     className="w-full text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
                 />
             </div>
-            <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Bobot (%) <span className="text-rose-400">*</span>
-                </label>
-                <div className="flex items-center gap-2">
-                    <Input
-                        type="number"
-                        min={0}
-                        max={limit}
-                        step={0.01}
-                        value={weight}
-                        onChange={e => setWeight(e.target.value)}
-                        placeholder={`0–${limit}`}
-                        className={cn('text-sm h-9 w-32', overLimit && 'border-rose-400 focus-visible:ring-rose-400')}
-                    />
-                    <span className="text-xs text-slate-400">
-                        % · sisa {limit.toFixed(2).replace(/\.?0+$/, '')}%
-                    </span>
+
+            {hasWeight && (
+                <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        Bobot (%) <span className="text-rose-400">*</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <Input
+                            type="number"
+                            min={0}
+                            max={limit}
+                            step={0.01}
+                            value={weight}
+                            onChange={e => setWeight(e.target.value)}
+                            placeholder={`0–${limit}`}
+                            className={cn('text-sm h-9 w-32', overLimit && 'border-rose-400 focus-visible:ring-rose-400')}
+                        />
+                        <span className="text-xs text-slate-400">
+                            % · sisa {limit.toFixed(2).replace(/\.?0+$/, '')}%
+                        </span>
+                    </div>
+                    {overLimit && (
+                        <p className="text-xs text-rose-500">
+                            Melebihi sisa bobot ({limit.toFixed(2).replace(/\.?0+$/, '')}%). Kurangi bobot pertanyaan lain terlebih dahulu.
+                        </p>
+                    )}
                 </div>
-                {overLimit && (
-                    <p className="text-xs text-rose-500">
-                        Melebihi sisa bobot ({limit.toFixed(2).replace(/\.?0+$/, '')}%). Kurangi bobot pertanyaan lain terlebih dahulu.
-                    </p>
-                )}
-            </div>
+            )}
+
             <div className="flex items-center gap-2 pt-1">
-                <Button size="sm" className="h-8 gap-1.5" onClick={() => onSave({ question: question.trim(), description: description.trim() || null, weight: Number(weight) })} disabled={!valid || saving}>
+                <Button
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => onSave({
+                        question: question.trim(),
+                        description: description.trim() || null,
+                        has_weight: hasWeight,
+                        weight: hasWeight ? Number(weight) : 0,
+                    })}
+                    disabled={!valid || saving}
+                >
                     {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                     {initial ? 'Simpan' : 'Tambah Pertanyaan'}
                 </Button>
@@ -398,9 +453,15 @@ function QuestionRow({ question, index, canConfig, onEdit, onDelete }) {
                     )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                        {question.weight}%
-                    </span>
+                    {question.has_weight === false ? (
+                        <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                            Tanpa bobot
+                        </span>
+                    ) : (
+                        <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                            {question.weight}%
+                        </span>
+                    )}
                     {canConfig && (
                         <>
                             <button onClick={() => onEdit(question)} className="text-slate-400 hover:text-primary transition-colors p-0.5">
@@ -415,10 +476,12 @@ function QuestionRow({ question, index, canConfig, onEdit, onDelete }) {
             </div>
 
             {/* Skor 1-10 visual */}
-            <div className="pl-9 flex items-center gap-2">
-                <span className="text-[10px] text-slate-400">Skor 1–10</span>
-                <ScoreBar score={6} />
-            </div>
+            {question.has_weight !== false && (
+                <div className="pl-9 flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400">Skor 1–10</span>
+                    <ScoreBar score={6} />
+                </div>
+            )}
 
             {/* Confirm delete */}
             {confirmDel && (

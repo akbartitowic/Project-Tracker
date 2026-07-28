@@ -9,6 +9,8 @@ export function useNotifications(enabled = true) {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
 
     const refreshUnreadCount = useCallback(async () => {
         if (!enabled) return;
@@ -20,12 +22,14 @@ export function useNotifications(enabled = true) {
         }
     }, [enabled]);
 
-    const loadNotifications = useCallback(async () => {
+    const loadNotifications = useCallback(async (targetPage = 1) => {
         if (!enabled) return;
         setLoading(true);
         try {
-            const res = await fetchAPI('/notifications');
+            const res = await fetchAPI(`/notifications?page=${targetPage}`);
             setNotifications(res?.data ?? []);
+            setPage(res?.meta?.current_page ?? targetPage);
+            setTotalPages(res?.meta?.last_page ?? 1);
         } catch {
             setNotifications([]);
         } finally {
@@ -60,5 +64,8 @@ export function useNotifications(enabled = true) {
         return () => clearInterval(interval);
     }, [enabled, refreshUnreadCount]);
 
-    return { notifications, unreadCount, loading, loadNotifications, markAsRead, markAllAsRead };
+    return {
+        notifications, unreadCount, loading, page, totalPages,
+        loadNotifications, markAsRead, markAllAsRead,
+    };
 }

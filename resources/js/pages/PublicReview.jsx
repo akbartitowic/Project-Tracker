@@ -86,9 +86,9 @@ export default function PublicReview() {
         fetchPublic(`/public/review/${token}`)
             .then(res => {
                 setFormData(res.data);
-                setAnswers((res.data.questions ?? []).map(q => ({
-                    question_id: q.id, score: 0, comment: '',
-                })));
+                setAnswers((res.data.questions ?? [])
+                    .filter(q => q.has_weight !== false)
+                    .map(q => ({ question_id: q.id, score: 0, comment: '' })));
             })
             .catch(e => setError(e.message))
             .finally(() => setLoading(false));
@@ -269,37 +269,47 @@ export default function PublicReview() {
                                     </div>
 
                                     <div className="space-y-5 divide-y divide-slate-100">
-                                        {formData.questions.map((q, idx) => (
-                                            <div key={q.id} className="pt-4 first:pt-0 space-y-2.5">
-                                                <div className="flex items-start gap-2.5">
-                                                    <span className="size-6 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                                                        {idx + 1}
-                                                    </span>
-                                                    <div className="flex-1">
-                                                        <p className="text-sm font-medium text-slate-800 leading-snug">{q.question}</p>
-                                                        {q.description && (
-                                                            <p className="text-[11px] text-slate-400 mt-1 flex gap-1.5">
-                                                                <Info className="size-3 shrink-0 mt-0.5" />{q.description}
-                                                            </p>
-                                                        )}
-                                                        <p className="text-[10px] text-primary mt-0.5">Bobot: {q.weight}%</p>
+                                        {formData.questions.map((q, idx) => {
+                                            const isWeighted = q.has_weight !== false;
+                                            const answer = answers.find(a => a.question_id === q.id);
+                                            return (
+                                                <div key={q.id} className="pt-4 first:pt-0 space-y-2.5">
+                                                    <div className="flex items-start gap-2.5">
+                                                        <span className="size-6 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                                            {idx + 1}
+                                                        </span>
+                                                        <div className="flex-1">
+                                                            <p className="text-sm font-medium text-slate-800 leading-snug">{q.question}</p>
+                                                            {q.description && (
+                                                                <p className="text-[11px] text-slate-400 mt-1 flex gap-1.5">
+                                                                    <Info className="size-3 shrink-0 mt-0.5" />{q.description}
+                                                                </p>
+                                                            )}
+                                                            {isWeighted ? (
+                                                                <p className="text-[10px] text-primary mt-0.5">Bobot: {q.weight}%</p>
+                                                            ) : (
+                                                                <p className="text-[10px] text-slate-400 mt-0.5">Informasi — tidak dinilai</p>
+                                                            )}
+                                                        </div>
                                                     </div>
+                                                    {isWeighted && (
+                                                        <div className="pl-8 space-y-2">
+                                                            <ScoreInput
+                                                                value={answer.score}
+                                                                onChange={s => setAnswers(prev => prev.map(a => a.question_id === q.id ? { ...a, score: s } : a))}
+                                                            />
+                                                            <textarea
+                                                                rows={1}
+                                                                placeholder="Komentar (opsional)…"
+                                                                value={answer.comment}
+                                                                onChange={e => setAnswers(prev => prev.map(a => a.question_id === q.id ? { ...a, comment: e.target.value } : a))}
+                                                                className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary text-slate-700"
+                                                            />
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <div className="pl-8 space-y-2">
-                                                    <ScoreInput
-                                                        value={answers[idx].score}
-                                                        onChange={s => setAnswers(prev => prev.map((a, i) => i === idx ? { ...a, score: s } : a))}
-                                                    />
-                                                    <textarea
-                                                        rows={1}
-                                                        placeholder="Komentar (opsional)…"
-                                                        value={answers[idx].comment}
-                                                        onChange={e => setAnswers(prev => prev.map((a, i) => i === idx ? { ...a, comment: e.target.value } : a))}
-                                                        className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary text-slate-700"
-                                                    />
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
 
                                     {/* General notes */}

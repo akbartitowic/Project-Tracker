@@ -1,4 +1,4 @@
-import { Menu, Search, Bell, Loader2, UserPlus, CalendarClock, AtSign } from "lucide-react";
+import { Menu, Search, Bell, Loader2, UserPlus, CalendarClock, AtSign, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,7 @@ function describeNotification(data) {
 export default function Header({ title = "Executive Overview", onMenuClick }) {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { notifications, unreadCount, loading, loadNotifications, markAsRead, markAllAsRead } =
+    const { notifications, unreadCount, loading, page, totalPages, loadNotifications, markAsRead, markAllAsRead } =
         useNotifications(!!user);
 
     const handleNotificationClick = (notification) => {
@@ -105,7 +105,7 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                         className="w-48 lg:w-64 pl-10 pr-4 py-2 bg-white dark:bg-[#151b28] border-slate-200 dark:border-white/10 rounded-lg text-sm focus-visible:ring-accent focus-visible:border-accent text-slate-900 dark:text-white transition-colors duration-200" />
                 </div>
 
-                <DropdownMenu onOpenChange={(open) => open && loadNotifications()}>
+                <DropdownMenu onOpenChange={(open) => open && loadNotifications(1)}>
                     <DropdownMenuTrigger asChild>
                         <Button
                             variant="outline"
@@ -158,40 +158,84 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                                         const isUnread = !n.read_at;
                                         const { Icon, iconClass, title, subtitle } = describeNotification(data);
                                         return (
-                                            <li key={n.id}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleNotificationClick(n)}
-                                                    className={`w-full text-left px-3 py-2.5 flex items-start gap-2.5 hover:bg-slate-50 dark:hover:bg-white/5 ${
-                                                        isUnread ? "bg-accent/5 dark:bg-accent/10" : ""
-                                                    }`}
-                                                >
-                                                    <div className={`size-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${iconClass}`}>
-                                                        <Icon className="size-4" />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="text-xs text-slate-700 dark:text-slate-300">
+                                            <li
+                                                key={n.id}
+                                                className={`px-3 py-2.5 flex items-start gap-2.5 ${
+                                                    isUnread ? "bg-accent/5 dark:bg-accent/10" : ""
+                                                }`}
+                                            >
+                                                <div className={`size-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${iconClass}`}>
+                                                    <Icon className="size-4" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-start gap-1.5">
+                                                        <p className="text-xs text-slate-700 dark:text-slate-300 flex-1">
                                                             {title}
                                                         </p>
-                                                        {subtitle && (
-                                                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                                                {subtitle}
-                                                            </p>
-                                                        )}
+                                                        {isUnread && <span className="size-2 rounded-full bg-accent shrink-0 mt-1" />}
+                                                    </div>
+                                                    {subtitle && (
+                                                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                                            {subtitle}
+                                                        </p>
+                                                    )}
+                                                    <div className="flex items-center justify-between mt-1.5">
                                                         <span className="text-[10px] text-slate-400">
                                                             {formatNotificationTime(n.created_at)}
                                                         </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleNotificationClick(n);
+                                                            }}
+                                                            className="flex items-center gap-1 rounded-md border border-accent/30 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/10 transition-colors"
+                                                        >
+                                                            Detail
+                                                            <ChevronRight className="size-3" />
+                                                        </button>
                                                     </div>
-                                                    {isUnread && (
-                                                        <span className="size-2 rounded-full bg-accent shrink-0 mt-1.5" />
-                                                    )}
-                                                </button>
+                                                </div>
                                             </li>
                                         );
                                     })}
                                 </ul>
                             )}
                         </div>
+                        {!loading && totalPages > 1 && (
+                            <>
+                                <DropdownMenuSeparator className="m-0" />
+                                <div className="flex items-center justify-between px-3 py-2">
+                                    <button
+                                        type="button"
+                                        disabled={page <= 1}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            loadNotifications(page - 1);
+                                        }}
+                                        className="p-1 rounded-md text-slate-400 hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                                        aria-label="Halaman sebelumnya"
+                                    >
+                                        <ChevronLeft className="size-4" />
+                                    </button>
+                                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                        Halaman {page} / {totalPages}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        disabled={page >= totalPages}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            loadNotifications(page + 1);
+                                        }}
+                                        className="p-1 rounded-md text-slate-400 hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                                        aria-label="Halaman berikutnya"
+                                    >
+                                        <ChevronRight className="size-4" />
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>

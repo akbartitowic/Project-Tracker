@@ -39,7 +39,7 @@ class UserController extends Controller
     {
         return response()->json([
             'data' => User::with('role')
-                ->select('id', 'name', 'email', 'phone_number', 'status', 'role_id', 'role', 'created_at', 'updated_at')
+                ->select('id', 'name', 'nickname', 'email', 'phone_number', 'status', 'role_id', 'role', 'created_at', 'updated_at')
                 ->get(),
         ]);
     }
@@ -48,6 +48,7 @@ class UserController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string',
+            'nickname' => 'nullable|string|max:255',
             'role_id' => 'required|exists:roles,id',
             'email' => 'required|email|unique:users',
             'phone_number' => 'nullable|string',
@@ -74,6 +75,7 @@ class UserController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string',
+            'nickname' => 'nullable|string|max:255',
             'role_id' => 'required|exists:roles,id',
             'email' => 'required|email|unique:users,email,' . $user->id,
             'phone_number' => 'nullable|string',
