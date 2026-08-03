@@ -12,19 +12,6 @@ class Task extends Model
 {
     use HasFactory;
 
-    const UPDATED_AT = null;
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($task) {
-            if (empty($task->updated_at)) {
-                $task->updated_at = $task->freshTimestamp();
-            }
-        });
-    }
-
     protected $fillable = [
         'title',
         'feature_title',
@@ -58,10 +45,6 @@ class Task extends Model
         'start_date' => 'date:Y-m-d',
         'last_due_reminder_sent_at' => 'datetime',
         'sort_order' => 'integer',
-        // `UPDATED_AT = null` above (disables Eloquent's auto-touch) also drops `updated_at`
-        // from Eloquent's automatic date-casting list, so it must be declared explicitly here
-        // to still come back as a Carbon instance instead of a raw string.
-        'updated_at' => 'datetime',
     ];
 
     public function project(): BelongsTo

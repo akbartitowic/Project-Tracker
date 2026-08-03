@@ -22,3 +22,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Graphify (local codebase-analysis CLI aid, not a project dependency)
+/graphify-out

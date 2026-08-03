@@ -6,6 +6,7 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [loginNotifications, setLoginNotifications] = useState(null);
 
     useEffect(() => {
         const token = localStorage.getItem('auth_token');
@@ -39,10 +40,25 @@ export function AuthProvider({ children }) {
         if (res.status === 'success') {
             localStorage.setItem('auth_token', res.access_token);
             setUser(res.user);
+            fetchUnreadForLoginPopup();
             return { success: true, user: res.user };
         }
         return { success: false, message: res.message };
     };
+
+    // Best-effort: shown once right after a successful login, never blocks the login flow itself.
+    const fetchUnreadForLoginPopup = async () => {
+        try {
+            const res = await fetchAPI('/notifications/unread');
+            if (res?.data?.length) {
+                setLoginNotifications({ items: res.data, total: res?.meta?.total ?? res.data.length });
+            }
+        } catch {
+            // Silent — popup just won't show, bell/badge still reflects unread state normally.
+        }
+    };
+
+    const dismissLoginNotifications = () => setLoginNotifications(null);
 
     const signup = async (userData) => {
         const res = await fetchAPI('/signup', {
@@ -89,7 +105,7 @@ export function AuthProvider({ children }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, signup, logout, updateProfile }}>
+        <AuthContext.Provider value={{ user, loading, login, signup, logout, updateProfile, loginNotifications, dismissLoginNotifications }}>
             {children}
         </AuthContext.Provider>
     );

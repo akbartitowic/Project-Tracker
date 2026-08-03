@@ -92,7 +92,7 @@ class PermissionCatalog
             'read' => 'Read',
             'update' => 'Update',
             'delete' => 'Delete',
-            'edit_last_update' => 'Edit Last Update',
+            'edit_last_update' => 'Update Date Task Manual',
         ];
 
         $sortOrder = 0;

@@ -21,13 +21,14 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
-const ACTIONS = ['create', 'read', 'update', 'delete'];
+const ACTIONS = ['create', 'read', 'update', 'delete', 'edit_last_update'];
 
 const ACTION_LABELS = {
     create: 'Create',
     read: 'Menu',
     update: 'Update',
     delete: 'Delete',
+    edit_last_update: 'Update Date Task Manual',
 };
 
 const ACTION_HINTS = {
@@ -35,6 +36,11 @@ const ACTION_HINTS = {
     create: 'Tambah data baru',
     update: 'Ubah data',
     delete: 'Hapus data',
+    edit_last_update: 'Override tanggal "Diperbarui" pada task secara manual',
+};
+
+const ACTION_BADGE_LABELS = {
+    edit_last_update: 'manual',
 };
 
 /* Per-module, per-action extra notes — used to clarify integration impact */
@@ -552,7 +558,7 @@ export default function SystemRoles() {
                                                                                         : 'border-slate-200 text-slate-500',
                                                                                 )}
                                                                             >
-                                                                                {action}
+                                                                                {ACTION_BADGE_LABELS[action] || action}
                                                                             </Badge>
                                                                         </div>
                                                                         <p className="mt-0.5 text-xs text-slate-500">

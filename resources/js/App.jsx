@@ -36,6 +36,7 @@ import PublicReview from './pages/PublicReview';
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
+import LoginNotificationsModal from './components/LoginNotificationsModal';
 import { useAuth } from './context/AuthContext';
 import { getDefaultLandingPath, getRequiredPermissionForPath, hasPermission } from './utils/permissions';
 
@@ -115,6 +116,7 @@ function App() {
           <Route path="integrasi/connector" element={<ConnectorMonitoring />} />
         </Route>
       </Routes>
+      <LoginNotificationsModal />
     </Router>
   );
 }

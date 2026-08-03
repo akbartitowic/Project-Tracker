@@ -1,4 +1,4 @@
-import { Menu, Search, Bell, Loader2, UserPlus, CalendarClock, AtSign, ChevronLeft, ChevronRight } from "lucide-react";
+import { Menu, Search, Bell, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,60 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "../../context/AuthContext";
 import { useNotifications } from "../../hooks/useNotifications";
-
-function formatNotificationTime(iso) {
-    if (!iso) return "";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "";
-    return d.toLocaleString("id-ID", {
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-}
-
-function describeNotification(data) {
-    if (data.type === "task_assigned") {
-        return {
-            Icon: UserPlus,
-            iconClass: "bg-primary/10 text-primary",
-            title: (
-                <>
-                    Kamu di-assign ke task{" "}
-                    <span className="font-semibold">{data.task_title}</span>
-                </>
-            ),
-            subtitle: data.project_name || null,
-        };
-    }
-    if (data.type === "task_due_reminder") {
-        return {
-            Icon: CalendarClock,
-            iconClass: "bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
-            title: (
-                <>
-                    Task <span className="font-semibold">{data.task_title}</span> sudah jatuh tempo
-                </>
-            ),
-            subtitle: data.due_date ? `Due date: ${data.due_date}` : null,
-        };
-    }
-    // task_mention (default)
-    return {
-        Icon: AtSign,
-        iconClass: "bg-primary/10 text-primary",
-        title: (
-            <>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                    {data.mentioned_by_name || "Seseorang"}
-                </span>{" "}
-                mention kamu di task <span className="font-semibold">{data.task_title}</span>
-            </>
-        ),
-        subtitle: data.note_excerpt || null,
-    };
-}
+import { describeNotification, formatNotificationTime } from "../../utils/notificationDisplay";
 
 export default function Header({ title = "Executive Overview", onMenuClick }) {
     const navigate = useNavigate();

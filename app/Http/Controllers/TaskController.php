@@ -1320,6 +1320,9 @@ class TaskController extends Controller
         }
 
         $updateData['updated_by_id'] = $user->id;
+        // Mass update() via the query builder never auto-touches timestamps (unlike a single
+        // model's save()/update()), so it has to be set explicitly here.
+        $updateData['updated_at'] = now();
 
         // Legacy tasks with no creator on record: the first person to touch them becomes the creator.
         $changes = Task::whereIn('id', $validated['task_ids'])
