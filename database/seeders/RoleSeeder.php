@@ -15,6 +15,7 @@ class RoleSeeder extends Seeder
         $roles = [
             ['name' => 'Admin', 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'Project Manager', 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Project Director', 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'Developer', 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'Designer', 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'QA', 'created_at' => now(), 'updated_at' => now()],

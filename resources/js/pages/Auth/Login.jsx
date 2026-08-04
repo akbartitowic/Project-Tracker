@@ -116,7 +116,7 @@ export default function Login() {
         try {
             const res = await login(credentials.email, credentials.password);
             if (res.success) {
-                navigate(getDefaultLandingPath(res.user));
+                navigate(res.user?.password_expired ? '/force-change-password' : getDefaultLandingPath(res.user));
             } else {
                 setError(res.message);
             }

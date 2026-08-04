@@ -33,6 +33,7 @@
 - [x] RBAC — System Roles & Permissions
 - [x] RBAC — Modules/Menus sebagai entitas DB nyata (tabel `modules`, FK dari `permissions`) + halaman admin "Modules" (`/modules`, read + toggle `is_active`/`sort_order`; nama modul tetap code-defined via `PermissionCatalog::menuActionMap()`). Menonaktifkan modul benar-benar memblokir akses (middleware + sidebar), bukan cuma kosmetik.
 - [x] Manajemen User (Team Users)
+- [x] Password Policy — wajib ganti password tiap 6 bulan (`User::isPasswordExpired()`), tidak boleh reuse 3 password terakhir (`App\Support\PasswordPolicy`, tabel `password_histories`), dipaksa ganti password via halaman `/force-change-password` saat login jika sudah expired
 
 ### Core Project
 - [x] Project List
@@ -44,7 +45,8 @@
 - [x] Project Board — Notes
 - [x] Task Management (CRUD, subtask, assignee, due date, priority, billable, rush hour, duplicate/clone task dengan opsi ikut subtask, multi-assignee dengan status aktif per task)
 - [x] Task Notes (@mention anggota project di komentar + notifikasi email & in-app bell ke yang di-mention)
-- [x] Notifikasi in-app (bell) + email untuk 3 aktivitas: @mention di task notes, task-assigned, due-date reminder — semua via Laravel Notification (`database` + `mail` channel), in-app selalu tercatat walau user matiin toggle email personal
+- [x] Notifikasi in-app (bell) + email untuk 4 aktivitas: @mention di task notes, task-assigned, due-date reminder, MH top-up threshold — semua via Laravel Notification (`database` + `mail` channel), in-app selalu tercatat walau user matiin toggle email personal
+- [x] Notifikasi threshold MH per top-up (50/70/90%) untuk project Agile — ke role Project Manager & Project Director yang jadi member project tsb, dihitung per top-up individual (FIFO bucket), bukan dari total MH project
 - [x] Manhour Logging
 - [x] Project Members & Role Quotas
 - [x] Team Load Monitoring

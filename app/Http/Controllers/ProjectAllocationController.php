@@ -9,12 +9,16 @@ use App\Models\Manhour;
 use App\Models\ProjectRoleQuota;
 use App\Models\Task;
 use App\Support\ProjectAccess;
+use App\Services\ManhourThresholdService;
 use App\Services\WebhookDispatcher;
+use App\Traits\LogActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProjectAllocationController extends Controller
 {
+    use LogActivity;
+
     private const CHANGE_REQUEST_CATEGORY = 'Change Request';
 
     private function isChangeRequestRow($row): bool
@@ -42,6 +46,18 @@ class ProjectAllocationController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    /**
+     * Best-effort: MH quota/threshold notification failures must never break the finance action itself.
+     */
+    private function checkManhourThresholds(int $projectId): void
+    {
+        try {
+            ManhourThresholdService::checkProject($projectId);
+        } catch (\Throwable $e) {
+            \Log::warning("Manhour threshold check failed for project {$projectId}: " . $e->getMessage());
+        }
     }
 
     private function allocationUserOptions(): array
@@ -111,6 +127,9 @@ class ProjectAllocationController extends Controller
 
         app(WebhookDispatcher::class)->dispatch('allocation.created', $allocation);
 
+        $projectName = Project::find($allocation->project_id)?->name ?? "#{$allocation->project_id}";
+        $this->log('Project', 'Created Allocation', "Added allocation of {$allocation->amount} for project: {$projectName}");
+
         return response()->json(['id' => $allocation->id]);
     }
 
@@ -140,6 +159,9 @@ class ProjectAllocationController extends Controller
 
         app(WebhookDispatcher::class)->dispatch('allocation.updated', $allocation->fresh());
 
+        $projectName = Project::find($allocation->project_id)?->name ?? "#{$allocation->project_id}";
+        $this->log('Project', 'Updated Allocation', "Updated allocation #{$allocation->id} for project: {$projectName}");
+
         return response()->json([
             'message' => 'Allocation updated',
             'data' => $allocation->fresh(),
@@ -155,11 +177,13 @@ class ProjectAllocationController extends Controller
 
         ProjectAccess::assertCanAccessProjectFinance($request->user(), (int) $allocation->project_id);
 
+        $projectName = Project::find($allocation->project_id)?->name ?? "#{$allocation->project_id}";
         $deleted = $allocation->delete();
 
         // Attributes remain accessible after delete() in Laravel, so full payload is preserved
         if ($deleted) {
             app(WebhookDispatcher::class)->dispatch('allocation.deleted', $allocation);
+            $this->log('Project', 'Deleted Allocation', "Deleted allocation #{$allocation->id} for project: {$projectName}");
         }
 
         return response()->json(['deleted' => $deleted ? 1 : 0]);
@@ -187,6 +211,9 @@ class ProjectAllocationController extends Controller
         $allocation->save();
 
         app(WebhookDispatcher::class)->dispatch('allocation.realized', $allocation);
+
+        $projectName = Project::find($allocation->project_id)?->name ?? "#{$allocation->project_id}";
+        $this->log('Project', 'Realized Allocation', "Realized allocation #{$allocation->id} ({$allocation->realized_amount}) for project: {$projectName}");
 
         return response()->json([
             'message' => 'Realization saved',
@@ -238,6 +265,10 @@ class ProjectAllocationController extends Controller
         $allocation->save();
 
         app(WebhookDispatcher::class)->dispatch('allocation.paid', $allocation->fresh());
+
+        $projectName = Project::find($allocation->project_id)?->name ?? "#{$allocation->project_id}";
+        $paidActivity = !empty($validated['reset']) ? 'Reset Allocation Payment' : 'Recorded Allocation Payment';
+        $this->log('Project', $paidActivity, "Allocation #{$allocation->id} paid amount now {$allocation->paid_amount} for project: {$projectName}");
 
         return response()->json([
             'message' => !empty($validated['reset']) ? 'Paid amount reset' : 'Payment recorded',
@@ -298,6 +329,9 @@ class ProjectAllocationController extends Controller
             DB::commit();
 
             app(WebhookDispatcher::class)->dispatch('allocation.created', $topupAllocation);
+            $this->checkManhourThresholds((int) $id);
+
+            $this->log('Project', 'Top-Up Quota', "Added {$validated['additional_hours']} hours ({$validated['additional_quotation']}) to project: {$project->name}");
 
             return response()->json(['message' => 'Top up successful']);
         } catch (\Exception $e) {
@@ -344,6 +378,8 @@ class ProjectAllocationController extends Controller
             DB::commit();
 
             app(WebhookDispatcher::class)->dispatch('allocation.created', $crAllocation);
+
+            $this->log('Project', 'Created Change Request', "Change request '{$validated['cr_feature']}' ({$validated['additional_quotation']}) for project: {$project->name}");
 
             return response()->json(['message' => 'Change request recorded']);
         } catch (\Exception $e) {
@@ -518,6 +554,12 @@ class ProjectAllocationController extends Controller
 
             DB::commit();
 
+            $this->checkManhourThresholds((int) $id);
+
+            $fromLabel = $fromType === 'role' ? "role #{$fromRoleId}" : 'general';
+            $toLabel = $toType === 'role' ? "role #{$toRoleId}" : 'general';
+            $this->log('Project', 'Transferred Quota', "Transferred {$hours} hours from {$fromLabel} to {$toLabel} for project: {$project->name}");
+
             return response()->json(['message' => 'Quota MH berhasil dipindahkan.']);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -561,6 +603,8 @@ class ProjectAllocationController extends Controller
 
         $quota->is_active = false;
         $quota->save();
+
+        $this->log('Project', 'Deactivated Role Quota', "Deactivated quota #{$quota->id} for project: {$project->name}");
 
         return response()->json(['message' => 'Kategori berhasil dinonaktifkan.']);
     }

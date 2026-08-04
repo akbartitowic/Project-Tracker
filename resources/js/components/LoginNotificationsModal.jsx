@@ -27,6 +27,8 @@ export default function LoginNotificationsModal() {
         const { project_id, task_id } = notification.data || {};
         if (project_id && task_id) {
             navigate(`/board/${project_id}/task/${task_id}`);
+        } else if (project_id) {
+            navigate(`/board/${project_id}/dashboard`);
         }
     };
 

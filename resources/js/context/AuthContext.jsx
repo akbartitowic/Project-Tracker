@@ -40,7 +40,11 @@ export function AuthProvider({ children }) {
         if (res.status === 'success') {
             localStorage.setItem('auth_token', res.access_token);
             setUser(res.user);
-            fetchUnreadForLoginPopup();
+            // Skip the unread-notifications popup when the user is about to be forced
+            // into the mandatory password-change page — nothing else should show first.
+            if (!res.user?.password_expired) {
+                fetchUnreadForLoginPopup();
+            }
             return { success: true, user: res.user };
         }
         return { success: false, message: res.message };
@@ -104,8 +108,26 @@ export function AuthProvider({ children }) {
         return { success: false, message: res.message };
     };
 
+    // Used by the mandatory password-rotation page (user.password_expired === true).
+    // Always force-logs-out on success — same policy as a voluntary change in updateProfile().
+    const forceChangePassword = async (payload) => {
+        const res = await fetchAPI('/force-password-change', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+
+        if (res.status === 'success') {
+            if (res.force_logout) {
+                localStorage.removeItem('auth_token');
+                setUser(null);
+            }
+            return { success: true, message: res.message };
+        }
+        return { success: false, message: res.message };
+    };
+
     return (
-        <AuthContext.Provider value={{ user, loading, login, signup, logout, updateProfile, loginNotifications, dismissLoginNotifications }}>
+        <AuthContext.Provider value={{ user, loading, login, signup, logout, updateProfile, forceChangePassword, loginNotifications, dismissLoginNotifications }}>
             {children}
         </AuthContext.Provider>
     );

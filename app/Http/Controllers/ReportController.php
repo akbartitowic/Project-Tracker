@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Support\ProjectAccess;
 use App\Support\UserAccess;
+use App\Traits\LogActivity;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -15,6 +16,8 @@ use Illuminate\Support\Facades\Mail;
 
 class ReportController extends Controller
 {
+    use LogActivity;
+
     private function normalizeTaskStatus(?string $status): string
     {
         $value = trim((string) $status);
@@ -115,12 +118,15 @@ class ReportController extends Controller
                     ]);
             });
 
+            $this->log('System', 'Report Email Sent', "Report for project '{$data['project']->name}' sent to " . implode(', ', $emails));
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Report sent successfully to ' . count($emails) . ' recipients.',
             ]);
         } catch (\Exception $e) {
             Log::error('Mail Error: ' . $e->getMessage());
+            $this->log('System', 'Report Email Failed', "Failed sending report for project '{$data['project']->name}' to " . implode(', ', $emails) . ": {$e->getMessage()}");
 
             return response()->json([
                 'status' => 'error',

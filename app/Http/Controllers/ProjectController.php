@@ -15,6 +15,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Support\EmailListParser;
 use App\Support\ProjectAccess;
 use App\Support\PublicStorageUrl;
 use App\Support\UserAccess;
@@ -130,6 +131,9 @@ class ProjectController extends Controller
             'project_id' => $id,
         ]);
 
+        $projectName = Project::find($id)?->name ?? "#{$id}";
+        $this->log('Project', 'Favorited Project', "Favorited project: {$projectName}");
+
         return response()->json(['message' => 'Project favorited']);
     }
 
@@ -142,7 +146,33 @@ class ProjectController extends Controller
             ->where('project_id', $id)
             ->delete();
 
+        $projectName = Project::find($id)?->name ?? "#{$id}";
+        $this->log('Project', 'Unfavorited Project', "Unfavorited project: {$projectName}");
+
         return response()->json(['message' => 'Project unfavorited']);
+    }
+
+    /**
+     * Store the project's default reviewer email list. Independent of any
+     * ReviewEvaluation config — lets PMs collect client emails ahead of time
+     * even before an evaluation cycle has been configured for the methodology.
+     */
+    public function updateReviewClientEmails(Request $request, $id)
+    {
+        $user = $request->user();
+        ProjectAccess::assertCanAccessProject($user, (int) $id);
+
+        $project = Project::findOrFail($id);
+
+        $validated = $request->validate([
+            'client_emails'   => 'nullable',
+            'client_emails.*' => 'string',
+        ]);
+
+        $project->review_client_emails = EmailListParser::parse($validated['client_emails'] ?? null);
+        $project->save();
+
+        return response()->json(['data' => ['review_client_emails' => $project->review_client_emails]]);
     }
 
     public function destroy(Request $request)

@@ -9,6 +9,7 @@ use App\Notifications\TaskAssignedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Throwable;
+use App\Services\ManhourThresholdService;
 use App\Services\TaskAggregationService;
 use App\Support\ProjectAccess;
 use App\Support\PublicStorageUrl;
@@ -27,6 +28,18 @@ class TaskController extends Controller
     use LogActivity;
 
     private const RUSH_HOUR_FACTOR = 1.3;
+
+    /**
+     * Best-effort: MH quota/threshold notification failures must never break the task mutation itself.
+     */
+    private function checkManhourThresholds(int $projectId): void
+    {
+        try {
+            ManhourThresholdService::checkProject($projectId);
+        } catch (\Throwable $e) {
+            \Log::warning("Manhour threshold check failed for project {$projectId}: " . $e->getMessage());
+        }
+    }
 
     /**
      * Notifies the assignee in-app (always) and by email (if they haven't disabled it).
@@ -697,6 +710,7 @@ class TaskController extends Controller
             DB::commit();
 
             if ($successCount > 0) {
+                $this->checkManhourThresholds((int) $project->id);
                 $this->log('Project', 'Imported Tasks', "Imported $successCount tasks to project ID: {$project->id}");
             }
 
@@ -791,6 +805,7 @@ class TaskController extends Controller
         if ($task->parent_task_id) {
             TaskAggregationService::syncParentEstimatedHours((int) $task->parent_task_id);
         }
+        $this->checkManhourThresholds((int) $task->project_id);
 
         $label = $task->parent_task_id ? 'subtask' : 'task';
         $this->log('Project', 'Created Task', "Added {$label} '{$task->title}' to project ID: {$task->project_id}");
@@ -906,6 +921,8 @@ class TaskController extends Controller
             );
             $this->sendTaskAssignedEmail($newTask);
         }
+
+        $this->checkManhourThresholds((int) $newTask->project_id);
 
         $this->log('Project', 'Duplicated Task', "Duplicated task '{$task->title}' (ID: {$task->id}) into new task ID: {$newTask->id}");
 
@@ -1056,6 +1073,8 @@ class TaskController extends Controller
             }
         }
 
+        $this->checkManhourThresholds((int) $task->project_id);
+
         $this->log('Project', 'Updated Task Assignees', "Updated assignees for task '{$task->title}' (ID: {$task->id}).");
 
         $currentAssignees = $task->assignees()->get(['users.id', 'users.name']);
@@ -1166,6 +1185,9 @@ class TaskController extends Controller
         } elseif ($changes) {
             TaskAggregationService::syncParentEstimatedHours((int) $task->id);
         }
+        if ($changes) {
+            $this->checkManhourThresholds((int) $task->project_id);
+        }
 
         return response()->json(['changes' => $changes]);
     }
@@ -1184,6 +1206,7 @@ class TaskController extends Controller
         if ($parentId) {
             TaskAggregationService::syncParentEstimatedHours($parentId);
         }
+        $this->checkManhourThresholds((int) $task->project_id);
 
         $this->log('Project', 'Deleted Task', "Deleted task ID: {$id}");
 
@@ -1212,11 +1235,15 @@ class TaskController extends Controller
 
         $parentIds = $tasks->pluck('parent_task_id')->filter()->unique()->all();
         $deletedIds = $tasks->pluck('id')->all();
+        $projectIds = $tasks->pluck('project_id')->unique();
 
         $deletedCount = Task::whereIn('id', $ids)->delete();
 
         foreach ($parentIds as $parentId) {
             TaskAggregationService::syncParentEstimatedHours((int) $parentId);
+        }
+        foreach ($projectIds as $projectId) {
+            $this->checkManhourThresholds((int) $projectId);
         }
 
         $this->log('Project', 'Bulk Deleted Tasks', 'Deleted ' . $deletedCount . ' task(s): ID ' . implode(', ', $deletedIds));
@@ -1267,6 +1294,7 @@ class TaskController extends Controller
         if (!empty($update['parent_task_id'])) {
             TaskAggregationService::syncParentEstimatedHours((int) $update['parent_task_id']);
         }
+        $this->checkManhourThresholds((int) $task->project_id);
 
         $this->log('Project', 'Promoted Backlog', "Backlog '{$task->title}' moved to board in project ID: {$task->project_id}");
 
@@ -1341,6 +1369,13 @@ class TaskController extends Controller
 
             foreach ($parentIds as $parentId) {
                 TaskAggregationService::syncParentEstimatedHours((int) $parentId);
+            }
+        }
+
+        if (array_key_exists('estimated_hours', $updateData) || array_key_exists('project_role_id', $updateData)) {
+            $projectIds = Task::whereIn('id', $validated['task_ids'])->pluck('project_id')->unique();
+            foreach ($projectIds as $projectId) {
+                $this->checkManhourThresholds((int) $projectId);
             }
         }
 

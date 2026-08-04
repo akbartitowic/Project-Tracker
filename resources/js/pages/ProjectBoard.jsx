@@ -1463,7 +1463,7 @@ export default function ProjectBoard() {
         if (users.length > 0) {
             return users.map((u) => ({
                 id: u.id,
-                label: `${u.name} (${u.role?.name || u.role || 'Member'})`,
+                label: u.name,
             }));
         }
         const seen = new Set();
@@ -1473,7 +1473,7 @@ export default function ProjectBoard() {
             seen.add(m.user_id);
             opts.push({
                 id: m.user_id,
-                label: `${m.user_name || 'User'} (${m.role_name || 'Member'})`,
+                label: m.user_name || 'User',
             });
         }
         return opts;
@@ -2020,7 +2020,7 @@ export default function ProjectBoard() {
 
                     {/* Assign Members Modal (available from project list) */}
                     <Dialog open={isAssignMembersModalOpen} onOpenChange={setIsAssignMembersModalOpen}>
-                        <DialogContent className="sm:max-w-[640px]">
+                        <DialogContent className="sm:max-w-[640px]" onOpenAutoFocus={(e) => e.preventDefault()}>
                             <DialogHeader>
                                 <DialogTitle>Assign Project Members</DialogTitle>
                                 <DialogDescription>
@@ -3409,7 +3409,7 @@ export default function ProjectBoard() {
 
             {/* Assign Members Modal */}
             <Dialog open={isAssignMembersModalOpen} onOpenChange={setIsAssignMembersModalOpen}>
-                <DialogContent className="sm:max-w-[640px]">
+                <DialogContent className="sm:max-w-[640px]" onOpenAutoFocus={(e) => e.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle>Assign Project Members</DialogTitle>
                         <DialogDescription>

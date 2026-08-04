@@ -45,6 +45,7 @@ Keep total length **&lt; 48 chars** when possible.
 | task_assignees | `tka` |
 | task_note_mentions | `tnm` |
 | task_field_changes | `tfc` |
+| password_histories | `ph` |
 
 Add a new row here when you introduce a new table.
 

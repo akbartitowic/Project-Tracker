@@ -1,4 +1,4 @@
-import { UserPlus, CalendarClock, AtSign } from "lucide-react";
+import { UserPlus, CalendarClock, AtSign, TrendingUp } from "lucide-react";
 
 export function formatNotificationTime(iso) {
     if (!iso) return "";
@@ -36,6 +36,19 @@ export function describeNotification(data) {
                 </>
             ),
             subtitle: data.due_date ? `Due date: ${data.due_date}` : null,
+        };
+    }
+    if (data.type === "mh_topup_threshold") {
+        return {
+            Icon: TrendingUp,
+            iconClass: "bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
+            title: (
+                <>
+                    MH top up role <span className="font-semibold">{data.role_name}</span> sudah mencapai{" "}
+                    <span className="font-semibold">{data.threshold}%</span>
+                </>
+            ),
+            subtitle: data.project_name || null,
         };
     }
     // task_mention (default)

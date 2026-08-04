@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Role;
 use App\Models\MenuItem;
 use App\Support\ClientInfo;
+use App\Support\PasswordPolicy;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,6 +25,7 @@ class AuthController extends Controller
     {
         $roleModel = $user->role()->with('permissions.module')->first();
         $data = $user->toArray();
+        $data['password_expired'] = $user->isPasswordExpired();
         $data['role_name'] = $roleModel?->name ?? ($data['role'] ?? null);
         $data['role_permissions'] = $roleModel
             ? $roleModel->permissions->map(fn ($p) => [
@@ -140,6 +142,7 @@ class AuthController extends Controller
                 ClientInfo::location($ip),
                 url('/profile'),
             ));
+            $this->log('Auth', 'Login Notification Sent', "Login notification sent to '{$user->email}'.");
         } catch (Throwable $e) {
             $this->log(
                 'Auth',
@@ -151,7 +154,9 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+        $user->currentAccessToken()->delete();
+        $this->log('Auth', 'User Logout', "User logged out: {$user->email}");
 
         return response()->json([
             'status' => 'success',
@@ -194,7 +199,8 @@ class AuthController extends Controller
 
         $passwordChanged = !empty($validated['password']);
         if ($passwordChanged) {
-            $user->password = Hash::make($validated['password']);
+            // Validates reuse, archives the outgoing hash, and saves the new password + timestamp.
+            PasswordPolicy::applyChange($user, $validated['password']);
         }
 
         $user->save();
@@ -212,6 +218,40 @@ class AuthController extends Controller
             'message' => 'Profile updated successfully',
             'user' => $this->serializeUser($user),
             'force_logout' => $passwordChanged,
+        ]);
+    }
+
+    /**
+     * Mandatory password reset when the 6-month rotation policy has expired
+     * (see User::isPasswordExpired()). Not gated by a module permission — every
+     * authenticated user must always be able to change their own expired password.
+     */
+    public function forcePasswordChange(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        if (!Hash::check($validated['current_password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['Password saat ini salah.'],
+            ]);
+        }
+
+        PasswordPolicy::applyChange($user, $validated['password']);
+
+        // Force logout everywhere (including this request's own token) — same policy
+        // as a voluntary password change in updateProfile().
+        $user->tokens()->delete();
+        $this->log('Auth', 'Password Changed', "Password changed for {$user->email} (mandatory rotation) — all sessions revoked.");
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Password berhasil diubah. Silakan login kembali.',
+            'force_logout' => true,
         ]);
     }
 }

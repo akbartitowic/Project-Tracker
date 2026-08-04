@@ -9,11 +9,14 @@ class ReviewToken extends Model
 {
     protected $fillable = [
         'token', 'project_id', 'evaluation_id', 'created_by', 'expires_at', 'is_active',
+        'client_emails', 'email_sent_at',
     ];
 
     protected $casts = [
-        'is_active'  => 'boolean',
-        'expires_at' => 'datetime',
+        'is_active'      => 'boolean',
+        'expires_at'     => 'datetime',
+        'client_emails'  => 'array',
+        'email_sent_at'  => 'datetime',
     ];
 
     public function project(): BelongsTo

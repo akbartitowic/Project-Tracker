@@ -85,7 +85,8 @@ function CreateEvaluationForm({ onCreated, onCancel }) {
     const needsValue = ['mh_percentage', 'task_done_percentage', 'project_percentage'].includes(triggerType);
     const valid = name.trim() &&
         (!needsValue || (triggerValue !== '' && Number(triggerValue) >= 1 && Number(triggerValue) <= 100)) &&
-        (triggerType !== 'mh_percentage' || triggerBasis);
+        (triggerType !== 'mh_percentage' || triggerBasis) &&
+        focus.trim() && purpose.trim();
 
     const handleSave = async () => {
         setSaving(true);
@@ -98,8 +99,8 @@ function CreateEvaluationForm({ onCreated, onCancel }) {
                 trigger_basis: triggerType === 'mh_percentage' ? triggerBasis : null,
                 trigger_value: needsValue ? Number(triggerValue) : null,
                 trigger_label: label,
-                focus:         focus.trim() || null,
-                purpose:       purpose.trim() || null,
+                focus:         focus.trim(),
+                purpose:       purpose.trim(),
             };
             const res = await fetchAPI('/review/evaluations', { method: 'POST', body: JSON.stringify(payload) });
             onCreated(res.data);
@@ -261,11 +262,15 @@ function CreateEvaluationForm({ onCreated, onCancel }) {
             {/* Focus + Purpose */}
             <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Fokus Kinerja</label>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        Fokus Kinerja <span className="text-rose-400">*</span>
+                    </label>
                     <textarea value={focus} onChange={e => setFocus(e.target.value)} rows={2} placeholder="Apa yang dievaluasi…" className="w-full text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Tujuan</label>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        Tujuan <span className="text-rose-400">*</span>
+                    </label>
                     <textarea value={purpose} onChange={e => setPurpose(e.target.value)} rows={2} placeholder="Tujuan dari evaluasi ini…" className="w-full text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
             </div>
@@ -509,15 +514,20 @@ function EvaluationBlock({ evaluation, canConfig, onDeleted }) {
     const [editingQ,      setEditingQ]      = useState(null);
     const [savingQ,       setSavingQ]       = useState(false);
     const [editingMeta,   setEditingMeta]   = useState(false);
-    const [metaInput,     setMetaInput]     = useState({ name: evaluation.name, trigger_label: evaluation.trigger_label, focus: evaluation.focus, purpose: evaluation.purpose });
+    const [metaInput,     setMetaInput]     = useState({ name: evaluation.name, trigger_label: evaluation.trigger_label, focus: evaluation.focus, purpose: evaluation.purpose, trigger_value: evaluation.trigger_value ?? '', trigger_basis: evaluation.trigger_basis ?? 'total_mh' });
     const [savingMeta,    setSavingMeta]    = useState(false);
     const [meta,          setMeta]          = useState({ name: evaluation.name, trigger_label: evaluation.trigger_label, focus: evaluation.focus, purpose: evaluation.purpose });
+    const [triggerConfig, setTriggerConfig] = useState({ trigger_value: evaluation.trigger_value, trigger_basis: evaluation.trigger_basis });
     const [editingRules,  setEditingRules]  = useState(false);
     const [rulesInput,    setRulesInput]    = useState({ active_days: evaluation.active_days ?? '', max_submissions: evaluation.max_submissions ?? '', one_per_user: evaluation.one_per_user ?? false });
     const [savingRules,   setSavingRules]   = useState(false);
     const [rules,         setRules]         = useState({ active_days: evaluation.active_days, max_submissions: evaluation.max_submissions, one_per_user: evaluation.one_per_user ?? false });
 
     const totalWeight = questions.reduce((s, q) => s + Number(q.weight), 0);
+    const needsTriggerValue = ['mh_percentage', 'task_done_percentage', 'project_percentage'].includes(evaluation.trigger_type);
+    const validMeta = metaInput.name.trim() && metaInput.trigger_label.trim() &&
+        (metaInput.focus ?? '').trim() && (metaInput.purpose ?? '').trim() &&
+        (!needsTriggerValue || (metaInput.trigger_value !== '' && Number(metaInput.trigger_value) >= 1 && Number(metaInput.trigger_value) <= 100));
 
     const handleDelete = async () => {
         setDeleting(true);
@@ -565,8 +575,17 @@ function EvaluationBlock({ evaluation, canConfig, onDeleted }) {
     const handleSaveMeta = async () => {
         setSavingMeta(true);
         try {
-            const res = await fetchAPI(`/review/evaluations/${evaluation.id}`, { method: 'PUT', body: JSON.stringify(metaInput) });
+            const payload = {
+                name:           metaInput.name,
+                trigger_label:  metaInput.trigger_label,
+                focus:          metaInput.focus,
+                purpose:        metaInput.purpose,
+                trigger_value:  needsTriggerValue ? Number(metaInput.trigger_value) : null,
+                trigger_basis:  evaluation.trigger_type === 'mh_percentage' ? metaInput.trigger_basis : null,
+            };
+            const res = await fetchAPI(`/review/evaluations/${evaluation.id}`, { method: 'PUT', body: JSON.stringify(payload) });
             setMeta({ name: res.data.name, trigger_label: res.data.trigger_label, focus: res.data.focus, purpose: res.data.purpose });
+            setTriggerConfig({ trigger_value: res.data.trigger_value, trigger_basis: res.data.trigger_basis });
             setEditingMeta(false);
         } catch (e) { alert('Gagal: ' + e.message); }
         finally { setSavingMeta(false); }
@@ -618,8 +637,8 @@ function EvaluationBlock({ evaluation, canConfig, onDeleted }) {
                         <p className="text-[10px] text-slate-400">{meta.trigger_label}</p>
                         <TriggerBadge
                             triggerType={evaluation.trigger_type}
-                            triggerValue={evaluation.trigger_value}
-                            triggerBasis={evaluation.trigger_basis}
+                            triggerValue={triggerConfig.trigger_value}
+                            triggerBasis={triggerConfig.trigger_basis}
                         />
                     </div>
                 </div>
@@ -693,19 +712,69 @@ function EvaluationBlock({ evaluation, canConfig, onDeleted }) {
                                     <Input value={metaInput.trigger_label} onChange={e => setMetaInput(p => ({ ...p, trigger_label: e.target.value }))} className="h-8 text-sm" />
                                 </div>
                             </div>
+
+                            {needsTriggerValue && (
+                                <div className="grid sm:grid-cols-2 gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                            Persentase (%) <span className="text-rose-400">*</span>
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                type="number" min={1} max={100}
+                                                value={metaInput.trigger_value}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    setMetaInput(p => ({ ...p, trigger_value: val, trigger_label: buildTriggerLabel(evaluation.trigger_type, val || null, p.trigger_basis) }));
+                                                }}
+                                                placeholder="1–100"
+                                                className="h-8 text-sm w-28"
+                                            />
+                                            <span className="text-xs text-slate-400">%</span>
+                                        </div>
+                                    </div>
+                                    {evaluation.trigger_type === 'mh_percentage' && (
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Basis MH</label>
+                                            <div className="flex gap-2">
+                                                {Object.entries(TRIGGER_BASIS).map(([k, label]) => (
+                                                    <button
+                                                        key={k}
+                                                        type="button"
+                                                        onClick={() => setMetaInput(p => ({ ...p, trigger_basis: k, trigger_label: buildTriggerLabel(evaluation.trigger_type, p.trigger_value || null, k) }))}
+                                                        className={cn(
+                                                            'flex-1 py-1.5 px-2 rounded-md border text-xs font-medium transition-all',
+                                                            metaInput.trigger_basis === k
+                                                                ? 'border-primary bg-primary/10 text-primary'
+                                                                : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-primary/30',
+                                                        )}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="space-y-1">
-                                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Fokus Kinerja</label>
+                                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                    Fokus Kinerja <span className="text-rose-400">*</span>
+                                </label>
                                 <textarea value={metaInput.focus} onChange={e => setMetaInput(p => ({ ...p, focus: e.target.value }))} rows={2} className="w-full text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary" />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Tujuan</label>
+                                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                    Tujuan <span className="text-rose-400">*</span>
+                                </label>
                                 <textarea value={metaInput.purpose} onChange={e => setMetaInput(p => ({ ...p, purpose: e.target.value }))} rows={2} className="w-full text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary" />
                             </div>
                             <div className="flex gap-2">
-                                <Button size="sm" className="h-8 gap-1.5" onClick={handleSaveMeta} disabled={savingMeta}>
+                                <Button size="sm" className="h-8 gap-1.5" onClick={handleSaveMeta} disabled={savingMeta || !validMeta}>
                                     {savingMeta ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />} Simpan
                                 </Button>
-                                <Button size="sm" variant="ghost" className="h-8" onClick={() => { setEditingMeta(false); setMetaInput({ name: meta.name, trigger_label: meta.trigger_label, focus: meta.focus, purpose: meta.purpose }); }}>Batal</Button>
+                                <Button size="sm" variant="ghost" className="h-8" onClick={() => { setEditingMeta(false); setMetaInput({ name: meta.name, trigger_label: meta.trigger_label, focus: meta.focus, purpose: meta.purpose, trigger_value: triggerConfig.trigger_value ?? '', trigger_basis: triggerConfig.trigger_basis ?? 'total_mh' }); }}>Batal</Button>
                             </div>
                         </div>
                     ) : (

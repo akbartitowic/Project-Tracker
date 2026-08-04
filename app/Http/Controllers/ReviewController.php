@@ -19,8 +19,8 @@ class ReviewController extends Controller
             'trigger_basis'  => 'nullable|in:total_mh,topup_mh',
             'trigger_value'  => 'nullable|integer|min:1|max:100',
             'trigger_label'  => 'required|string|max:200',
-            'focus'          => 'nullable|string',
-            'purpose'        => 'nullable|string',
+            'focus'          => 'required|string',
+            'purpose'        => 'required|string',
         ]);
 
         $order = ReviewEvaluation::where('methodology', $validated['methodology'])->max('order') + 1;
@@ -59,8 +59,9 @@ class ReviewController extends Controller
             'name'            => 'sometimes|string|max:150',
             'trigger_label'   => 'sometimes|string|max:200',
             'trigger_value'   => 'nullable|integer|min:1|max:100',
-            'focus'           => 'sometimes|string',
-            'purpose'         => 'sometimes|string',
+            'trigger_basis'   => 'nullable|in:total_mh,topup_mh',
+            'focus'           => 'sometimes|required|string',
+            'purpose'         => 'sometimes|required|string',
             'active_days'     => 'nullable|integer|min:1|max:3650',
             'max_submissions' => 'nullable|integer|min:1|max:999',
             'one_per_user'    => 'sometimes|boolean',

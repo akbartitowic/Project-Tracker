@@ -11,6 +11,8 @@ import {
     Link as LinkIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
@@ -303,13 +305,90 @@ function ReviewDetail({ review }) {
     );
 }
 
+/* ── Reusable email chip-list input (add via Enter/comma/blur, remove via X) ── */
+function EmailChipInput({ emails, onChange, placeholder }) {
+    const [draft, setDraft] = useState('');
+
+    const commit = (raw) => {
+        const value = raw.trim().replace(/,$/, '');
+        if (!value) return;
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+            alert('Format email tidak valid: ' + value);
+            return;
+        }
+        if (!emails.some(e => e.toLowerCase() === value.toLowerCase())) {
+            onChange([...emails, value]);
+        }
+        setDraft('');
+    };
+
+    const removeEmail = (idx) => onChange(emails.filter((_, i) => i !== idx));
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            commit(draft);
+        } else if (e.key === 'Backspace' && !draft && emails.length > 0) {
+            removeEmail(emails.length - 1);
+        }
+    };
+
+    return (
+        <div className="space-y-1.5">
+            {emails.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                    {emails.map((email, idx) => (
+                        <span
+                            key={email + idx}
+                            className="flex items-center gap-1 text-[10px] font-medium pl-2 pr-1 py-0.5 rounded-full bg-primary/10 text-primary"
+                        >
+                            {email}
+                            <button
+                                type="button"
+                                onClick={() => removeEmail(idx)}
+                                className="rounded-full hover:bg-primary/20 p-0.5"
+                                title="Hapus"
+                            >
+                                <X className="size-2.5" />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+            <div className="flex items-center gap-1.5">
+                <Input
+                    value={draft}
+                    onChange={e => setDraft(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onBlur={() => commit(draft)}
+                    placeholder={placeholder}
+                    className="h-7 text-xs bg-white dark:bg-slate-900"
+                />
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 w-7 p-0 shrink-0"
+                    onClick={() => commit(draft)}
+                    title="Tambah email"
+                >
+                    <Plus className="size-3" />
+                </Button>
+            </div>
+        </div>
+    );
+}
+
 /* ── Share link panel (per evaluation, inside dialog) ── */
 function ShareLinkPanel({ project, evaluation }) {
-    const [tokens,   setTokens]   = useState(null); // null = not loaded yet
-    const [loading,  setLoading]  = useState(false);
-    const [creating, setCreating] = useState(false);
-    const [copied,   setCopied]   = useState(null);
-    const [open,     setOpen]     = useState(false);
+    const [tokens,      setTokens]      = useState(null); // null = not loaded yet
+    const [loading,     setLoading]     = useState(false);
+    const [creating,    setCreating]    = useState(false);
+    const [copied,      setCopied]      = useState(null);
+    const [open,        setOpen]        = useState(false);
+    const [emailsList,  setEmailsList]  = useState(project.review_client_emails ?? []);
+    const [autoSend,    setAutoSend]    = useState(false);
+    const [sendingId,   setSendingId]   = useState(null);
 
     const load = async () => {
         setLoading(true);
@@ -330,8 +409,12 @@ function ShareLinkPanel({ project, evaluation }) {
     const handleCreate = async () => {
         setCreating(true);
         try {
-            const res = await fetchAPI(`/projects/${project.id}/evaluations/${evaluation.id}/tokens`, { method: 'POST' });
+            const res = await fetchAPI(`/projects/${project.id}/evaluations/${evaluation.id}/tokens`, {
+                method: 'POST',
+                body: JSON.stringify({ client_emails: emailsList, auto_send: autoSend }),
+            });
             setTokens(prev => [res.data, ...(prev ?? [])]);
+            setEmailsList([]);
         } catch (e) { alert('Gagal membuat link: ' + e.message); }
         finally { setCreating(false); }
     };
@@ -341,6 +424,15 @@ function ShareLinkPanel({ project, evaluation }) {
             await fetchAPI(`/review/tokens/${id}`, { method: 'DELETE' });
             setTokens(prev => prev.map(t => t.id === id ? { ...t, is_active: false, is_usable: false } : t));
         } catch (e) { alert('Gagal: ' + e.message); }
+    };
+
+    const handleSendEmail = async (id) => {
+        setSendingId(id);
+        try {
+            const res = await fetchAPI(`/review/tokens/${id}/send-email`, { method: 'POST' });
+            setTokens(prev => prev.map(t => t.id === id ? res.data : t));
+        } catch (e) { alert('Gagal mengirim email: ' + e.message); }
+        finally { setSendingId(null); }
     };
 
     const copyUrl = (url, id) => {
@@ -412,8 +504,45 @@ function ShareLinkPanel({ project, evaluation }) {
                                             </button>
                                         )}
                                     </div>
+                                    {(t.client_emails ?? []).length > 0 && (
+                                        <div className="flex items-center justify-between gap-2 pt-0.5">
+                                            <span className="text-[10px] text-slate-500 truncate" title={t.client_emails.join(', ')}>
+                                                {t.email_sent_at ? 'Terkirim ke: ' : 'Client: '}{t.client_emails.join(', ')}
+                                            </span>
+                                            {t.is_usable && (
+                                                <button
+                                                    onClick={() => handleSendEmail(t.id)}
+                                                    disabled={sendingId === t.id}
+                                                    className="shrink-0 flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                                                >
+                                                    {sendingId === t.id
+                                                        ? <Loader2 className="size-2.5 animate-spin" />
+                                                        : <Send className="size-2.5" />
+                                                    }
+                                                    {t.email_sent_at ? 'Kirim Ulang' : 'Kirim Email'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
+
+                            {/* Create form */}
+                            <div className="space-y-1.5">
+                                <EmailChipInput
+                                    emails={emailsList}
+                                    onChange={setEmailsList}
+                                    placeholder="email-client@company.com lalu Enter"
+                                />
+                                <div className="flex items-center justify-between px-0.5">
+                                    <span className="text-[10px] text-slate-500">Kirim otomatis saat link dibuat</span>
+                                    <Switch
+                                        checked={autoSend}
+                                        onCheckedChange={setAutoSend}
+                                        className="scale-90"
+                                    />
+                                </div>
+                            </div>
 
                             {/* Create button */}
                             <Button
@@ -439,12 +568,15 @@ function ShareLinkPanel({ project, evaluation }) {
 
 /* ── Summary Dialog ── */
 function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
+    const navigate = useNavigate();
     const [summary,   setSummary]   = useState(null);
     const [allReviews, setAllReviews] = useState({});
     const [loading,   setLoading]   = useState(true);
     const [activeEval, setActiveEval] = useState(null); // evaluation object for submit form
     const [detailReview, setDetailReview] = useState(null); // review object to view answers
     const [evals,     setEvals]     = useState([]);
+    const [pendingEmails, setPendingEmails] = useState([]);
+    const [savingEmails,  setSavingEmails]  = useState(false);
 
     const [triggerStatuses, setTriggerStatuses] = useState({});
 
@@ -461,6 +593,7 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
             setSummary(summaryRes);
             setAllReviews(reviewsRes.data ?? {});
             setEvals(evalsRes.data ?? []);
+            setPendingEmails(project.review_client_emails ?? []);
             const tsMap = {};
             (triggerRes.data ?? []).forEach(t => { tsMap[t.evaluation_id] = t; });
             setTriggerStatuses(tsMap);
@@ -473,6 +606,17 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
     const handleSubmitted = (newReview) => {
         setActiveEval(null);
         load();
+    };
+
+    const handleSaveClientEmails = async () => {
+        setSavingEmails(true);
+        try {
+            await fetchAPI(`/projects/${project.id}/review-client-emails`, {
+                method: 'PUT',
+                body: JSON.stringify({ client_emails: pendingEmails }),
+            });
+        } catch (e) { alert('Gagal menyimpan email: ' + e.message); }
+        finally { setSavingEmails(false); }
     };
 
     if (!project) return null;
@@ -526,6 +670,57 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
                                     </p>
                                 </div>
                                 <LevelBadge score={summary.overall} />
+                            </div>
+                        )}
+
+                        {/* No evaluation cycle configured yet for this project's methodology */}
+                        {evals.length === 0 && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/10 p-4 space-y-3">
+                                <div className="flex items-start gap-2">
+                                    <AlertCircle className="size-4 text-amber-500 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                                            Konfigurasi evaluasi review belum dibuat
+                                        </p>
+                                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                                            Belum ada evaluation cycle untuk metodologi {project.methodology ?? 'project ini'}.
+                                            Anda tetap bisa menyiapkan email client di bawah ini — link review baru bisa dibuat/dikirim
+                                            setelah konfigurasi tersedia.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {canConfig && (
+                                    <>
+                                        <EmailChipInput
+                                            emails={pendingEmails}
+                                            onChange={setPendingEmails}
+                                            placeholder="email-client@company.com lalu Enter"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 text-xs gap-1.5"
+                                                onClick={handleSaveClientEmails}
+                                                disabled={savingEmails}
+                                            >
+                                                {savingEmails
+                                                    ? <Loader2 className="size-3 animate-spin" />
+                                                    : null
+                                                }
+                                                Simpan Email
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                className="h-7 text-xs gap-1.5"
+                                                onClick={() => navigate('/review/config')}
+                                            >
+                                                <Settings2 className="size-3.5" /> Buat Konfigurasi
+                                            </Button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -805,6 +1000,16 @@ export default function Review() {
     const view    = searchParams.get('view') === 'list' ? 'list' : 'card';
     const setView = (v) => setSearchParams(prev => { prev.set('view', v); return prev; });
 
+    // Methodology tab — separate "page" per methodology, synced to the URL
+    // (?methodology=Waterfall / ?methodology=Agile+Scrum) so it's linkable/bookmarkable,
+    // same pattern as the Aktif/Done/Favorit tabs on the Project Board.
+    const methodologyTab = searchParams.get('methodology') ?? 'all';
+    const setMethodologyTab = (m) => setSearchParams(prev => {
+        if (m === 'all') prev.delete('methodology'); else prev.set('methodology', m);
+        prev.delete('project');
+        return prev;
+    });
+
     // Summary dialog state lives in the URL (?project=<id>) so it's linkable,
     // shareable, and closes on browser back — not just local component state.
     const summaryProjectId = searchParams.get('project');
@@ -839,14 +1044,17 @@ export default function Review() {
     }, []);
 
     useEffect(() => { if (canRead) load(); else setLoading(false); }, [load, canRead]);
+    useEffect(() => { setPage(1); }, [methodologyTab]);
 
     const activeCount    = projects.filter(p => p.status === 'In Progress').length;
     const agileCount     = projects.filter(p => p.methodology === 'Agile Scrum').length;
     const waterfallCount = projects.filter(p => p.methodology === 'Waterfall').length;
 
     const sortedProjects = useMemo(
-        () => [...projects].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
-        [projects]
+        () => [...projects]
+            .filter(p => methodologyTab === 'all' || p.methodology === methodologyTab)
+            .sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+        [projects, methodologyTab]
     );
     const pagedProjects = useMemo(
         () => sortedProjects.slice((page - 1) * pageSize, page * pageSize),
@@ -909,9 +1117,39 @@ export default function Review() {
                 </div>
             )}
 
-            {/* Dashboard */}
+            {/* Methodology tabs — separate view per methodology */}
+            {projects.length > 0 && (
+                <div className="inline-flex rounded-xl border border-slate-200 bg-white/70 p-0.5 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28]">
+                    <Button
+                        type="button" variant="ghost" size="sm"
+                        className={cn('h-8 gap-1.5 px-3', methodologyTab === 'all' && 'bg-accent text-white hover:bg-accent hover:text-white')}
+                        onClick={() => setMethodologyTab('all')}
+                    >
+                        Semua
+                        <span className="text-xs opacity-80">({projects.length})</span>
+                    </Button>
+                    <Button
+                        type="button" variant="ghost" size="sm"
+                        className={cn('h-8 gap-1.5 px-3', methodologyTab === 'Waterfall' && 'bg-accent text-white hover:bg-accent hover:text-white')}
+                        onClick={() => setMethodologyTab('Waterfall')}
+                    >
+                        Waterfall
+                        <span className="text-xs opacity-80">({waterfallCount})</span>
+                    </Button>
+                    <Button
+                        type="button" variant="ghost" size="sm"
+                        className={cn('h-8 gap-1.5 px-3', methodologyTab === 'Agile Scrum' && 'bg-accent text-white hover:bg-accent hover:text-white')}
+                        onClick={() => setMethodologyTab('Agile Scrum')}
+                    >
+                        Agile Scrum
+                        <span className="text-xs opacity-80">({agileCount})</span>
+                    </Button>
+                </div>
+            )}
+
+            {/* Dashboard — reflects the active methodology tab */}
             {canRead && !loading && !error && (
-                <ReviewDashboard summaries={summaries} projects={projects} />
+                <ReviewDashboard summaries={summaries} projects={sortedProjects} />
             )}
 
             {/* Content */}
@@ -928,10 +1166,12 @@ export default function Review() {
                     <X className="size-4 shrink-0" /> {error}
                     <Button variant="outline" size="sm" className="ml-2 h-7 text-xs" onClick={load}>Coba lagi</Button>
                 </div>
-            ) : projects.length === 0 ? (
+            ) : sortedProjects.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-300/70 dark:border-white/10 rounded-xl bg-white/50 backdrop-blur-sm dark:bg-white/5">
                     <Star className="size-12 mb-3 opacity-20" />
-                    <p className="text-sm font-medium">Belum ada project</p>
+                    <p className="text-sm font-medium">
+                        {projects.length === 0 ? 'Belum ada project' : `Tidak ada project ${methodologyTab}`}
+                    </p>
                 </div>
             ) : view === 'card' ? (
                 <div className="space-y-4">

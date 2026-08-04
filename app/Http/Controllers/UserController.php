@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\UserAccess;
+use App\Traits\LogActivity;
 use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
+    use LogActivity;
+
     private function isProtectedAccount(User $user): bool
     {
         return UserAccess::isPrivileged($user);
@@ -61,6 +64,8 @@ class UserController extends Controller
         $validated['role'] = Role::find($validated['role_id'])->name;
         $user = User::create($validated);
 
+        $this->log('System', 'Created User', "Created user '{$user->name}' ({$user->email}) with role: {$user->role}");
+
         return response()->json(['id' => $user->id]);
     }
 
@@ -89,8 +94,19 @@ class UserController extends Controller
             unset($validated['password']);
         }
 
+        $oldRoleId = $user->role_id;
+        $oldRoleName = $user->role;
+
         $validated['role'] = Role::find($validated['role_id'])->name;
         $changes = $user->update($validated) ? 1 : 0;
+
+        if ((int) $oldRoleId !== (int) $validated['role_id']) {
+            $this->log(
+                'System',
+                'Updated User Role',
+                "Changed role for '{$user->name}' ({$user->email}) from '{$oldRoleName}' to '{$validated['role']}'"
+            );
+        }
 
         return response()->json(['changes' => $changes]);
     }
@@ -110,7 +126,13 @@ class UserController extends Controller
 
         $this->assertCanManageUser($request, $user);
 
+        $userName = $user->name;
+        $userEmail = $user->email;
         $deleted = $user->delete();
+
+        if ($deleted) {
+            $this->log('System', 'Deleted User', "Deleted user '{$userName}' ({$userEmail})");
+        }
 
         return response()->json(['deleted' => $deleted ? 1 : 0]);
     }

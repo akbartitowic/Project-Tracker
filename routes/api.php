@@ -56,6 +56,7 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profile', [AuthController::class, 'updateProfile'])->middleware('permission:profile.update');
+    Route::post('/force-password-change', [AuthController::class, 'forcePasswordChange']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/notifications/unread', [NotificationController::class, 'unread']);
@@ -80,6 +81,7 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/projects/{id}/finance-summary', [ProjectAllocationController::class, 'financeSummary'])->middleware('permission:finance_monitoring.read');
     Route::post('/projects/{id}/favorite', [ProjectController::class, 'favorite'])->middleware('permission:project_board.read');
     Route::delete('/projects/{id}/favorite', [ProjectController::class, 'unfavorite'])->middleware('permission:project_board.read');
+    Route::put('/projects/{id}/review-client-emails', [ProjectController::class, 'updateReviewClientEmails'])->middleware('permission:review.update');
 
     // 1.5 System Log Routes
     Route::get('/activity-logs', [ActivityLogController::class, 'index'])->middleware('permission:system_log.read');
@@ -292,6 +294,7 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/projects/{projectId}/evaluations/{evalId}/tokens', [ReviewTokenController::class, 'index'])->middleware('permission:review.update');
     Route::post('/projects/{projectId}/evaluations/{evalId}/tokens', [ReviewTokenController::class, 'store'])->middleware('permission:review.update');
     Route::delete('/review/tokens/{id}', [ReviewTokenController::class, 'destroy'])->middleware('permission:review.update');
+    Route::post('/review/tokens/{id}/send-email', [ReviewTokenController::class, 'sendEmail'])->middleware('permission:review.update');
 
     // 13. Global Integration Settings
     Route::get('/global-integration', [GlobalIntegrationController::class, 'show'])->middleware('permission:finance_monitoring.read');

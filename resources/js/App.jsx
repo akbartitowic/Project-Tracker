@@ -36,21 +36,40 @@ import PublicReview from './pages/PublicReview';
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
+import ForceChangePassword from './pages/Auth/ForceChangePassword';
 import LoginNotificationsModal from './components/LoginNotificationsModal';
 import { useAuth } from './context/AuthContext';
 import { getDefaultLandingPath, getRequiredPermissionForPath, hasPermission } from './utils/permissions';
 
-function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
-  const location = useLocation();
-  
-  if (loading) return (
+function AuthLoadingSpinner() {
+  return (
     <div className="min-h-screen flex items-center justify-center bg-[#000040]">
       <div className="size-12 border-4 border-accent/20 border-t-accent rounded-full animate-spin"></div>
     </div>
   );
-  
+}
+
+// Gate for /force-change-password itself: only reachable while logged in AND
+// user.password_expired is true, otherwise it's not a valid destination.
+function ForceChangePasswordRoute() {
+  const { user, loading } = useAuth();
+
+  if (loading) return <AuthLoadingSpinner />;
   if (!user) return <Navigate to="/login" replace />;
+  if (!user.password_expired) return <Navigate to={getDefaultLandingPath(user)} replace />;
+  return <ForceChangePassword />;
+}
+
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return <AuthLoadingSpinner />;
+
+  if (!user) return <Navigate to="/login" replace />;
+  // Mandatory 6-month password rotation (User::isPasswordExpired()) overrides everything
+  // else in the app — no route under Layout is reachable until the password is changed.
+  if (user.password_expired) return <Navigate to="/force-change-password" replace />;
   const requiredPermission = getRequiredPermissionForPath(location.pathname);
   if (requiredPermission && !hasPermission(user, requiredPermission)) {
     const fallbackPath = getDefaultLandingPath(user);
@@ -77,6 +96,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/force-change-password" element={<ForceChangePasswordRoute />} />
         <Route path="/r/:token" element={<PublicReview />} />
 
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>

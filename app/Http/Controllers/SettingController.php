@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Setting;
 use App\Support\AppBranding;
 use App\Support\SettingKeys;
+use App\Traits\LogActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Config;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Log;
 
 class SettingController extends Controller
 {
+    use LogActivity;
+
     public function branding()
     {
         return response()->json([
@@ -153,12 +156,15 @@ class SettingController extends Controller
                     ->subject('Noohtify SMTP Test');
             });
 
+            $this->log('System', 'SMTP Test Email Sent', "Test email sent successfully to '{$settings['mail_from_address']}' via host '{$settings['mail_host']}'");
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Test email sent successfully to ' . $settings['mail_from_address'],
             ]);
         } catch (\Exception $e) {
             Log::error('SMTP Test Error: ' . $e->getMessage());
+            $this->log('System', 'SMTP Test Email Failed', "Failed sending test email to '{$settings['mail_from_address']}' via host '{$settings['mail_host']}': {$e->getMessage()}");
 
             return response()->json([
                 'status' => 'error',

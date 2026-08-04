@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ActivityLog;
 use App\Models\Manhour;
 use App\Models\ReportSchedule;
 use App\Models\Task;
@@ -48,8 +49,10 @@ class SendScheduledReports extends Command
             });
 
             Log::info("Scheduled report sent: schedule #{$schedule->id} project \"{$schedule->project->name}\"");
+            $this->logScheduleActivity($schedule, 'Scheduled Report Email Sent', "Scheduled report for project '{$schedule->project->name}' sent to " . implode(', ', $schedule->emails ?? []));
         } catch (\Throwable $e) {
             Log::error("Scheduled report #{$schedule->id} failed: {$e->getMessage()}");
+            $this->logScheduleActivity($schedule, 'Scheduled Report Email Failed', "Failed sending scheduled report for project '{$schedule->project->name}': {$e->getMessage()}");
         }
 
         $schedule->last_run_at = now();
@@ -69,6 +72,25 @@ class SendScheduledReports extends Command
         }
 
         $schedule->save();
+    }
+
+    /**
+     * Attributed to the schedule's creator — there is no "acting user" in this cron
+     * context, and activity_logs.user_id is a required FK, so schedules without a
+     * created_by are silently skipped rather than logged under a fake actor.
+     */
+    private function logScheduleActivity(ReportSchedule $schedule, string $activity, string $description): void
+    {
+        if (!$schedule->created_by) {
+            return;
+        }
+
+        ActivityLog::create([
+            'user_id' => $schedule->created_by,
+            'type' => 'System',
+            'activity' => $activity,
+            'description' => $description,
+        ]);
     }
 
     // ── Report data builder ─────────────────────────────────────────────────

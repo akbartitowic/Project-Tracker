@@ -1,0 +1,139 @@
+import { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { ShieldAlert, Lock, KeyRound, AlertCircle } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/ui/password-input";
+import AppLogo from '../../components/AppLogo';
+
+// Full-page, unskippable gate shown when User::isPasswordExpired() is true (password not
+// changed in 6+ months). Reached right after login (Login.jsx) and re-enforced on every
+// route render while user.password_expired is true (see App.jsx's ProtectedRoute).
+export default function ForceChangePassword() {
+    const { user, forceChangePassword } = useAuth();
+    const [data, setData] = useState({ current_password: '', password: '', password_confirmation: '' });
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+
+        if (data.password !== data.password_confirmation) {
+            setError('Konfirmasi password baru tidak cocok.');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const res = await forceChangePassword(data);
+            if (res.success) {
+                alert(res.message || 'Password berhasil diubah. Silakan login kembali.');
+                window.location.href = '/login';
+                return;
+            }
+            setError(res.message || 'Gagal mengubah password.');
+        } catch (err) {
+            setError(err.message || 'Gagal mengubah password.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-[#000040] font-sans p-4">
+            <div className="absolute top-[-15%] left-[10%] size-[32rem] bg-slate-400/25 rounded-full blur-[120px]" />
+            <div className="absolute top-[10%] right-[-10%] size-96 bg-primary/40 rounded-full blur-[110px]" />
+            <div className="absolute bottom-[-20%] left-[-10%] size-[28rem] bg-[#232a38]/80 rounded-full blur-[110px]" />
+
+            <div className="relative z-10 w-full max-w-md">
+                <div className="flex items-center justify-center gap-2.5 mb-6">
+                    <div className="size-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
+                        <AppLogo alt="Application logo" className="size-6" />
+                    </div>
+                    <span className="text-xl font-black text-white tracking-tight">HubTask</span>
+                </div>
+
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
+                    <div className="text-center mb-6">
+                        <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
+                            <ShieldAlert className="size-6" />
+                        </div>
+                        <h2 className="text-xl font-black text-white tracking-tight">Password Kamu Sudah Kedaluwarsa</h2>
+                        <p className="text-slate-400 font-medium mt-1 text-sm">
+                            Demi keamanan, password wajib diganti setiap 6 bulan{user?.name ? `, ${user.name}` : ''}.
+                            Silakan buat password baru untuk melanjutkan.
+                        </p>
+                    </div>
+
+                    {error && (
+                        <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center gap-3 text-rose-200 text-sm animate-in fade-in slide-in-from-top-2">
+                            <AlertCircle className="size-5 shrink-0" />
+                            {error}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Password Saat Ini</label>
+                            <div className="relative group">
+                                <Lock className="pointer-events-none absolute left-4 top-1/2 z-10 size-5 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-accent" />
+                                <PasswordInput
+                                    required
+                                    placeholder="••••••••"
+                                    className="h-13 rounded-2xl border-white/10 bg-white/5 pl-12 text-white placeholder:text-slate-400 transition-all focus:border-accent focus:ring-accent"
+                                    toggleButtonClassName="text-slate-400 hover:bg-white/10 hover:text-white dark:hover:bg-white/10"
+                                    value={data.current_password}
+                                    onChange={e => setData({ ...data, current_password: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Password Baru</label>
+                            <div className="relative group">
+                                <KeyRound className="pointer-events-none absolute left-4 top-1/2 z-10 size-5 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-accent" />
+                                <PasswordInput
+                                    required
+                                    minLength={8}
+                                    placeholder="Minimal 8 karakter"
+                                    className="h-13 rounded-2xl border-white/10 bg-white/5 pl-12 text-white placeholder:text-slate-400 transition-all focus:border-accent focus:ring-accent"
+                                    toggleButtonClassName="text-slate-400 hover:bg-white/10 hover:text-white dark:hover:bg-white/10"
+                                    value={data.password}
+                                    onChange={e => setData({ ...data, password: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Konfirmasi Password Baru</label>
+                            <div className="relative group">
+                                <KeyRound className="pointer-events-none absolute left-4 top-1/2 z-10 size-5 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-accent" />
+                                <PasswordInput
+                                    required
+                                    minLength={8}
+                                    placeholder="Ulangi password baru"
+                                    className="h-13 rounded-2xl border-white/10 bg-white/5 pl-12 text-white placeholder:text-slate-400 transition-all focus:border-accent focus:ring-accent"
+                                    toggleButtonClassName="text-slate-400 hover:bg-white/10 hover:text-white dark:hover:bg-white/10"
+                                    value={data.password_confirmation}
+                                    onChange={e => setData({ ...data, password_confirmation: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                            Password baru tidak boleh sama dengan 3 password terakhir yang pernah kamu gunakan.
+                        </p>
+
+                        <Button
+                            type="submit"
+                            disabled={isLoading}
+                            className="w-full h-13 bg-accent hover:bg-orange-600 text-white font-bold rounded-2xl shadow-lg shadow-accent/20 transition-all hover:scale-[1.02] active:scale-[0.98] mt-2"
+                        >
+                            {isLoading ? 'Menyimpan...' : 'Ganti Password'}
+                        </Button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    );
+}

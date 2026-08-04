@@ -4,10 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Role;
 use App\Support\UserAccess;
+use App\Traits\LogActivity;
 use Illuminate\Http\Request;
 
 class RoleController extends Controller
 {
+    use LogActivity;
+
     private function assertCanManageRoles(Request $request): void
     {
         if (!UserAccess::isPrivileged($request->user())) {
@@ -38,9 +41,13 @@ class RoleController extends Controller
         ]);
 
         $role = Role::create(['name' => $validated['name']]);
+        $permissionCount = 0;
         if (isset($validated['permissions'])) {
             $role->permissions()->sync($validated['permissions']);
+            $permissionCount = count($validated['permissions']);
         }
+
+        $this->log('System', 'Created Role', "Created role '{$role->name}' with {$permissionCount} permission(s)");
 
         return response()->json(['id' => $role->id]);
     }
@@ -58,10 +65,31 @@ class RoleController extends Controller
             'permissions.*' => 'exists:permissions,id',
         ]);
 
+        $oldName = $role->name;
+        $oldPermissionIds = $role->permissions()->pluck('permissions.id')->all();
+
         $role->update(['name' => $validated['name']]);
+
+        $descriptionParts = [];
+        if ($oldName !== $validated['name']) {
+            $descriptionParts[] = "renamed from '{$oldName}' to '{$validated['name']}'";
+        }
         if (isset($validated['permissions'])) {
             $role->permissions()->sync($validated['permissions']);
+            $added = count(array_diff($validated['permissions'], $oldPermissionIds));
+            $removed = count(array_diff($oldPermissionIds, $validated['permissions']));
+            if ($added > 0 || $removed > 0) {
+                $descriptionParts[] = "{$added} permission(s) added, {$removed} permission(s) removed";
+            }
         }
+
+        $this->log(
+            'System',
+            'Updated Role',
+            $descriptionParts === []
+                ? "Updated role '{$validated['name']}' (no changes)"
+                : "Updated role '{$validated['name']}': " . implode('; ', $descriptionParts)
+        );
 
         return response()->json(['changes' => 1]);
     }
@@ -73,7 +101,12 @@ class RoleController extends Controller
         $role = Role::findOrFail($id);
         $this->assertRoleIsMutable($role);
 
+        $roleName = $role->name;
         $deleted = $role->delete();
+
+        if ($deleted) {
+            $this->log('System', 'Deleted Role', "Deleted role '{$roleName}'");
+        }
 
         return response()->json(['deleted' => $deleted ? 1 : 0]);
     }
