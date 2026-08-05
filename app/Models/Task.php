@@ -12,6 +12,24 @@ class Task extends Model
 {
     use HasFactory;
 
+    /**
+     * "Last update" (dipakai di Generate Report) hanya boleh berubah saat card/status
+     * berpindah, bukan tiap edit field lain — jadi auto-touch Eloquent dimatikan di sini,
+     * dan TaskController men-touch kolom ini secara eksplisit hanya di titik status berubah.
+     */
+    const UPDATED_AT = null;
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($task) {
+            if (empty($task->updated_at)) {
+                $task->updated_at = $task->freshTimestamp();
+            }
+        });
+    }
+
     protected $fillable = [
         'title',
         'feature_title',
@@ -45,6 +63,9 @@ class Task extends Model
         'start_date' => 'date:Y-m-d',
         'last_due_reminder_sent_at' => 'datetime',
         'sort_order' => 'integer',
+        // Eloquent stops auto-casting this to Carbon once UPDATED_AT is disabled above,
+        // but the report Blade template still calls ->format() on it — cast explicitly.
+        'updated_at' => 'datetime',
     ];
 
     public function project(): BelongsTo

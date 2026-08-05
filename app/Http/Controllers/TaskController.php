@@ -953,7 +953,12 @@ class TaskController extends Controller
                     ->increment('sort_order');
                 $validated['sort_order'] = 0;
             }
-            return $task->update($validated) ? 1 : 0;
+            $result = $task->update($validated) ? 1 : 0;
+            if ($movedColumns) {
+                // "Last update" hanya berubah saat kartu benar-benar pindah kolom.
+                Task::where('id', $task->id)->update(['updated_at' => now()]);
+            }
+            return $result;
         });
 
         $this->log('Project', 'Updated Task Status', "Changed task '{$task->title}' from {$oldStatus} to {$validated['status']}");
@@ -1161,9 +1166,14 @@ class TaskController extends Controller
             TaskChangeLogger::logFieldChanges($task, $fieldsBefore, $task->fresh()->only(TaskChangeLogger::TRACKABLE_FIELDS), $user);
         }
 
+        if ($changes && $validated['status'] !== $fieldsBefore['status']) {
+            // "Last update" hanya berubah saat status task berpindah, bukan tiap edit field lain.
+            Task::where('id', $task->id)->update(['updated_at' => now()]);
+        }
+
         if ($customUpdatedAt) {
-            // Query builder update() doesn't auto-touch timestamps, so this
-            // survives after the model save() above already set it to now().
+            // Override manual (permission project_board.edit_last_update) selalu menang
+            // terakhir, walau status juga berubah di request yang sama.
             Task::where('id', $task->id)->update(['updated_at' => Carbon::parse($customUpdatedAt)]);
             $changes = 1;
         }
@@ -1279,6 +1289,7 @@ class TaskController extends Controller
             'parent_task_id' => 'nullable|integer|exists:tasks,id',
         ]);
 
+        $oldStatus = $task->status;
         $update = ['is_backlog' => false, 'status' => 'To Do'];
         $this->markUpdatedBy($task, $update, $user);
 
@@ -1290,6 +1301,11 @@ class TaskController extends Controller
         }
 
         $task->update($update);
+
+        if ($oldStatus !== $update['status']) {
+            // "Last update" hanya berubah saat status task benar-benar berpindah.
+            Task::where('id', $task->id)->update(['updated_at' => now()]);
+        }
 
         if (!empty($update['parent_task_id'])) {
             TaskAggregationService::syncParentEstimatedHours((int) $update['parent_task_id']);
@@ -1348,9 +1364,8 @@ class TaskController extends Controller
         }
 
         $updateData['updated_by_id'] = $user->id;
-        // Mass update() via the query builder never auto-touches timestamps (unlike a single
-        // model's save()/update()), so it has to be set explicitly here.
-        $updateData['updated_at'] = now();
+        // "Last update" sengaja TIDAK disentuh di sini — bulk edit MH/role/kategori bukan
+        // perpindahan status, jadi tidak boleh mengubah kolom yang dipakai Generate Report itu.
 
         // Legacy tasks with no creator on record: the first person to touch them becomes the creator.
         $changes = Task::whereIn('id', $validated['task_ids'])
