@@ -27,6 +27,8 @@ class SettingKeys
         'smtp_username',
         'smtp_password',
         'smtp_encryption',
+        'review_invite_email_subject',
+        'review_invite_email_body',
     ];
 
     public static function isSensitiveKey(string $key): bool

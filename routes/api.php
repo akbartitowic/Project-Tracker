@@ -294,6 +294,8 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/projects/{projectId}/evaluations/{evalId}/tokens', [ReviewTokenController::class, 'index'])->middleware('permission:review.update');
     Route::post('/projects/{projectId}/evaluations/{evalId}/tokens', [ReviewTokenController::class, 'store'])->middleware('permission:review.update');
     Route::delete('/review/tokens/{id}', [ReviewTokenController::class, 'destroy'])->middleware('permission:review.update');
+    Route::patch('/review/tokens/{id}/emails', [ReviewTokenController::class, 'updateEmails'])->middleware('permission:review.update');
+    Route::get('/review/tokens/{id}/email-preview', [ReviewTokenController::class, 'emailPreview'])->middleware('permission:review.update');
     Route::post('/review/tokens/{id}/send-email', [ReviewTokenController::class, 'sendEmail'])->middleware('permission:review.update');
 
     // 13. Global Integration Settings

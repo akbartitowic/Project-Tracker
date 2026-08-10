@@ -8,6 +8,7 @@ use App\Models\ReviewEvaluation;
 use App\Models\ReviewToken;
 use App\Support\EmailListParser;
 use App\Support\ProjectAccess;
+use App\Support\ReviewEmailTemplate;
 use App\Traits\LogActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -28,6 +29,8 @@ class ReviewTokenController extends Controller
             'client_emails'   => 'nullable',
             'client_emails.*' => 'string',
             'auto_send'       => 'nullable|boolean',
+            'subject'         => 'nullable|string|max:255',
+            'body'            => 'nullable|string|max:5000',
         ]);
 
         $clientEmails = EmailListParser::parse($validated['client_emails'] ?? null);
@@ -48,14 +51,43 @@ class ReviewTokenController extends Controller
         ]);
 
         if (!empty($validated['auto_send']) && $clientEmails !== []) {
-            $this->sendTokenEmail($token, $eval);
+            $this->sendTokenEmail($token, $eval, $validated['subject'] ?? null, $validated['body'] ?? null);
         }
 
         return response()->json(['data' => $this->serialize($token)], 201);
     }
 
+    /** PATCH /review/tokens/{id}/emails — update the client email list on an already-created link */
+    public function updateEmails(Request $request, int $id)
+    {
+        $token = ReviewToken::findOrFail($id);
+
+        $validated = $request->validate([
+            'client_emails'   => 'nullable',
+            'client_emails.*' => 'string',
+        ]);
+
+        $clientEmails = EmailListParser::parse($validated['client_emails'] ?? null);
+        $token->update(['client_emails' => $clientEmails]);
+
+        return response()->json(['data' => $this->serialize($token->fresh())]);
+    }
+
+    /** GET /review/tokens/{id}/email-preview — rendered subject/body for the send dialog */
+    public function emailPreview(int $id)
+    {
+        $token = ReviewToken::findOrFail($id);
+        $project = Project::find($token->project_id);
+        $eval = ReviewEvaluation::findOrFail($token->evaluation_id);
+        $url = url('/r/' . $token->token);
+
+        $rendered = ReviewEmailTemplate::renderFor($project, $eval, $url);
+
+        return response()->json(['data' => $rendered]);
+    }
+
     /** POST /review/tokens/{id}/send-email — manually (re)send the link to the stored client emails */
-    public function sendEmail(int $id)
+    public function sendEmail(Request $request, int $id)
     {
         $token = ReviewToken::findOrFail($id);
 
@@ -63,8 +95,13 @@ class ReviewTokenController extends Controller
             return response()->json(['message' => 'Belum ada email client yang tersimpan untuk link ini.'], 422);
         }
 
+        $validated = $request->validate([
+            'subject' => 'nullable|string|max:255',
+            'body'    => 'nullable|string|max:5000',
+        ]);
+
         $eval = ReviewEvaluation::findOrFail($token->evaluation_id);
-        $sent = $this->sendTokenEmail($token, $eval);
+        $sent = $this->sendTokenEmail($token, $eval, $validated['subject'] ?? null, $validated['body'] ?? null);
 
         if (!$sent) {
             return response()->json(['message' => 'Gagal mengirim email. Cek konfigurasi SMTP atau System Logs untuk detail.'], 500);
@@ -73,13 +110,13 @@ class ReviewTokenController extends Controller
         return response()->json(['data' => $this->serialize($token->fresh())]);
     }
 
-    private function sendTokenEmail(ReviewToken $token, ReviewEvaluation $eval): bool
+    private function sendTokenEmail(ReviewToken $token, ReviewEvaluation $eval, ?string $subjectOverride = null, ?string $bodyOverride = null): bool
     {
         $project = Project::find($token->project_id);
         $url = url('/r/' . $token->token);
 
         try {
-            Mail::to($token->client_emails)->send(new ReviewLinkMail($project, $eval, $url));
+            Mail::to($token->client_emails)->send(new ReviewLinkMail($project, $eval, $url, $subjectOverride, $bodyOverride));
             $token->update(['email_sent_at' => now()]);
             $this->log(
                 'Project',

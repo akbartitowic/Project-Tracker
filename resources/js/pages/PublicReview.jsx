@@ -172,13 +172,6 @@ export default function PublicReview() {
                             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-1.5">
                                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{formData.project_name}</p>
                                 <h1 className="text-xl font-bold text-slate-900">{formData.evaluation_name}</h1>
-                                <p className="text-sm text-slate-500">{formData.trigger_label}</p>
-                                {formData.focus && (
-                                    <p className="text-xs text-slate-400 flex items-start gap-1.5 pt-1">
-                                        <Info className="size-3.5 shrink-0 mt-0.5" />
-                                        {formData.focus}
-                                    </p>
-                                )}
                                 {formData.expires_at && (
                                     <p className="text-xs text-amber-600 font-medium pt-0.5">
                                         Aktif hingga: {new Date(formData.expires_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -285,9 +278,7 @@ export default function PublicReview() {
                                                                     <Info className="size-3 shrink-0 mt-0.5" />{q.description}
                                                                 </p>
                                                             )}
-                                                            {isWeighted ? (
-                                                                <p className="text-[10px] text-primary mt-0.5">Bobot: {q.weight}%</p>
-                                                            ) : (
+                                                            {!isWeighted && (
                                                                 <p className="text-[10px] text-slate-400 mt-0.5">Informasi — tidak dinilai</p>
                                                             )}
                                                         </div>

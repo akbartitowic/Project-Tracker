@@ -9,6 +9,7 @@ use App\Models\ProjectReview;
 use App\Models\ProjectReviewAnswer;
 use App\Models\ReviewEvaluation;
 use App\Models\ReviewQuestion;
+use App\Models\ReviewToken;
 use App\Models\Task;
 use App\Support\ProjectAccess;
 use Illuminate\Http\Request;
@@ -58,11 +59,20 @@ class ProjectReviewController extends Controller
         $project    = Project::findOrFail($projectId);
         $evals      = ReviewEvaluation::where('methodology', $project->methodology)->where('is_active', true)->orderBy('order')->get();
 
-        $summary = $evals->map(function ($eval) use ($projectId) {
+        // Share-link status is scoped per evaluation (per review), not the whole
+        // project — a project can have several reviews, each with its own link(s)
+        // and send/copy status, so counting must happen per review everywhere.
+        $tokensByEval = ReviewToken::where('project_id', $projectId)
+            ->get(['id', 'evaluation_id', 'is_active', 'email_sent_at', 'client_emails'])
+            ->groupBy('evaluation_id');
+
+        $summary = $evals->map(function ($eval) use ($projectId, $tokensByEval) {
             $latest = ProjectReview::where('project_id', $projectId)
                 ->where('evaluation_id', $eval->id)
                 ->latest()
                 ->first();
+
+            $evalTokens = $tokensByEval->get($eval->id, collect());
 
             return [
                 'evaluation_id'    => $eval->id,
@@ -74,6 +84,14 @@ class ProjectReviewController extends Controller
                 'submitted_at'     => $latest?->created_at?->toIso8601String(),
                 'submitted_by'     => $latest?->submitter?->name,
                 'review_id'        => $latest?->id,
+                // `has_emails` lets the frontend treat a link that already has client
+                // emails saved as "terkirim" even before the send button is clicked.
+                'share'            => [
+                    'has_link'      => $evalTokens->isNotEmpty(),
+                    'email_sent_at' => $evalTokens->max('email_sent_at')?->toIso8601String(),
+                    'has_emails'    => $evalTokens->contains(fn ($t) => !empty($t->client_emails)),
+                    'token_ids'     => $evalTokens->pluck('id')->values(),
+                ],
             ];
         });
 

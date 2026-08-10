@@ -8,12 +8,13 @@ import {
     Star, LayoutGrid, List, Loader2, X, Lock,
     KanbanSquare, ChevronRight, Settings2, Clock,
     Send, ArrowLeft, Info, MessageSquare, Plus, AlertCircle,
-    Link as LinkIcon,
+    Link as LinkIcon, User, CheckCircle2, ClipboardCheck, Clipboard, MailCheck, MailX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 const fmtDateWIB = (iso) => {
@@ -34,25 +35,6 @@ const LEVELS = [
 function getLevel(score) {
     if (score == null) return null;
     return LEVELS.find(l => score >= l.min) ?? LEVELS[2];
-}
-
-function ScorePill({ score, label }) {
-    const level = getLevel(score);
-    if (!level) {
-        return (
-            <div className="flex flex-col items-center gap-0.5">
-                <div className="size-2 rounded-full bg-slate-200 dark:bg-slate-700" />
-                <span className="text-[9px] text-slate-400 text-center leading-tight">{label}</span>
-            </div>
-        );
-    }
-    return (
-        <div className="flex flex-col items-center gap-0.5">
-            <div className={cn('size-2 rounded-full', level.dot)} />
-            <span className="text-[9px] font-semibold text-slate-600 dark:text-slate-300">{Math.round(score)}%</span>
-            <span className="text-[9px] text-slate-400 text-center leading-tight">{label}</span>
-        </div>
-    );
 }
 
 function LevelBadge({ score }) {
@@ -80,35 +62,60 @@ const STATUS_STYLE = {
 
 /* ── Review result section (shown on card/row) ── */
 function ReviewResultBar({ summary, overall, onClick }) {
-    const hasSummary = summary?.length > 0;
-    const hasAnySubmitted = summary?.some(s => s.submitted);
+    const hasSummary     = summary?.length > 0;
+    const submittedCount = summary?.filter(s => s.submitted).length ?? 0;
+    const totalCount     = summary?.length ?? 0;
+    const allDone        = hasSummary && submittedCount === totalCount;
+    const pct            = totalCount > 0 ? (submittedCount / totalCount) * 100 : 0;
+
+    const lastReview = hasSummary
+        ? summary
+            .filter(s => s.submitted && s.submitted_at)
+            .sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at))[0]
+        : null;
+
+    const level = getLevel(overall);
 
     return (
         <button
             onClick={onClick}
-            className="w-full flex items-center gap-2 pt-2.5 mt-2.5 border-t border-slate-100 dark:border-slate-800 hover:opacity-80 transition-opacity text-left"
+            className="w-full text-left pt-2.5 mt-2.5 border-t border-slate-100 dark:border-slate-800 hover:opacity-80 transition-opacity space-y-1.5"
         >
-            {hasSummary ? (
-                <div className="flex items-center gap-3 flex-1">
-                    {summary.map((s) => (
-                        <ScorePill
-                            key={s.evaluation_id}
-                            score={s.submitted ? s.total_score : null}
-                            label={`Eval ${s.evaluation_order}`}
-                        />
-                    ))}
-                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 shrink-0" />
-                    <div className="flex flex-col items-center gap-0.5">
-                        {overall != null
-                            ? <LevelBadge score={overall} />
-                            : <span className="text-[9px] text-slate-400 italic">Belum ada</span>}
-                        <span className="text-[9px] text-slate-400">Overall</span>
+            <div className="flex items-center justify-between gap-2">
+                {overall != null ? (
+                    <div className="flex items-center gap-1.5">
+                        <span className={cn('text-base font-bold leading-none', level?.color)}>{overall.toFixed(1)}%</span>
+                        <LevelBadge score={overall} />
                     </div>
+                ) : (
+                    <span className="text-[11px] text-slate-400 italic">
+                        {hasSummary ? 'Belum ada review' : 'Lihat & isi review'}
+                    </span>
+                )}
+                <ChevronRight className="size-3.5 text-slate-400 shrink-0" />
+            </div>
+
+            {hasSummary && (
+                <div className="flex items-center gap-1.5">
+                    <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div
+                            className={cn('h-full rounded-full transition-all', allDone ? 'bg-emerald-500' : 'bg-primary')}
+                            style={{ width: `${pct}%` }}
+                        />
+                    </div>
+                    <span className="text-[10px] text-slate-400 shrink-0 flex items-center gap-0.5">
+                        {allDone && <CheckCircle2 className="size-2.5 text-emerald-500" />}
+                        {submittedCount}/{totalCount} eval
+                    </span>
                 </div>
-            ) : (
-                <span className="text-[11px] text-slate-400 italic flex-1">Lihat & isi review</span>
             )}
-            <ChevronRight className="size-3 text-slate-400 shrink-0" />
+
+            {lastReview && (
+                <p className="text-[10px] text-slate-400 flex items-center gap-1 truncate">
+                    <User className="size-2.5 shrink-0" />
+                    <span className="truncate">{lastReview.submitted_by} · {fmtDateWIB(lastReview.submitted_at)}</span>
+                </p>
+            )}
         </button>
     );
 }
@@ -379,22 +386,129 @@ function EmailChipInput({ emails, onChange, placeholder }) {
     );
 }
 
+/* ── Dialog to preview/edit subject+body before manually sending a review-invite email ── */
+function SendReviewEmailDialog({ tokenId, open, onClose, onSent }) {
+    const [loading, setLoading] = useState(true);
+    const [sending, setSending] = useState(false);
+    const [subject, setSubject] = useState('');
+    const [body,    setBody]    = useState('');
+
+    useEffect(() => {
+        if (!open || !tokenId) return;
+        setLoading(true);
+        fetchAPI(`/review/tokens/${tokenId}/email-preview`)
+            .then(res => {
+                setSubject(res.data?.subject ?? '');
+                setBody(res.data?.body ?? '');
+            })
+            .catch(e => alert('Gagal memuat template email: ' + e.message))
+            .finally(() => setLoading(false));
+    }, [open, tokenId]);
+
+    const handleSend = async () => {
+        setSending(true);
+        try {
+            const res = await fetchAPI(`/review/tokens/${tokenId}/send-email`, {
+                method: 'POST',
+                body: JSON.stringify({ subject, body }),
+            });
+            onSent(res.data);
+            onClose();
+        } catch (e) { alert('Gagal mengirim email: ' + e.message); }
+        finally { setSending(false); }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle className="text-base">Kirim Email Review</DialogTitle>
+                </DialogHeader>
+                {loading ? (
+                    <div className="flex items-center justify-center py-10 gap-2 text-slate-400 text-sm">
+                        <Loader2 className="size-5 animate-spin" /> Memuat template…
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Subject</label>
+                            <Input value={subject} onChange={e => setSubject(e.target.value)} className="h-9 text-sm" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Isi Email</label>
+                            <Textarea value={body} onChange={e => setBody(e.target.value)} rows={6} className="text-sm" />
+                            <p className="text-[10px] text-slate-400">
+                                Tombol "Isi Review" &amp; link fallback tetap otomatis ditambahkan setelah teks ini.
+                                Perubahan di sini hanya berlaku untuk pengiriman ini saja.
+                            </p>
+                        </div>
+                    </div>
+                )}
+                <DialogFooter className="gap-2 sm:gap-2">
+                    <Button variant="outline" onClick={onClose} disabled={sending}>Batal</Button>
+                    <Button onClick={handleSend} disabled={loading || sending} className="gap-1.5">
+                        {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                        Kirim
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 /* ── Share link panel (per evaluation, inside dialog) ── */
+const COPIED_LINKS_KEY   = 'hubtask_review_copied_links';
+const COPIED_LINKS_EVENT = 'hubtask:review-link-copied';
+const readCopiedLinks = () => {
+    try { return JSON.parse(localStorage.getItem(COPIED_LINKS_KEY) ?? '{}'); } catch { return {}; }
+};
+
+// Shared across the dashboard summary tiles and the per-token badges inside
+// ShareLinkPanel, so "sudah disalin" stays in sync without prop-drilling
+// through the project card / summary dialog tree. Persisted per browser
+// (clipboard copies aren't something the backend can observe).
+function useCopiedLinks() {
+    const [copiedAt, setCopiedAtState] = useState(readCopiedLinks);
+
+    useEffect(() => {
+        const onUpdate = () => setCopiedAtState(readCopiedLinks());
+        window.addEventListener(COPIED_LINKS_EVENT, onUpdate);
+        window.addEventListener('storage', onUpdate);
+        return () => {
+            window.removeEventListener(COPIED_LINKS_EVENT, onUpdate);
+            window.removeEventListener('storage', onUpdate);
+        };
+    }, []);
+
+    const markCopied = (id) => {
+        const next = { ...readCopiedLinks(), [id]: new Date().toISOString() };
+        try { localStorage.setItem(COPIED_LINKS_KEY, JSON.stringify(next)); } catch { /* storage unavailable, badge just won't persist */ }
+        window.dispatchEvent(new Event(COPIED_LINKS_EVENT));
+    };
+
+    return [copiedAt, markCopied];
+}
+
 function ShareLinkPanel({ project, evaluation }) {
     const [tokens,      setTokens]      = useState(null); // null = not loaded yet
     const [loading,     setLoading]     = useState(false);
     const [creating,    setCreating]    = useState(false);
     const [copied,      setCopied]      = useState(null);
+    const [copiedAt,    markCopied]     = useCopiedLinks(); // { [tokenId]: iso string } — persisted locally, per browser
     const [open,        setOpen]        = useState(false);
     const [emailsList,  setEmailsList]  = useState(project.review_client_emails ?? []);
     const [autoSend,    setAutoSend]    = useState(false);
-    const [sendingId,   setSendingId]   = useState(null);
+    const [tokenEmailDrafts, setTokenEmailDrafts] = useState({}); // { [tokenId]: string[] } — local edits before saving
+    const [savingEmailsId, setSavingEmailsId] = useState(null);
+    const [sendDialogTokenId, setSendDialogTokenId] = useState(null);
 
     const load = async () => {
         setLoading(true);
         try {
             const res = await fetchAPI(`/projects/${project.id}/evaluations/${evaluation.id}/tokens`);
-            setTokens(res.data ?? []);
+            const list = res.data ?? [];
+            setTokens(list);
+            setTokenEmailDrafts(Object.fromEntries(list.map(t => [t.id, t.client_emails ?? []])));
         } catch { setTokens([]); }
         finally { setLoading(false); }
     };
@@ -414,6 +528,7 @@ function ShareLinkPanel({ project, evaluation }) {
                 body: JSON.stringify({ client_emails: emailsList, auto_send: autoSend }),
             });
             setTokens(prev => [res.data, ...(prev ?? [])]);
+            setTokenEmailDrafts(prev => ({ ...prev, [res.data.id]: res.data.client_emails ?? [] }));
             setEmailsList([]);
         } catch (e) { alert('Gagal membuat link: ' + e.message); }
         finally { setCreating(false); }
@@ -426,19 +541,32 @@ function ShareLinkPanel({ project, evaluation }) {
         } catch (e) { alert('Gagal: ' + e.message); }
     };
 
-    const handleSendEmail = async (id) => {
-        setSendingId(id);
+    // Emails save immediately on every add/remove — no separate "Simpan" step to
+    // forget, which previously left a typed-but-unsaved email silently uncounted.
+    const handleTokenEmailsChange = async (id, emails) => {
+        setTokenEmailDrafts(prev => ({ ...prev, [id]: emails }));
+        setSavingEmailsId(id);
         try {
-            const res = await fetchAPI(`/review/tokens/${id}/send-email`, { method: 'POST' });
+            const res = await fetchAPI(`/review/tokens/${id}/emails`, {
+                method: 'PATCH',
+                body: JSON.stringify({ client_emails: emails }),
+            });
             setTokens(prev => prev.map(t => t.id === id ? res.data : t));
-        } catch (e) { alert('Gagal mengirim email: ' + e.message); }
-        finally { setSendingId(null); }
+            setTokenEmailDrafts(prev => ({ ...prev, [id]: res.data.client_emails ?? [] }));
+        } catch (e) { alert('Gagal menyimpan email: ' + e.message); }
+        finally { setSavingEmailsId(null); }
+    };
+
+    const handleEmailSent = (updatedToken) => {
+        setTokens(prev => prev.map(t => t.id === updatedToken.id ? updatedToken : t));
+        setTokenEmailDrafts(prev => ({ ...prev, [updatedToken.id]: updatedToken.client_emails ?? [] }));
     };
 
     const copyUrl = (url, id) => {
         navigator.clipboard.writeText(url);
         setCopied(id);
         setTimeout(() => setCopied(null), 2000);
+        markCopied(id);
     };
 
     return (
@@ -484,6 +612,33 @@ function ShareLinkPanel({ project, evaluation }) {
                                             </span>
                                         )}
                                     </div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        {copiedAt[t.id] ? (
+                                            <span
+                                                title={`Disalin ${fmtDateWIB(copiedAt[t.id])}`}
+                                                className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                                            >
+                                                <ClipboardCheck className="size-2.5" /> Sudah disalin
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+                                                <Clipboard className="size-2.5" /> Belum disalin
+                                            </span>
+                                        )}
+                                        {(t.email_sent_at || (t.client_emails ?? []).length > 0) ? (
+                                            <span
+                                                title={(t.client_emails ?? []).join(', ')}
+                                                className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                                            >
+                                                <MailCheck className="size-2.5" />
+                                                {t.email_sent_at ? `Terkirim ke User ${fmtDateWIB(t.email_sent_at)}` : 'Terkirim ke User'}
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400">
+                                                <MailX className="size-2.5" /> Belum dikirim
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="flex items-center gap-1.5">
                                         <code className="flex-1 text-[11px] text-slate-600 dark:text-slate-300 truncate bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5 font-mono">
                                             {t.url}
@@ -505,23 +660,34 @@ function ShareLinkPanel({ project, evaluation }) {
                                         )}
                                     </div>
                                     {(t.client_emails ?? []).length > 0 && (
-                                        <div className="flex items-center justify-between gap-2 pt-0.5">
-                                            <span className="text-[10px] text-slate-500 truncate" title={t.client_emails.join(', ')}>
-                                                {t.email_sent_at ? 'Terkirim ke: ' : 'Client: '}{t.client_emails.join(', ')}
-                                            </span>
-                                            {t.is_usable && (
-                                                <button
-                                                    onClick={() => handleSendEmail(t.id)}
-                                                    disabled={sendingId === t.id}
-                                                    className="shrink-0 flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
-                                                >
-                                                    {sendingId === t.id
-                                                        ? <Loader2 className="size-2.5 animate-spin" />
-                                                        : <Send className="size-2.5" />
+                                        <p className="text-[10px] text-slate-500 truncate pt-0.5" title={t.client_emails.join(', ')}>
+                                            {t.email_sent_at ? 'Terkirim ke: ' : 'Client: '}{t.client_emails.join(', ')}
+                                        </p>
+                                    )}
+                                    {t.is_usable && (
+                                        <div className="pt-1 space-y-1.5">
+                                            <EmailChipInput
+                                                emails={tokenEmailDrafts[t.id] ?? []}
+                                                onChange={(emails) => handleTokenEmailsChange(t.id, emails)}
+                                                placeholder="Tambah email client…"
+                                            />
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="shrink-0 flex items-center gap-1 text-[10px] text-slate-400">
+                                                    {savingEmailsId === t.id
+                                                        ? <><Loader2 className="size-2.5 animate-spin" /> Menyimpan…</>
+                                                        : 'Tersimpan otomatis'
                                                     }
+                                                </span>
+                                                <button
+                                                    onClick={() => setSendDialogTokenId(t.id)}
+                                                    disabled={(t.client_emails ?? []).length === 0}
+                                                    title={(t.client_emails ?? []).length === 0 ? 'Simpan minimal 1 email dulu' : undefined}
+                                                    className="shrink-0 flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    <Send className="size-2.5" />
                                                     {t.email_sent_at ? 'Kirim Ulang' : 'Kirim Email'}
                                                 </button>
-                                            )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -562,6 +728,13 @@ function ShareLinkPanel({ project, evaluation }) {
                     )}
                 </div>
             )}
+
+            <SendReviewEmailDialog
+                tokenId={sendDialogTokenId}
+                open={sendDialogTokenId != null}
+                onClose={() => setSendDialogTokenId(null)}
+                onSent={handleEmailSent}
+            />
         </div>
     );
 }
@@ -858,9 +1031,21 @@ function ReviewDashboard({ summaries, projects }) {
         if (level) byLevel[level.label] = (byLevel[level.label] ?? 0) + 1;
     });
 
+    // Share-link status — counted per review (evaluation), not per project,
+    // since a project can have more than one review, each with its own link(s)
+    // and independent send/copy status. Copy status only lives in this browser's
+    // localStorage (backend has no way to observe a clipboard copy). A link that
+    // already has its client emails filled in (`share.has_emails`) counts as
+    // "terkirim" too, even before the send button itself has actually been clicked.
+    const copiedMap    = readCopiedLinks();
+    const allEvals      = projects.flatMap(p => summaries[p.id]?.data ?? []);
+    const totalReviews  = allEvals.length;
+    const emailSentEvals  = allEvals.filter(e => !!e.share?.email_sent_at || !!e.share?.has_emails);
+    const linkCopiedEvals = allEvals.filter(e => (e.share?.token_ids ?? []).some(id => copiedMap[id]));
+
     return (
         <div className="space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 <div className="rounded-xl border border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl p-4">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Sudah Review</p>
                     <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
@@ -899,8 +1084,64 @@ function ReviewDashboard({ summaries, projects }) {
                     <p className="text-2xl font-bold text-rose-700 dark:text-rose-400 mt-1">{byLevel['Perlu Perbaikan']}</p>
                     <p className="text-xs text-rose-400 mt-0.5">&lt; 60%</p>
                 </div>
+
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/10 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-500 flex items-center gap-1">
+                        <MailCheck className="size-3" /> Terkirim ke User
+                    </p>
+                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">
+                        {emailSentEvals.length}
+                        <span className="text-sm font-normal text-emerald-400">/{totalReviews}</span>
+                    </p>
+                    <p className="text-xs text-emerald-500 mt-0.5">review</p>
+                </div>
+
+                <div className="rounded-xl border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/10 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-500 flex items-center gap-1">
+                        <ClipboardCheck className="size-3" /> Link Disalin
+                    </p>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-400 mt-1">
+                        {linkCopiedEvals.length}
+                        <span className="text-sm font-normal text-blue-400">/{totalReviews}</span>
+                    </p>
+                    <p className="text-xs text-blue-500 mt-0.5">review (browser ini)</p>
+                </div>
             </div>
 
+        </div>
+    );
+}
+
+/* ── "Terkirim"/"Disalin" badges — reused on both grid card and list row.
+   Counted per review (evaluation), not per project — a project can have more
+   than one review, each with its own link(s) and send/copy status. ── */
+function ShareStatusBadges({ evaluations }) {
+    const withLink = (evaluations ?? []).filter(e => e.share?.has_link);
+    if (withLink.length === 0) return null;
+
+    const copiedMap = readCopiedLinks();
+    const copiedCount = withLink.filter(e => (e.share.token_ids ?? []).some(id => copiedMap[id])).length;
+    // A review whose link already has client emails filled in counts as
+    // "terkirim" too, even if the send button itself hasn't been clicked yet.
+    const sentCount = withLink.filter(e => !!e.share.email_sent_at || !!e.share.has_emails).length;
+    const total = withLink.length;
+
+    return (
+        <div className="flex items-center gap-1.5 flex-wrap pt-1.5 mt-1.5 border-t border-slate-100 dark:border-slate-800">
+            <span className={cn(
+                'inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full',
+                copiedCount > 0 ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500',
+            )}>
+                {copiedCount > 0 ? <ClipboardCheck className="size-2.5" /> : <Clipboard className="size-2.5" />}
+                Disalin {copiedCount}/{total}
+            </span>
+            <span className={cn(
+                'inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full',
+                sentCount > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400',
+            )}>
+                {sentCount > 0 ? <MailCheck className="size-2.5" /> : <MailX className="size-2.5" />}
+                Terkirim ke User {sentCount}/{total}
+            </span>
         </div>
     );
 }
@@ -944,6 +1185,7 @@ function ProjectGridCard({ project, onOpenSummary, summaryData }) {
                     overall={s?.overall}
                     onClick={() => onOpenSummary(project)}
                 />
+                <ShareStatusBadges evaluations={s?.data} />
             </div>
         </div>
     );
@@ -984,6 +1226,7 @@ function ProjectListRow({ project, onOpenSummary, summaryData }) {
                 overall={s?.overall}
                 onClick={() => onOpenSummary(project)}
             />
+            <ShareStatusBadges evaluations={s?.data} />
         </div>
     );
 }
@@ -1014,7 +1257,17 @@ export default function Review() {
     // shareable, and closes on browser back — not just local component state.
     const summaryProjectId = searchParams.get('project');
     const openSummary  = (project) => setSearchParams(prev => { prev.set('project', String(project.id)); return prev; });
-    const closeSummary = () => setSearchParams(prev => { prev.delete('project'); return prev; });
+    const closeSummary = () => {
+        // Refresh just this project's summary so the "terkirim"/"disalin" badges on
+        // its card reflect anything done inside the dialog (send email, copy link).
+        if (summaryProjectId) {
+            const pid = summaryProjectId;
+            fetchAPI(`/projects/${pid}/reviews/summary`)
+                .then(res => setSummaries(prev => ({ ...prev, [pid]: res })))
+                .catch(() => {});
+        }
+        setSearchParams(prev => { prev.delete('project'); return prev; });
+    };
 
     const [projects,       setProjects]       = useState([]);
     const [summaries,      setSummaries]      = useState({});

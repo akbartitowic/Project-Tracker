@@ -18,10 +18,13 @@ import {
     Image,
     Download,
     FileArchive,
+    FileText,
+    RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { PasswordInput } from '@/components/ui/password-input';
 import {
     Dialog,
@@ -31,6 +34,19 @@ import {
     DialogDescription,
     DialogFooter,
 } from '@/components/ui/dialog';
+
+const REVIEW_TEMPLATE_DEFAULTS = {
+    review_invite_email_subject: 'Permintaan Review Project: {project_name}',
+    review_invite_email_body:
+        'Kami mengundang Anda untuk memberikan review/evaluasi atas project berikut: {project_name} ({evaluation_name}).\n\nSilakan klik tombol di bawah ini untuk mengisi review.',
+};
+
+const REVIEW_TEMPLATE_PLACEHOLDERS = [
+    { token: '{project_name}', desc: 'Nama project' },
+    { token: '{evaluation_name}', desc: 'Nama siklus evaluasi' },
+    { token: '{app_name}', desc: 'Nama aplikasi' },
+    { token: '{review_url}', desc: 'Link review (dipakai di tombol, opsional disebut di body)' },
+];
 
 const SMTP_FIELDS = [
     { name: 'mail_host', label: 'SMTP Host', placeholder: 'smtp.gmail.com', half: true },
@@ -154,6 +170,54 @@ export default function SystemSettings() {
         } finally {
             setIsTestingSmtp(false);
         }
+    };
+
+    const [reviewTemplate, setReviewTemplate] = useState(REVIEW_TEMPLATE_DEFAULTS);
+    const [isReviewTemplateLoading, setIsReviewTemplateLoading] = useState(true);
+    const [isSavingReviewTemplate, setIsSavingReviewTemplate] = useState(false);
+
+    useEffect(() => {
+        const loadReviewTemplate = async () => {
+            try {
+                const keys = Object.keys(REVIEW_TEMPLATE_DEFAULTS).join(',');
+                const res = await fetchAPI(`/settings/all?keys=${keys}`);
+                if (res.status === 'success' && res.data) {
+                    setReviewTemplate((prev) => ({
+                        review_invite_email_subject: res.data.review_invite_email_subject || prev.review_invite_email_subject,
+                        review_invite_email_body: res.data.review_invite_email_body || prev.review_invite_email_body,
+                    }));
+                }
+            } catch (err) {
+                console.error('Failed to load review email template', err);
+            } finally {
+                setIsReviewTemplateLoading(false);
+            }
+        };
+        loadReviewTemplate();
+    }, []);
+
+    const handleReviewTemplateChange = (e) => {
+        const { name, value } = e.target;
+        setReviewTemplate((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const saveReviewTemplate = async () => {
+        setIsSavingReviewTemplate(true);
+        try {
+            await fetchAPI('/settings/update', {
+                method: 'POST',
+                body: JSON.stringify(reviewTemplate),
+            });
+            alert('Template email review berhasil disimpan.');
+        } catch (err) {
+            alert(`Gagal menyimpan: ${err.message}`);
+        } finally {
+            setIsSavingReviewTemplate(false);
+        }
+    };
+
+    const resetReviewTemplate = () => {
+        setReviewTemplate(REVIEW_TEMPLATE_DEFAULTS);
     };
 
     const handleResetData = async () => {
@@ -297,6 +361,91 @@ export default function SystemSettings() {
                         )}
                     </CardContent>
                 </Card>
+
+                {hasPermission(user, 'settings.update') && (
+                    <Card className="border-slate-200/90 shadow-none dark:border-slate-800">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <FileText className="size-4 text-primary" />
+                                Template Email Review
+                            </CardTitle>
+                            <CardDescription>
+                                Subject dan isi email undangan review yang dikirim ke client. Berlaku sebagai default —
+                                masih bisa diedit ulang saat mengirim per link di halaman Review.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {isReviewTemplateLoading ? (
+                                <div className="flex justify-center py-10">
+                                    <Loader2 className="size-6 animate-spin text-primary" />
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Subject</label>
+                                        <Input
+                                            name="review_invite_email_subject"
+                                            value={reviewTemplate.review_invite_email_subject}
+                                            onChange={handleReviewTemplateChange}
+                                            placeholder={REVIEW_TEMPLATE_DEFAULTS.review_invite_email_subject}
+                                            className="h-9"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Isi email</label>
+                                        <Textarea
+                                            name="review_invite_email_body"
+                                            value={reviewTemplate.review_invite_email_body}
+                                            onChange={handleReviewTemplateChange}
+                                            placeholder={REVIEW_TEMPLATE_DEFAULTS.review_invite_email_body}
+                                            rows={5}
+                                            className="text-sm"
+                                        />
+                                    </div>
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/40 p-3">
+                                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">Placeholder yang tersedia</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                                            {REVIEW_TEMPLATE_PLACEHOLDERS.map((p) => (
+                                                <p key={p.token} className="text-xs text-slate-600 dark:text-slate-400">
+                                                    <code className="text-[11px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 font-mono text-primary">{p.token}</code>
+                                                    {' '}— {p.desc}
+                                                </p>
+                                            ))}
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-2">
+                                            Tombol "Isi Review" dan link fallback selalu otomatis mengarah ke link review yang benar,
+                                            terlepas apakah {'{review_url}'} disebut di isi email atau tidak.
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-800 sm:flex-row">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="gap-1.5 sm:flex-1"
+                                            onClick={resetReviewTemplate}
+                                        >
+                                            <RotateCcw className="size-4" />
+                                            Reset ke default
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            className="gap-1.5 sm:flex-1"
+                                            onClick={saveReviewTemplate}
+                                            disabled={isSavingReviewTemplate}
+                                        >
+                                            {isSavingReviewTemplate ? (
+                                                <Loader2 className="size-4 animate-spin" />
+                                            ) : (
+                                                <Save className="size-4" />
+                                            )}
+                                            Simpan
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
 
                 {hasPermission(user, 'settings.update') && (
                     <Card className="border-slate-200 shadow-none dark:border-slate-800">
