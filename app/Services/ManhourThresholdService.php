@@ -117,16 +117,33 @@ class ManhourThresholdService
         }
     }
 
-    /** PM/Director project members only — not every PM/Director in the system. */
+    /**
+     * PM/Director project members only — not every PM/Director in the system.
+     * "PM/Director" is matched two ways since this app has two separate role
+     * concepts that can both be named "Project Manager"/"Project Director":
+     *   - the member's global system role (`users.role_id` -> `roles`), used for RBAC;
+     *   - the member's per-project task/manhour role (`project_members.project_role_id`
+     *     -> `project_roles`), shown on the Project Board member list.
+     * A member qualifies via either one, unioned and deduped.
+     */
     private static function resolveRecipients(int $projectId): Collection
     {
-        return User::query()
+        $bySystemRole = User::query()
             ->join('project_members', 'project_members.user_id', '=', 'users.id')
             ->join('roles', 'roles.id', '=', 'users.role_id')
             ->where('project_members.project_id', $projectId)
             ->whereIn('roles.name', self::NOTIFY_ROLE_NAMES)
             ->select('users.*')
-            ->distinct()
             ->get();
+
+        $byProjectRole = User::query()
+            ->join('project_members', 'project_members.user_id', '=', 'users.id')
+            ->join('project_roles', 'project_roles.id', '=', 'project_members.project_role_id')
+            ->where('project_members.project_id', $projectId)
+            ->whereIn('project_roles.name', self::NOTIFY_ROLE_NAMES)
+            ->select('users.*')
+            ->get();
+
+        return $bySystemRole->merge($byProjectRole)->unique('id')->values();
     }
 }
