@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Manhour;
 use App\Models\Project;
 use App\Models\ProjectAllocation;
 use App\Models\ProjectReview;
@@ -124,12 +123,12 @@ class ProjectReviewController extends Controller
             ->orderBy('order')
             ->get();
 
-        $statuses = $evals->map(fn($e) => $this->computeTriggerStatus($e, $projectId));
+        $statuses = $evals->map(fn($e) => $this->computeTriggerStatus($e, $projectId, $project));
 
         return response()->json(['data' => $statuses]);
     }
 
-    private function computeTriggerStatus(ReviewEvaluation $eval, int $projectId): array
+    private function computeTriggerStatus(ReviewEvaluation $eval, int $projectId, Project $project): array
     {
         $base = [
             'evaluation_id'   => $eval->id,
@@ -145,7 +144,13 @@ class ProjectReviewController extends Controller
         if ($eval->trigger_value === null) return $base;
 
         if ($eval->trigger_type === 'mh_percentage') {
-            $usedHours = (float) Manhour::where('project_id', $projectId)->sum('hours');
+            // Aligned with Project Board's "MH terpakai" (ProjectController::balance()):
+            // planned/estimated hours on billable, quota-eligible tasks — not actual logged manhours.
+            $usedHours = (float) Task::query()
+                ->where('project_id', $projectId)
+                ->where('is_billable', true)
+                ->quotaEligible()
+                ->sum('estimated_hours');
 
             if ($eval->trigger_basis === 'topup_mh') {
                 $budget = (float) ProjectAllocation::where('project_id', $projectId)
@@ -153,10 +158,8 @@ class ProjectReviewController extends Controller
                     ->whereNotNull('topup_hours')
                     ->sum('topup_hours');
             } else {
-                // total_mh: sum all manhour usage; budget = all topup_hours (contract hours not stored separately)
-                $budget = (float) ProjectAllocation::where('project_id', $projectId)
-                    ->whereNotNull('topup_hours')
-                    ->sum('topup_hours');
+                // total_mh: budget = project's total MH quota, same as Project Board's "MH terpakai".
+                $budget = (float) ($project->total_manhours ?? 0);
             }
 
             if ($budget > 0) {
