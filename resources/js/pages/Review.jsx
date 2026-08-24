@@ -1698,8 +1698,12 @@ export default function Review() {
                 </div>
             )}
 
-            {/* Summary dialog */}
+            {/* Summary dialog — keyed by project id so switching directly from one
+                project's modal to another's (e.g. via browser back/forward) fully
+                remounts it, resetting sub-view state like activeEval/detailReview
+                instead of leaving stale content from the previous project visible. */}
             <ReviewSummaryDialog
+                key={summaryProject?.id ?? 'none'}
                 open={summaryProject !== null}
                 onClose={closeSummary}
                 project={summaryProject}
