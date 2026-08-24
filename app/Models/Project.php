@@ -23,6 +23,7 @@ class Project extends Model
         'total_cost',
         'quotation_value',
         'review_client_emails',
+        'review_enabled',
     ];
 
     protected $casts = [
@@ -30,5 +31,6 @@ class Project extends Model
         'start_date' => 'date:Y-m-d',
         'end_date' => 'date:Y-m-d',
         'review_client_emails' => 'array',
+        'review_enabled' => 'boolean',
     ];
 }

@@ -9,10 +9,12 @@ use App\Models\MenuItem;
 use App\Support\ClientInfo;
 use App\Support\PasswordPolicy;
 use App\Support\PermissionCatalog;
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use App\Traits\LogActivity;
 use Throwable;
@@ -26,6 +28,7 @@ class AuthController extends Controller
         $roleModel = $user->role()->with('permissions.module')->first();
         $data = $user->toArray();
         $data['password_expired'] = $user->isPasswordExpired();
+        $data['avatar_url'] = PublicStorageUrl::for($user->avatar_path);
         $data['role_name'] = $roleModel?->name ?? ($data['role'] ?? null);
         $data['role_permissions'] = $roleModel
             ? $roleModel->permissions->map(fn ($p) => [
@@ -219,6 +222,49 @@ class AuthController extends Controller
             'user' => $this->serializeUser($user),
             'force_logout' => $passwordChanged,
         ]);
+    }
+
+    public function uploadAvatar(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'avatar' => 'required|image|max:4096',
+        ]);
+
+        $this->deleteAvatarFile($user->avatar_path);
+        $user->avatar_path = $request->file('avatar')->store('avatars', 'public');
+        $user->save();
+        $this->log('Auth', 'Updated Profile Photo', "User: {$user->name}");
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Foto profil berhasil diperbarui',
+            'user' => $this->serializeUser($user),
+        ]);
+    }
+
+    public function removeAvatar(Request $request)
+    {
+        $user = $request->user();
+
+        $this->deleteAvatarFile($user->avatar_path);
+        $user->avatar_path = null;
+        $user->save();
+        $this->log('Auth', 'Removed Profile Photo', "User: {$user->name}");
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Foto profil dihapus',
+            'user' => $this->serializeUser($user),
+        ]);
+    }
+
+    private function deleteAvatarFile(?string $path): void
+    {
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
     }
 
     /**

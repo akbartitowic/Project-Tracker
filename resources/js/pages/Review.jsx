@@ -9,12 +9,14 @@ import {
     KanbanSquare, ChevronRight, Settings2, Clock,
     Send, ArrowLeft, Info, MessageSquare, Plus, AlertCircle,
     Link as LinkIcon, User, CheckCircle2, ClipboardCheck, Clipboard, MailCheck, MailX,
+    LayoutDashboard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 const fmtDateWIB = (iso) => {
@@ -27,9 +29,9 @@ const fmtDateWIB = (iso) => {
 
 /* ── Score helpers ── */
 const LEVELS = [
-    { min: 80,  label: 'Baik',            color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', ring: 'ring-emerald-200' },
-    { min: 60,  label: 'Cukup',           color: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200',     dot: 'bg-amber-500',   ring: 'ring-amber-200'   },
-    { min: 0,   label: 'Perlu Perbaikan', color: 'text-rose-700',    bg: 'bg-rose-50 border-rose-200',       dot: 'bg-rose-500',    ring: 'ring-rose-200'    },
+    { key: 'good', min: 80,  label: 'Baik',             color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', ring: 'ring-emerald-200' },
+    { key: 'fair', min: 60,  label: 'Cukup',            color: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200',     dot: 'bg-amber-500',   ring: 'ring-amber-200'   },
+    { key: 'poor', min: 0,   label: 'Perlu Perbaikan',  color: 'text-rose-700',    bg: 'bg-rose-50 border-rose-200',       dot: 'bg-rose-500',    ring: 'ring-rose-200'    },
 ];
 
 function getLevel(score) {
@@ -241,7 +243,7 @@ function ReviewSubmitForm({ project, evaluation, onSubmitted, onCancel }) {
                 <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Catatan Umum (opsional)</label>
                 <textarea
                     rows={2}
-                    placeholder="Catatan keseluruhan untuk evaluasi ini…"
+                    placeholder="Catatan umum untuk evaluasi ini…"
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     className="w-full text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
@@ -431,15 +433,15 @@ function SendReviewEmailDialog({ tokenId, open, onClose, onSent }) {
                 ) : (
                     <div className="space-y-3">
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Subject</label>
+                            <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Subjek</label>
                             <Input value={subject} onChange={e => setSubject(e.target.value)} className="h-9 text-sm" />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Isi Email</label>
                             <Textarea value={body} onChange={e => setBody(e.target.value)} rows={6} className="text-sm" />
                             <p className="text-[10px] text-slate-400">
-                                Tombol "Isi Review" &amp; link fallback tetap otomatis ditambahkan setelah teks ini.
-                                Perubahan di sini hanya berlaku untuk pengiriman ini saja.
+                                Tombol "Isi Review" &amp; link cadangan tetap ditambahkan otomatis setelah teks ini.
+                                Perubahan di sini hanya berlaku untuk pengiriman ini.
                             </p>
                         </div>
                     </div>
@@ -608,7 +610,7 @@ function ShareLinkPanel({ project, evaluation }) {
                                         </span>
                                         {t.expires_at && (
                                             <span className="text-[10px] text-slate-400">
-                                                Hingga {new Date(t.expires_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                Sampai {new Date(t.expires_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                                             </span>
                                         )}
                                     </div>
@@ -618,7 +620,7 @@ function ShareLinkPanel({ project, evaluation }) {
                                                 title={`Disalin ${fmtDateWIB(copiedAt[t.id])}`}
                                                 className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
                                             >
-                                                <ClipboardCheck className="size-2.5" /> Sudah disalin
+                                                <ClipboardCheck className="size-2.5" /> Disalin
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
@@ -635,7 +637,7 @@ function ShareLinkPanel({ project, evaluation }) {
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400">
-                                                <MailX className="size-2.5" /> Belum dikirim
+                                                <MailX className="size-2.5" /> Belum terkirim
                                             </span>
                                         )}
                                     </div>
@@ -647,7 +649,7 @@ function ShareLinkPanel({ project, evaluation }) {
                                             onClick={() => copyUrl(t.url, t.id)}
                                             className="shrink-0 text-xs font-medium px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                                         >
-                                            {copied === t.id ? 'Disalin!' : 'Salin'}
+                                            {copied === t.id ? 'Tersalin!' : 'Salin'}
                                         </button>
                                         {t.is_usable && (
                                             <button
@@ -661,7 +663,7 @@ function ShareLinkPanel({ project, evaluation }) {
                                     </div>
                                     {(t.client_emails ?? []).length > 0 && (
                                         <p className="text-[10px] text-slate-500 truncate pt-0.5" title={t.client_emails.join(', ')}>
-                                            {t.email_sent_at ? 'Terkirim ke: ' : 'Client: '}{t.client_emails.join(', ')}
+                                            {t.email_sent_at ? 'Terkirim ke: ' : 'Klien: '}{t.client_emails.join(', ')}
                                         </p>
                                     )}
                                     {t.is_usable && (
@@ -669,7 +671,7 @@ function ShareLinkPanel({ project, evaluation }) {
                                             <EmailChipInput
                                                 emails={tokenEmailDrafts[t.id] ?? []}
                                                 onChange={(emails) => handleTokenEmailsChange(t.id, emails)}
-                                                placeholder="Tambah email client…"
+                                                placeholder="Tambah email klien…"
                                             />
                                             <div className="flex items-center gap-1.5">
                                                 <span className="shrink-0 flex items-center gap-1 text-[10px] text-slate-400">
@@ -1016,8 +1018,92 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
     );
 }
 
-/* ── Review Dashboard ── */
-function ReviewDashboard({ summaries, projects }) {
+/* ── Relative time in Indonesian, e.g. "3 hari lalu" ── */
+function timeAgo(iso) {
+    if (!iso) return null;
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1)  return 'baru saja';
+    if (minutes < 60) return `${minutes} menit lalu`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} jam lalu`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} hari lalu`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months} bulan lalu`;
+    return `${Math.floor(months / 12)} tahun lalu`;
+}
+
+const REVIEW_STATUS_STYLE = {
+    full:      { icon: CheckCircle2, iconBg: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400', pill: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400', label: 'Sudah Direview' },
+    partial:   { icon: Clock,        iconBg: 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400',       pill: 'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400',       label: 'Sebagian' },
+    none:      { icon: Clock,        iconBg: 'bg-rose-50 text-rose-500 dark:bg-rose-900/20 dark:text-rose-400',           pill: 'bg-rose-100 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400',           label: 'Belum Direview' },
+    no_config: { icon: Clock,        iconBg: 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500',         pill: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',           label: 'Tanpa Evaluasi' },
+};
+
+/* ── Horizontal segmented bar + legend — reusable proportion chart, no chart lib needed.
+   Segments are clickable (bar slice or legend entry) when onSegmentClick is given. ── */
+function SegmentedBarChart({ title, headline, headlineSub, segments, emptyLabel, onSegmentClick }) {
+    const total = segments.reduce((acc, s) => acc + s.value, 0);
+    return (
+        <div className="rounded-xl border border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl p-4 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{title}</p>
+            </div>
+
+            {headline != null && (
+                <p className="text-2xl font-bold text-slate-900 dark:text-white -mt-1">
+                    {headline}
+                    {headlineSub && <span className="text-xs font-normal text-slate-400 ml-1">{headlineSub}</span>}
+                </p>
+            )}
+
+            {total > 0 ? (
+                <>
+                    <div className="flex h-3 w-full rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800">
+                        {segments.filter(s => s.value > 0).map(s => (
+                            <button
+                                key={s.key}
+                                type="button"
+                                onClick={() => onSegmentClick?.(s.key)}
+                                className={cn('h-full transition-all', s.barColor, onSegmentClick && 'cursor-pointer hover:brightness-110')}
+                                style={{ width: `${(s.value / total) * 100}%` }}
+                                title={`${s.label}: ${s.value}`}
+                            />
+                        ))}
+                    </div>
+                    <div className="flex flex-wrap gap-x-1 gap-y-1">
+                        {segments.map(s => (
+                            <button
+                                key={s.key}
+                                type="button"
+                                onClick={() => onSegmentClick?.(s.key)}
+                                disabled={!onSegmentClick || s.value === 0}
+                                className={cn(
+                                    'flex items-center gap-1.5 text-xs rounded-md px-1.5 py-0.5 transition-colors',
+                                    onSegmentClick && s.value > 0 && 'hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer',
+                                    s.value === 0 && 'opacity-50',
+                                )}
+                            >
+                                <span className={cn('size-2 rounded-full shrink-0', s.dotColor)} />
+                                <span className="text-slate-500 dark:text-slate-400">{s.label}</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-200">{s.value}</span>
+                                <span className="text-slate-400">({Math.round((s.value / total) * 100)}%)</span>
+                            </button>
+                        ))}
+                    </div>
+                </>
+            ) : (
+                <p className="text-xs text-slate-400 italic">{emptyLabel}</p>
+            )}
+        </div>
+    );
+}
+
+/* ── Review Dashboard — proportion charts + per-project review status list ── */
+function ReviewDashboard({ summaries, projects, onOpenProject }) {
+    const [activeSegment, setActiveSegment] = useState(null); // { title, items: [{ project, subtitle }] }
+
     if (projects.length === 0) return null;
 
     const withReview = projects.filter(p => summaries[p.id]?.overall != null);
@@ -1025,89 +1111,180 @@ function ReviewDashboard({ summaries, projects }) {
         ? withReview.reduce((acc, p) => acc + summaries[p.id].overall, 0) / withReview.length
         : null;
 
-    const byLevel = { 'Baik': 0, 'Cukup': 0, 'Perlu Perbaikan': 0 };
-    withReview.forEach(p => {
-        const level = getLevel(summaries[p.id].overall);
-        if (level) byLevel[level.label] = (byLevel[level.label] ?? 0) + 1;
+    // Per-project status: how many of its evaluations are submitted, and — for
+    // ones with nothing submitted yet — how long since a review link was first
+    // generated for it (the longest-waiting evaluation, i.e. earliest link).
+    const projectStatuses = projects.map(p => {
+        const evals = summaries[p.id]?.data ?? [];
+        const submittedCount = evals.filter(e => e.submitted).length;
+        const totalCount = evals.length;
+        const generatedTimes = evals.filter(e => !e.submitted).map(e => e.share?.generated_at).filter(Boolean).sort();
+        const waitingSince = generatedTimes[0] ?? null;
+        const submittedTimes = evals.filter(e => e.submitted && e.submitted_at).map(e => e.submitted_at).sort();
+        const lastSubmittedAt = submittedTimes.length ? submittedTimes[submittedTimes.length - 1] : null;
+
+        let status;
+        if (totalCount === 0) status = 'no_config';
+        else if (submittedCount === 0) status = 'none';
+        else if (submittedCount === totalCount) status = 'full';
+        else status = 'partial';
+
+        return { project: p, submittedCount, totalCount, status, waitingSince, lastSubmittedAt };
     });
 
-    // Share-link status — counted per review (evaluation), not per project,
-    // since a project can have more than one review, each with its own link(s)
-    // and independent send/copy status. Copy status only lives in this browser's
-    // localStorage (backend has no way to observe a clipboard copy). A link that
-    // already has its client emails filled in (`share.has_emails`) counts as
-    // "terkirim" too, even before the send button itself has actually been clicked.
-    const copiedMap    = readCopiedLinks();
-    const allEvals      = projects.flatMap(p => summaries[p.id]?.data ?? []);
-    const totalReviews  = allEvals.length;
-    const emailSentEvals  = allEvals.filter(e => !!e.share?.email_sent_at || !!e.share?.has_emails);
-    const linkCopiedEvals = allEvals.filter(e => (e.share?.token_ids ?? []).some(id => copiedMap[id]));
+    // Grouped by status/score level — reused both for the chart segment values
+    // and for the click-through modal listing which projects are in each group.
+    const statusGroups = {
+        full:      projectStatuses.filter(s => s.status === 'full'),
+        partial:   projectStatuses.filter(s => s.status === 'partial'),
+        none:      projectStatuses.filter(s => s.status === 'none'),
+        no_config: projectStatuses.filter(s => s.status === 'no_config'),
+    };
+    const scoreGroups = {
+        good: withReview.filter(p => getLevel(summaries[p.id].overall)?.key === 'good'),
+        fair: withReview.filter(p => getLevel(summaries[p.id].overall)?.key === 'fair'),
+        poor: withReview.filter(p => getLevel(summaries[p.id].overall)?.key === 'poor'),
+    };
+
+    // Most urgent first: not-reviewed (oldest waiting link first) → partial → no-config → fully reviewed.
+    const ORDER = { none: 0, partial: 1, no_config: 2, full: 3 };
+    const sortedStatuses = [...projectStatuses].sort((a, b) => {
+        if (ORDER[a.status] !== ORDER[b.status]) return ORDER[a.status] - ORDER[b.status];
+        if (a.status === 'none' && (a.waitingSince || b.waitingSince)) {
+            if (a.waitingSince && b.waitingSince) return new Date(a.waitingSince) - new Date(b.waitingSince);
+            return a.waitingSince ? -1 : 1;
+        }
+        return (a.project.name || '').localeCompare(b.project.name || '');
+    });
+
+    const statusSegments = [
+        { key: 'full',      label: 'Sudah Direview',  value: statusGroups.full.length,      barColor: 'bg-emerald-500',              dotColor: 'bg-emerald-500' },
+        { key: 'partial',   label: 'Sebagian',        value: statusGroups.partial.length,   barColor: 'bg-amber-400',                dotColor: 'bg-amber-400' },
+        { key: 'none',      label: 'Belum Direview',  value: statusGroups.none.length,      barColor: 'bg-rose-400',                 dotColor: 'bg-rose-400' },
+        { key: 'no_config', label: 'Tanpa Evaluasi',  value: statusGroups.no_config.length,  barColor: 'bg-slate-300 dark:bg-slate-600', dotColor: 'bg-slate-300 dark:bg-slate-600' },
+    ];
+
+    const scoreSegments = [
+        { key: 'good', label: 'Baik',             value: scoreGroups.good.length, barColor: 'bg-emerald-500', dotColor: 'bg-emerald-500' },
+        { key: 'fair', label: 'Cukup',            value: scoreGroups.fair.length, barColor: 'bg-amber-500',   dotColor: 'bg-amber-500' },
+        { key: 'poor', label: 'Perlu Perbaikan',  value: scoreGroups.poor.length, barColor: 'bg-rose-500',    dotColor: 'bg-rose-500' },
+    ];
+
+    const statusSubtitle = ({ status, submittedCount, totalCount, waitingSince, lastSubmittedAt }) => {
+        if (status === 'no_config') return 'Belum ada evaluasi aktif untuk metodologi ini';
+        if (status === 'none') return waitingSince ? `Menunggu — link dibuat ${timeAgo(waitingSince)}` : 'Belum direview, link belum dibuat';
+        if (status === 'partial') return `${submittedCount}/${totalCount} evaluasi direview${lastSubmittedAt ? ` · terakhir ${timeAgo(lastSubmittedAt)}` : ''}`;
+        return `Semua evaluasi direview${lastSubmittedAt ? ` · terakhir ${timeAgo(lastSubmittedAt)}` : ''}`;
+    };
+
+    const openStatusSegment = (key) => {
+        const label = statusSegments.find(s => s.key === key)?.label ?? '';
+        setActiveSegment({
+            title: `Project — ${label}`,
+            items: statusGroups[key].map(g => ({ project: g.project, subtitle: statusSubtitle(g) })),
+        });
+    };
+
+    const openScoreSegment = (key) => {
+        const label = scoreSegments.find(s => s.key === key)?.label ?? '';
+        setActiveSegment({
+            title: `Project — Skor ${label}`,
+            items: scoreGroups[key].map(p => ({ project: p, subtitle: `${summaries[p.id].overall.toFixed(1)}%` })),
+        });
+    };
 
     return (
-        <div className="space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div className="rounded-xl border border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Sudah Review</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                        {withReview.length}
-                        <span className="text-sm font-normal text-slate-400">/{projects.length}</span>
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">project</p>
-                </div>
-
-                <div className={cn(
-                    'rounded-xl border p-4',
-                    avgScore != null ? getLevel(avgScore)?.bg : 'border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl',
-                )}>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Rata-rata Skor</p>
-                    {avgScore != null ? (
-                        <div className="flex items-end gap-2 mt-1">
-                            <p className={cn('text-2xl font-bold', getLevel(avgScore)?.color)}>
-                                {avgScore.toFixed(1)}%
-                            </p>
-                            <div className="mb-0.5"><LevelBadge score={avgScore} /></div>
-                        </div>
-                    ) : (
-                        <p className="text-2xl font-bold text-slate-300 dark:text-slate-600 mt-1">—</p>
-                    )}
-                    <p className="text-xs text-slate-400 mt-0.5">keseluruhan</p>
-                </div>
-
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/10 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-500">Baik</p>
-                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">{byLevel['Baik']}</p>
-                    <p className="text-xs text-emerald-500 mt-0.5">≥ 80%</p>
-                </div>
-
-                <div className="rounded-xl border border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-900/10 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-400">Perlu Perbaikan</p>
-                    <p className="text-2xl font-bold text-rose-700 dark:text-rose-400 mt-1">{byLevel['Perlu Perbaikan']}</p>
-                    <p className="text-xs text-rose-400 mt-0.5">&lt; 60%</p>
-                </div>
-
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/10 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-500 flex items-center gap-1">
-                        <MailCheck className="size-3" /> Terkirim ke User
-                    </p>
-                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">
-                        {emailSentEvals.length}
-                        <span className="text-sm font-normal text-emerald-400">/{totalReviews}</span>
-                    </p>
-                    <p className="text-xs text-emerald-500 mt-0.5">review</p>
-                </div>
-
-                <div className="rounded-xl border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/10 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-500 flex items-center gap-1">
-                        <ClipboardCheck className="size-3" /> Link Disalin
-                    </p>
-                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-400 mt-1">
-                        {linkCopiedEvals.length}
-                        <span className="text-sm font-normal text-blue-400">/{totalReviews}</span>
-                    </p>
-                    <p className="text-xs text-blue-500 mt-0.5">review (browser ini)</p>
-                </div>
+        <div className="space-y-4">
+            {/* Proportion charts — how projects are distributed across review status and score quality.
+                Segments are clickable — opens a modal listing the matching projects. */}
+            <div className="grid md:grid-cols-2 gap-3">
+                <SegmentedBarChart
+                    title="Status Review"
+                    headline={`${withReview.length}/${projects.length}`}
+                    headlineSub="project sudah direview"
+                    segments={statusSegments}
+                    emptyLabel="Belum ada project."
+                    onSegmentClick={openStatusSegment}
+                />
+                <SegmentedBarChart
+                    title="Distribusi Skor"
+                    headline={avgScore != null ? `${avgScore.toFixed(1)}%` : '—'}
+                    headlineSub="rata-rata keseluruhan"
+                    segments={scoreSegments}
+                    emptyLabel="Belum ada project yang direview."
+                    onSegmentClick={openScoreSegment}
+                />
             </div>
 
+            {/* Segment detail modal — shared by both charts above */}
+            <Dialog open={!!activeSegment} onOpenChange={(o) => !o && setActiveSegment(null)}>
+                <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="text-base">{activeSegment?.title}</DialogTitle>
+                    </DialogHeader>
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {(activeSegment?.items ?? []).length === 0 && (
+                            <p className="text-xs text-slate-400 italic py-6 text-center">Tidak ada project.</p>
+                        )}
+                        {(activeSegment?.items ?? []).map(({ project: p, subtitle }) => (
+                            <button
+                                key={p.id}
+                                onClick={() => { onOpenProject(p); setActiveSegment(null); }}
+                                className="w-full flex items-center justify-between gap-3 px-1 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors text-left"
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{p.name}</p>
+                                    <p className="text-[11px] text-slate-400 truncate">{subtitle}</p>
+                                </div>
+                                <ChevronRight className="size-3.5 text-slate-300 shrink-0" />
+                            </button>
+                        ))}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Per-project review status — who's reviewed, who's not, and how long the wait's been */}
+            <div className="rounded-xl border border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">Status Review per Project</p>
+                    <p className="text-[11px] text-slate-400">{projects.length} project</p>
+                </div>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {sortedStatuses.map(({ project: p, submittedCount, totalCount, status, waitingSince, lastSubmittedAt }) => {
+                        const style = REVIEW_STATUS_STYLE[status];
+                        const Icon = style.icon;
+                        return (
+                            <button
+                                key={p.id}
+                                onClick={() => onOpenProject(p)}
+                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors text-left"
+                            >
+                                <div className={cn('size-8 rounded-lg flex items-center justify-center shrink-0', style.iconBg)}>
+                                    <Icon className="size-4" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium text-slate-800 dark:text-white truncate">{p.name}</span>
+                                        <span className={cn('inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full border shrink-0', METHODOLOGY_STYLE[p.methodology] ?? 'bg-slate-100 text-slate-400 border-slate-200')}>
+                                            {p.methodology ?? '—'}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                        {status === 'no_config' && 'Belum ada evaluasi aktif untuk metodologi ini'}
+                                        {status === 'none' && (waitingSince ? `Menunggu review — link dibuat ${timeAgo(waitingSince)}` : 'Belum direview, link belum dibuat')}
+                                        {status === 'partial' && `${submittedCount}/${totalCount} evaluasi direview${lastSubmittedAt ? ` · terakhir ${timeAgo(lastSubmittedAt)}` : ''}`}
+                                        {status === 'full' && `Semua evaluasi direview${lastSubmittedAt ? ` · terakhir ${timeAgo(lastSubmittedAt)}` : ''}`}
+                                    </p>
+                                </div>
+                                <span className={cn('shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full', style.pill)}>
+                                    {style.label}
+                                </span>
+                                <ChevronRight className="size-3.5 text-slate-300 shrink-0" />
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 }
@@ -1243,13 +1420,24 @@ export default function Review() {
     const view    = searchParams.get('view') === 'list' ? 'list' : 'card';
     const setView = (v) => setSearchParams(prev => { prev.set('view', v); return prev; });
 
-    // Methodology tab — separate "page" per methodology, synced to the URL
-    // (?methodology=Waterfall / ?methodology=Agile+Scrum) so it's linkable/bookmarkable,
-    // same pattern as the Aktif/Done/Favorit tabs on the Project Board.
-    const methodologyTab = searchParams.get('methodology') ?? 'all';
+    // View tab — "dashboard" (overview across all projects) / "Waterfall" / "Agile Scrum"
+    // (project browsing filtered per methodology), synced to the URL (?methodology=...)
+    // so it's linkable/bookmarkable, same pattern as the Aktif/Done/Favorit tabs on the Project Board.
+    const methodologyTab = searchParams.get('methodology') ?? 'dashboard';
     const setMethodologyTab = (m) => setSearchParams(prev => {
-        if (m === 'all') prev.delete('methodology'); else prev.set('methodology', m);
+        if (m === 'dashboard') prev.delete('methodology'); else prev.set('methodology', m);
         prev.delete('project');
+        return prev;
+    });
+
+    // Year filter — synced to the URL (?year=...) so it's linkable/bookmarkable.
+    // Defaults to the current calendar year ("tahun berjalan"). "all" shows every
+    // project regardless of year.
+    const currentYear = new Date().getFullYear();
+    const yearParam = searchParams.get('year');
+    const yearFilter = yearParam === 'all' ? 'all' : (yearParam ? Number(yearParam) : currentYear);
+    const setYearFilter = (y) => setSearchParams(prev => {
+        if (y === currentYear) prev.delete('year'); else prev.set('year', String(y));
         return prev;
     });
 
@@ -1280,7 +1468,10 @@ export default function Review() {
         setLoading(true); setError(null);
         try {
             const res = await fetchAPI('/projects');
-            const list = res.data ?? res ?? [];
+            const allProjects = res.data ?? res ?? [];
+            // Only projects marked eligible for review (toggled in Review Config → tab Project)
+            // show up here — `review_enabled` defaults to true when absent for backward compat.
+            const list = allProjects.filter(p => p.review_enabled !== false);
             setProjects(list);
 
             // Load summaries for all projects in parallel
@@ -1297,17 +1488,55 @@ export default function Review() {
     }, []);
 
     useEffect(() => { if (canRead) load(); else setLoading(false); }, [load, canRead]);
-    useEffect(() => { setPage(1); }, [methodologyTab]);
+    useEffect(() => { setPage(1); }, [methodologyTab, yearFilter]);
 
-    const activeCount    = projects.filter(p => p.status === 'In Progress').length;
-    const agileCount     = projects.filter(p => p.methodology === 'Agile Scrum').length;
-    const waterfallCount = projects.filter(p => p.methodology === 'Waterfall').length;
+    // Which year a project "belongs to" for the year filter: the year of its most
+    // recent review activity (latest submission, or link generation if nothing's
+    // been submitted yet) across all its evaluations — falling back to the
+    // project's start_date year when it has no review activity at all yet.
+    const projectYearMap = useMemo(() => {
+        const map = {};
+        for (const p of projects) {
+            const evals = summaries[p.id]?.data ?? [];
+            const dates = [];
+            evals.forEach(e => {
+                if (e.submitted_at) dates.push(e.submitted_at);
+                if (e.share?.generated_at) dates.push(e.share.generated_at);
+            });
+            if (dates.length > 0) {
+                map[p.id] = new Date(dates.sort().slice(-1)[0]).getFullYear();
+            } else if (p.start_date) {
+                map[p.id] = new Date(p.start_date).getFullYear();
+            } else {
+                map[p.id] = null;
+            }
+        }
+        return map;
+    }, [projects, summaries]);
 
+    const availableYears = useMemo(() => {
+        const years = new Set([currentYear]);
+        Object.values(projectYearMap).forEach(y => { if (y != null) years.add(y); });
+        return Array.from(years).sort((a, b) => b - a);
+    }, [projectYearMap, currentYear]);
+
+    // Projects with no determinable year (no review activity yet AND no start_date)
+    // stay visible regardless of the selected year — there's no date to judge them by.
+    const yearFilteredProjects = useMemo(() => {
+        if (yearFilter === 'all') return projects;
+        return projects.filter(p => projectYearMap[p.id] == null || projectYearMap[p.id] === yearFilter);
+    }, [projects, projectYearMap, yearFilter]);
+
+    const agileCount     = yearFilteredProjects.filter(p => p.methodology === 'Agile Scrum').length;
+    const waterfallCount = yearFilteredProjects.filter(p => p.methodology === 'Waterfall').length;
+
+    // Only "Waterfall"/"Agile Scrum" tabs browse a filtered project list; the
+    // "dashboard" tab shows an overview over all projects instead (see below).
     const sortedProjects = useMemo(
-        () => [...projects]
-            .filter(p => methodologyTab === 'all' || p.methodology === methodologyTab)
+        () => [...yearFilteredProjects]
+            .filter(p => p.methodology === methodologyTab)
             .sort((a, b) => (a.name || '').localeCompare(b.name || '')),
-        [projects, methodologyTab]
+        [yearFilteredProjects, methodologyTab]
     );
     const pagedProjects = useMemo(
         () => sortedProjects.slice((page - 1) * pageSize, page * pageSize),
@@ -1341,45 +1570,37 @@ export default function Review() {
                             <Settings2 className="size-3.5" /> Konfigurasi
                         </Button>
                     )}
-                    <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
-                    {['card', 'list'].map(v => (
-                        <button key={v} onClick={() => setView(v)} className={cn(
-                            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all capitalize',
-                            view === v
-                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
-                        )}>
-                            {v === 'card' ? <LayoutGrid className="size-3.5" /> : <List className="size-3.5" />}
-                            {v.charAt(0).toUpperCase() + v.slice(1)}
-                        </button>
-                    ))}
-                    </div>
+                    {methodologyTab !== 'dashboard' && (
+                        <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
+                        {['card', 'list'].map(v => (
+                            <button key={v} onClick={() => setView(v)} className={cn(
+                                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all capitalize',
+                                view === v
+                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                            )}>
+                                {v === 'card' ? <LayoutGrid className="size-3.5" /> : <List className="size-3.5" />}
+                                {v.charAt(0).toUpperCase() + v.slice(1)}
+                            </button>
+                        ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* Stats */}
+            {/* View tabs — Dashboard shows an overview across all projects;
+                Waterfall/Agile Scrum browse the project list for that methodology.
+                Year filter applies page-wide (default: tahun berjalan / current year). */}
             {projects.length > 0 && (
-                <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
-                    <span><strong className="text-slate-700 dark:text-slate-200">{projects.length}</strong> project</span>
-                    <span className="text-slate-300 dark:text-slate-700">·</span>
-                    <span><strong className="text-emerald-600">{activeCount}</strong> aktif</span>
-                    <span className="text-slate-300 dark:text-slate-700">·</span>
-                    <span><strong className="text-blue-600">{agileCount}</strong> Agile</span>
-                    <span className="text-slate-300 dark:text-slate-700">·</span>
-                    <span><strong className="text-violet-600">{waterfallCount}</strong> Waterfall</span>
-                </div>
-            )}
-
-            {/* Methodology tabs — separate view per methodology */}
-            {projects.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="inline-flex rounded-xl border border-slate-200 bg-white/70 p-0.5 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28]">
                     <Button
                         type="button" variant="ghost" size="sm"
-                        className={cn('h-8 gap-1.5 px-3', methodologyTab === 'all' && 'bg-accent text-white hover:bg-accent hover:text-white')}
-                        onClick={() => setMethodologyTab('all')}
+                        className={cn('h-8 gap-1.5 px-3', methodologyTab === 'dashboard' && 'bg-accent text-white hover:bg-accent hover:text-white')}
+                        onClick={() => setMethodologyTab('dashboard')}
                     >
-                        Semua
-                        <span className="text-xs opacity-80">({projects.length})</span>
+                        <LayoutDashboard className="size-3.5" />
+                        Dashboard
                     </Button>
                     <Button
                         type="button" variant="ghost" size="sm"
@@ -1398,11 +1619,19 @@ export default function Review() {
                         <span className="text-xs opacity-80">({agileCount})</span>
                     </Button>
                 </div>
-            )}
 
-            {/* Dashboard — reflects the active methodology tab */}
-            {canRead && !loading && !error && (
-                <ReviewDashboard summaries={summaries} projects={sortedProjects} />
+                <Select value={String(yearFilter)} onValueChange={(v) => setYearFilter(v === 'all' ? 'all' : Number(v))}>
+                    <SelectTrigger className="h-8 w-[130px] text-xs border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-[#151b28]">
+                        <SelectValue placeholder="Tahun" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Semua Tahun</SelectItem>
+                        {availableYears.map(y => (
+                            <SelectItem key={y} value={String(y)}>Tahun {y}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                </div>
             )}
 
             {/* Content */}
@@ -1419,12 +1648,21 @@ export default function Review() {
                     <X className="size-4 shrink-0" /> {error}
                     <Button variant="outline" size="sm" className="ml-2 h-7 text-xs" onClick={load}>Coba lagi</Button>
                 </div>
+            ) : methodologyTab === 'dashboard' ? (
+                yearFilteredProjects.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-300/70 dark:border-white/10 rounded-xl bg-white/50 backdrop-blur-sm dark:bg-white/5">
+                        <Star className="size-12 mb-3 opacity-20" />
+                        <p className="text-sm font-medium">
+                            {projects.length === 0 ? 'Belum ada project' : `Tidak ada project untuk ${yearFilter === 'all' ? 'filter ini' : `tahun ${yearFilter}`}`}
+                        </p>
+                    </div>
+                ) : (
+                    <ReviewDashboard summaries={summaries} projects={yearFilteredProjects} onOpenProject={openSummary} />
+                )
             ) : sortedProjects.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-300/70 dark:border-white/10 rounded-xl bg-white/50 backdrop-blur-sm dark:bg-white/5">
                     <Star className="size-12 mb-3 opacity-20" />
-                    <p className="text-sm font-medium">
-                        {projects.length === 0 ? 'Belum ada project' : `Tidak ada project ${methodologyTab}`}
-                    </p>
+                    <p className="text-sm font-medium">Tidak ada project {methodologyTab}</p>
                 </div>
             ) : view === 'card' ? (
                 <div className="space-y-4">

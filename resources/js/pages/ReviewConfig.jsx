@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { hasPermission } from '../utils/permissions';
@@ -7,10 +7,11 @@ import {
     ArrowLeft, Star, Settings2, Plus, Trash2, Check, X,
     Loader2, ChevronDown, ChevronRight,
     Info, Pencil, Calendar, Hash, UserCheck, ShieldCheck,
-    Zap, Percent, AlarmClock, GitBranch,
+    Zap, Percent, AlarmClock, GitBranch, ListChecks, KanbanSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 const METHODOLOGY_LABELS = {
@@ -504,7 +505,11 @@ function QuestionRow({ question, index, canConfig, onEdit, onDelete }) {
 
 /* ── Evaluation block ── */
 function EvaluationBlock({ evaluation, canConfig, onDeleted }) {
-    const [expanded,      setExpanded]      = useState(true);
+    // Collapsed by default — with several cycles already configured, auto-expanding
+    // every card (rules + meta + every question) at once made the page feel dense
+    // the moment it opened. The header row alone (name, trigger, weight%, toggle)
+    // is enough to scan; details load on click.
+    const [expanded,      setExpanded]      = useState(false);
     const [confirmDel,    setConfirmDel]    = useState(false);
     const [deleting,      setDeleting]      = useState(false);
     const [isActive,      setIsActive]      = useState(evaluation.is_active ?? true);
@@ -983,11 +988,150 @@ function EvaluationBlock({ evaluation, canConfig, onDeleted }) {
     );
 }
 
+/* ── Project eligibility toggle row — "Project" tab ── */
+function ProjectEligibilityRow({ project, canConfig, onToggled }) {
+    const [enabled, setEnabled] = useState(project.review_enabled !== false);
+    const [saving,  setSaving]  = useState(false);
+
+    const handleToggle = async (next) => {
+        const prev = enabled;
+        setEnabled(next); // optimistic
+        setSaving(true);
+        try {
+            const res = await fetchAPI(`/review/projects/${project.id}/eligibility`, {
+                method: 'PATCH',
+                body: JSON.stringify({ review_enabled: next }),
+            });
+            onToggled(project.id, res.data.review_enabled);
+        } catch (e) {
+            setEnabled(prev);
+            alert('Gagal menyimpan: ' + e.message);
+        } finally { setSaving(false); }
+    };
+
+    const style = METHODOLOGY_LABELS[project.methodology] ?? {};
+
+    return (
+        <div className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center shrink-0">
+                <KanbanSquare className="size-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{project.name}</p>
+                <div className="flex items-center gap-1.5 mt-1">
+                    <span className={cn(
+                        'inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
+                        style.bg ?? 'bg-slate-100 border-slate-200', style.color ?? 'text-slate-500',
+                    )}>
+                        {project.methodology ?? '—'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{project.status}</span>
+                </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+                <span className={cn('text-[11px] font-medium', enabled ? 'text-emerald-600' : 'text-slate-400')}>
+                    {enabled ? 'Berhak Review' : 'Tidak Berhak'}
+                </span>
+                {canConfig ? (
+                    <Switch checked={enabled} onCheckedChange={handleToggle} disabled={saving} />
+                ) : (
+                    <span className={cn(
+                        'text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
+                        enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500',
+                    )}>
+                        {enabled ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/* ── "Project" tab body — list of all projects with a review-eligibility toggle ── */
+function ProjectEligibilityTab({ canConfig }) {
+    const [projects, setProjects] = useState([]);
+    const [loading,  setLoading]  = useState(true);
+    const [error,    setError]    = useState(null);
+    const [search,   setSearch]   = useState('');
+
+    const load = useCallback(async () => {
+        setLoading(true); setError(null);
+        try {
+            const res = await fetchAPI('/review/projects');
+            setProjects(res.data ?? []);
+        } catch { setError('Gagal memuat daftar project.'); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const handleToggled = (id, reviewEnabled) => {
+        setProjects(prev => prev.map(p => p.id === id ? { ...p, review_enabled: reviewEnabled } : p));
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center gap-2 py-16 text-slate-400 text-sm">
+                <Loader2 className="size-5 animate-spin" /> Memuat daftar project…
+            </div>
+        );
+    }
+    if (error) {
+        return (
+            <div className="flex items-center justify-center gap-2 py-16 text-rose-500 text-sm">
+                <X className="size-4 shrink-0" /> {error}
+                <Button variant="outline" size="sm" className="ml-2 h-7 text-xs" onClick={load}>Coba lagi</Button>
+            </div>
+        );
+    }
+
+    const filtered = projects.filter(p => (p.name ?? '').toLowerCase().includes(search.toLowerCase()));
+    const enabledCount = projects.filter(p => p.review_enabled !== false).length;
+
+    return (
+        <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <strong className="text-slate-700 dark:text-slate-200">{enabledCount}</strong>
+                    <span className="text-slate-400">/{projects.length}</span> project berhak menerima review.
+                </p>
+                <Input
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Cari project…"
+                    className="h-8 text-xs w-full sm:w-56"
+                />
+            </div>
+
+            {filtered.length === 0 ? (
+                <p className="text-xs text-slate-400 italic text-center py-10">
+                    {projects.length === 0 ? 'Belum ada project.' : 'Tidak ada project yang cocok pencarian.'}
+                </p>
+            ) : (
+                <div className="space-y-2">
+                    {filtered.map(p => (
+                        <ProjectEligibilityRow key={p.id} project={p} canConfig={canConfig} onToggled={handleToggled} />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 /* ── Page ── */
 export default function ReviewConfig() {
     const { user }   = useAuth();
     const canConfig  = hasPermission(user, 'review.update');
     const navigate   = useNavigate();
+
+    // Tab — "Siklus Evaluasi" (existing config) vs "Project" (review-eligibility toggle list),
+    // synced to the URL (?tab=projects) so it's linkable/bookmarkable.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const activeTab = searchParams.get('tab') === 'projects' ? 'projects' : 'evaluations';
+    const setActiveTab = (t) => setSearchParams(prev => {
+        if (t === 'evaluations') prev.delete('tab'); else prev.set('tab', t);
+        return prev;
+    });
 
     const [evaluations,  setEvaluations]  = useState([]);
     const [loading,      setLoading]      = useState(true);
@@ -1040,15 +1184,35 @@ export default function ReviewConfig() {
                         {canConfig ? 'Kelola siklus evaluasi dan pertanyaan review' : 'Lihat siklus evaluasi dan pertanyaan review'}
                     </p>
                 </div>
-                {canConfig && !showCreate && (
+                {activeTab === 'evaluations' && canConfig && !showCreate && (
                     <Button size="sm" className="gap-1.5 h-8 text-xs shrink-0" onClick={() => setShowCreate(true)}>
                         <Plus className="size-3.5" /> Tambah Siklus
                     </Button>
                 )}
             </div>
 
+            {/* Tabs */}
+            <div className="inline-flex rounded-xl border border-slate-200 bg-white/70 p-0.5 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28]">
+                <Button
+                    type="button" variant="ghost" size="sm"
+                    className={cn('h-8 gap-1.5 px-3', activeTab === 'evaluations' && 'bg-accent text-white hover:bg-accent hover:text-white')}
+                    onClick={() => setActiveTab('evaluations')}
+                >
+                    <ListChecks className="size-3.5" /> Siklus Evaluasi
+                </Button>
+                <Button
+                    type="button" variant="ghost" size="sm"
+                    className={cn('h-8 gap-1.5 px-3', activeTab === 'projects' && 'bg-accent text-white hover:bg-accent hover:text-white')}
+                    onClick={() => setActiveTab('projects')}
+                >
+                    <KanbanSquare className="size-3.5" /> Project
+                </Button>
+            </div>
+
             {/* Content */}
-            {loading ? (
+            {activeTab === 'projects' ? (
+                <ProjectEligibilityTab canConfig={canConfig} />
+            ) : loading ? (
                 <div className="flex items-center justify-center gap-2 py-16 text-slate-400 text-sm">
                     <Loader2 className="size-5 animate-spin" /> Memuat konfigurasi…
                 </div>

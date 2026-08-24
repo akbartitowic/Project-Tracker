@@ -25,6 +25,11 @@ class ReviewTokenController extends Controller
         $user  = $request->user();
         $eval  = ReviewEvaluation::findOrFail($evalId);
 
+        $project = Project::findOrFail($projectId);
+        if (!$project->review_enabled) {
+            return response()->json(['error' => 'Project ini tidak berhak menerima review, link tidak bisa dibuat.'], 403);
+        }
+
         $validated = $request->validate([
             'client_emails'   => 'nullable',
             'client_emails.*' => 'string',

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { User, Mail, Phone, Lock, Save, CheckCircle2, Shield, Code, Bug } from 'lucide-react';
+import AvatarUpload from '../components/profile/AvatarUpload';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -9,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Profile() {
-    const { user, updateProfile } = useAuth();
+    const { user, updateProfile, setUserDirect } = useAuth();
     const [data, setData] = useState({
         name: user?.name || '',
         nickname: user?.nickname || '',
@@ -270,9 +271,12 @@ export default function Profile() {
 
                 <div className="space-y-6">
                     <Card className="bg-primary/5 border-primary/10 overflow-hidden text-center p-8">
-                        <div className="size-24 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-primary/30 shadow-xl">
-                            <span className="text-4xl font-black text-primary uppercase">{user?.name?.charAt(0)}</span>
-                        </div>
+                        <AvatarUpload
+                            avatarUrl={user?.avatar_url}
+                            name={user?.name}
+                            onUpdated={(nextUser) => nextUser && setUserDirect(nextUser)}
+                            onError={(msg) => setMessage({ type: 'error', text: msg })}
+                        />
                         <h3 className="font-black text-xl text-slate-900 dark:text-white leading-tight">{user?.name}</h3>
                         <p className="text-sm text-slate-500 font-medium">{user?.email}</p>
                         <div className="mt-6 pt-6 border-t border-primary/10">

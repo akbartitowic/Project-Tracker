@@ -56,6 +56,8 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profile', [AuthController::class, 'updateProfile'])->middleware('permission:profile.update');
+    Route::post('/profile/avatar', [AuthController::class, 'uploadAvatar'])->middleware('permission:profile.update');
+    Route::delete('/profile/avatar', [AuthController::class, 'removeAvatar'])->middleware('permission:profile.update');
     Route::post('/force-password-change', [AuthController::class, 'forcePasswordChange']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
@@ -275,6 +277,8 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::post('/projects/{id}/integrations/{cid}/test', [ProjectIntegrationController::class, 'testWebhook'])->middleware('permission:finance_monitoring.update');
 
     // 14. Review — evaluations & questions configuration
+    Route::get('/review/projects', [ProjectReviewController::class, 'eligibleProjects'])->middleware('permission:review.read');
+    Route::patch('/review/projects/{id}/eligibility', [ProjectReviewController::class, 'updateEligibility'])->middleware('permission:review.update');
     Route::get('/review/evaluations', [ReviewController::class, 'evaluations'])->middleware('permission:review.read');
     Route::post('/review/evaluations', [ReviewController::class, 'store'])->middleware('permission:review.create');
     Route::put('/review/evaluations/{id}', [ReviewController::class, 'updateEvaluation'])->middleware('permission:review.update');

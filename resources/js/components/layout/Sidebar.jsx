@@ -156,8 +156,12 @@ export default function Sidebar({ mobileOpen = false }) {
                         collapsed && 'lg:justify-center',
                     )}
                 >
-                    <div className="size-9 shrink-0 rounded-lg bg-accent/15 flex items-center justify-center text-accent font-black text-sm dark:bg-accent/20">
-                        {(user?.nickname || user?.name)?.charAt(0)}
+                    <div className="size-9 shrink-0 rounded-lg overflow-hidden bg-accent/15 flex items-center justify-center text-accent font-black text-sm dark:bg-accent/20">
+                        {user?.avatar_url ? (
+                            <img src={user.avatar_url} alt={user?.name || 'Avatar'} className="size-full object-cover" />
+                        ) : (
+                            (user?.nickname || user?.name)?.charAt(0)
+                        )}
                     </div>
                     <div className={cn('overflow-hidden', collapsedLabelClass(collapsed))}>
                         <p className="text-xs font-bold text-slate-700 dark:text-white truncate">{user?.nickname || user?.name}</p>

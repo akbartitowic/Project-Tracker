@@ -21,6 +21,13 @@ class PublicReviewController extends Controller
             ], 403);
         }
 
+        if (!$rt->project?->review_enabled) {
+            return response()->json([
+                'error'  => 'Project ini tidak lagi berhak menerima review.',
+                'status' => 'inactive',
+            ], 403);
+        }
+
         $eval = $rt->evaluation;
 
         if (!$eval->is_active) {
@@ -65,10 +72,14 @@ class PublicReviewController extends Controller
     /** POST /public/review/{token}/submit — anonymous submission */
     public function submit(Request $request, string $token)
     {
-        $rt = ReviewToken::with('evaluation.questions')->where('token', $token)->firstOrFail();
+        $rt = ReviewToken::with(['project', 'evaluation.questions'])->where('token', $token)->firstOrFail();
 
         if (!$rt->isUsable()) {
             return response()->json(['error' => 'Link ini tidak aktif atau sudah kadaluarsa.'], 403);
+        }
+
+        if (!$rt->project?->review_enabled) {
+            return response()->json(['error' => 'Project ini tidak lagi berhak menerima review.'], 403);
         }
 
         $eval = $rt->evaluation;

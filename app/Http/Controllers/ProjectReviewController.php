@@ -16,6 +16,43 @@ use Illuminate\Http\Request;
 class ProjectReviewController extends Controller
 {
     /**
+     * GET /review/projects
+     * Lightweight project list (id, name, methodology, status, review_enabled)
+     * for the "Project" tab on the Review Config page — deciding which
+     * projects are eligible to receive reviews at all.
+     */
+    public function eligibleProjects()
+    {
+        $projects = Project::query()
+            ->select('id', 'name', 'methodology', 'status', 'review_enabled')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json(['data' => $projects]);
+    }
+
+    /**
+     * PATCH /review/projects/{id}/eligibility
+     * Toggle whether a project is allowed to receive reviews at all.
+     */
+    public function updateEligibility(Request $request, int $id)
+    {
+        $project = Project::findOrFail($id);
+
+        $validated = $request->validate([
+            'review_enabled' => 'required|boolean',
+        ]);
+
+        $project->update(['review_enabled' => $validated['review_enabled']]);
+
+        return response()->json(['data' => [
+            'id'             => $project->id,
+            'name'           => $project->name,
+            'review_enabled' => $project->review_enabled,
+        ]]);
+    }
+
+    /**
      * GET /projects/{id}/reviews
      * Returns all submitted reviews for a project, grouped by evaluation,
      * each with computed score and submitted_by info.
@@ -62,7 +99,7 @@ class ProjectReviewController extends Controller
         // project — a project can have several reviews, each with its own link(s)
         // and send/copy status, so counting must happen per review everywhere.
         $tokensByEval = ReviewToken::where('project_id', $projectId)
-            ->get(['id', 'evaluation_id', 'is_active', 'email_sent_at', 'client_emails'])
+            ->get(['id', 'evaluation_id', 'is_active', 'email_sent_at', 'client_emails', 'created_at'])
             ->groupBy('evaluation_id');
 
         $summary = $evals->map(function ($eval) use ($projectId, $tokensByEval) {
@@ -85,11 +122,15 @@ class ProjectReviewController extends Controller
                 'review_id'        => $latest?->id,
                 // `has_emails` lets the frontend treat a link that already has client
                 // emails saved as "terkirim" even before the send button is clicked.
+                // `generated_at` = when the first review link was created for this
+                // evaluation — used by the dashboard to show "menunggu sejak X" for
+                // projects that haven't been reviewed yet.
                 'share'            => [
                     'has_link'      => $evalTokens->isNotEmpty(),
                     'email_sent_at' => $evalTokens->max('email_sent_at')?->toIso8601String(),
                     'has_emails'    => $evalTokens->contains(fn ($t) => !empty($t->client_emails)),
                     'token_ids'     => $evalTokens->pluck('id')->values(),
+                    'generated_at'  => $evalTokens->min('created_at')?->toIso8601String(),
                 ],
             ];
         });
@@ -118,7 +159,12 @@ class ProjectReviewController extends Controller
         }
 
         $project = Project::findOrFail($projectId);
-        $evals   = ReviewEvaluation::where('methodology', $project->methodology)
+
+        if (!$project->review_enabled) {
+            return response()->json(['data' => []]);
+        }
+
+        $evals = ReviewEvaluation::where('methodology', $project->methodology)
             ->where('is_active', true)
             ->orderBy('order')
             ->get();
@@ -193,6 +239,11 @@ class ProjectReviewController extends Controller
         $user = $request->user();
         if (!ProjectAccess::canAccessProject($user, $projectId)) {
             return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $project = Project::findOrFail($projectId);
+        if (!$project->review_enabled) {
+            return response()->json(['error' => 'Project ini tidak berhak menerima review.'], 403);
         }
 
         $eval      = ReviewEvaluation::findOrFail($evalId);

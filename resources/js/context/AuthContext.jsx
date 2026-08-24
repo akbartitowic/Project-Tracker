@@ -126,8 +126,13 @@ export function AuthProvider({ children }) {
         return { success: false, message: res.message };
     };
 
+    // Exposed so screens that mutate the user outside updateProfile() (e.g. avatar
+    // upload, which uses its own multipart request) can sync the returned user
+    // straight into context without a full refetch.
+    const setUserDirect = (nextUser) => setUser(nextUser);
+
     return (
-        <AuthContext.Provider value={{ user, loading, login, signup, logout, updateProfile, forceChangePassword, loginNotifications, dismissLoginNotifications }}>
+        <AuthContext.Provider value={{ user, loading, login, signup, logout, updateProfile, forceChangePassword, loginNotifications, dismissLoginNotifications, setUserDirect }}>
             {children}
         </AuthContext.Provider>
     );
