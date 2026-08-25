@@ -26,7 +26,7 @@ export default class ErrorBoundary extends React.Component {
           <div className="max-w-3xl mx-auto border border-rose-500/40 bg-rose-500/10 rounded-xl p-6">
             <h1 className="text-2xl font-bold text-rose-300 mb-2">UI Runtime Error</h1>
             <p className="text-sm text-rose-100/90 mb-3">
-              Terjadi error saat render aplikasi. Halaman tidak dilanjutkan untuk mencegah blank screen.
+              An error occurred while rendering the app. The page was stopped to prevent a blank screen.
             </p>
             <pre className="text-xs whitespace-pre-wrap break-words bg-slate-950/80 p-3 rounded border border-slate-700">
               {this.state.message}

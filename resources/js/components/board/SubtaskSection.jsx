@@ -377,7 +377,7 @@ export default function SubtaskSection({
                                                 value={form.description}
                                                 onChange={(html) => setForm((f) => ({ ...f, description: html }))}
                                                 projectId={selectedProject?.id}
-                                                placeholder="Deskripsi subtask (opsional)... (paste gambar untuk melampirkan)"
+                                                placeholder="Subtask description (optional)... (paste an image to attach it)"
                                             />
                                         </div>
                                         <div className={`grid grid-cols-1 gap-3 ${categoryOptions.length > 0 ? 'sm:grid-cols-2' : ''}`}>
@@ -492,7 +492,7 @@ export default function SubtaskSection({
                                                 <label className="text-xs font-medium text-slate-600">
                                                     Estimated MH
                                                     {!form.billable && (
-                                                        <span className="font-normal text-slate-400"> (opsional, Team Load)</span>
+                                                        <span className="font-normal text-slate-400"> (optional, Team Load)</span>
                                                     )}
                                                     {form.billable && isWaterfall && (
                                                         <span className="font-normal text-slate-400"> (Team Load)</span>
@@ -503,7 +503,7 @@ export default function SubtaskSection({
                                                     min="0"
                                                     step="0.5"
                                                     value={form.estimate}
-                                                    placeholder={form.billable ? '0' : 'Opsional'}
+                                                    placeholder={form.billable ? '0' : 'Optional'}
                                                     onChange={(e) => setForm((f) => ({ ...f, estimate: e.target.value }))}
                                                     onFocus={(e) => e.target.select()}
                                                 />
@@ -570,7 +570,7 @@ export default function SubtaskSection({
                             value={form.description}
                             onChange={(html) => setForm((f) => ({ ...f, description: html }))}
                             projectId={selectedProject?.id}
-                            placeholder="Deskripsi subtask (opsional)... (paste gambar untuk melampirkan)"
+                            placeholder="Subtask description (optional)... (paste an image to attach it)"
                         />
                     </div>
                     <div className={`grid grid-cols-1 gap-3 ${categoryOptions.length > 0 ? 'sm:grid-cols-2' : ''}`}>
@@ -685,7 +685,7 @@ export default function SubtaskSection({
                             <label className="text-xs font-medium text-slate-600">
                                 Estimated MH
                                 {!form.billable && (
-                                    <span className="font-normal text-slate-400"> (opsional, Team Load)</span>
+                                    <span className="font-normal text-slate-400"> (optional, Team Load)</span>
                                 )}
                                 {form.billable && isWaterfall && (
                                     <span className="font-normal text-slate-400"> (Team Load)</span>
@@ -696,7 +696,7 @@ export default function SubtaskSection({
                                 min="0"
                                 step="0.5"
                                 value={form.estimate}
-                                placeholder={form.billable ? '0' : 'Opsional'}
+                                placeholder={form.billable ? '0' : 'Optional'}
                                 onChange={(e) => setForm((f) => ({ ...f, estimate: e.target.value }))}
                                 onFocus={(e) => e.target.select()}
                             />

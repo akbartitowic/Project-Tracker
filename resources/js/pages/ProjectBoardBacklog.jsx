@@ -176,7 +176,7 @@ export default function ProjectBoardBacklog() {
             setBacklogItems(backlogRes.data || []);
             setBoardTasks(tasksRes.data || []);
         } catch (err) {
-            alert(err.message || 'Gagal memindahkan task ke board.');
+            alert(err.message || 'Failed to move tasks to the board.');
         } finally {
             setIsPromotingBulk(false);
         }
@@ -212,7 +212,7 @@ export default function ProjectBoardBacklog() {
             setEditingId(null);
             await loadBacklog();
         } catch (err) {
-            alert(err.message || 'Gagal menyimpan perubahan.');
+            alert(err.message || 'Failed to save changes.');
         } finally {
             setIsSavingEdit(false);
         }
@@ -283,20 +283,20 @@ export default function ProjectBoardBacklog() {
             setShowAddDialog(false);
             await loadBacklog();
         } catch (err) {
-            alert(err.message || 'Gagal menambah backlog.');
+            alert(err.message || 'Failed to add backlog item.');
         } finally {
             setIsAdding(false);
         }
     };
 
     const handleDelete = async (itemId) => {
-        if (!confirm('Hapus item backlog ini?') || !canUpdate) return;
+        if (!confirm('Delete this backlog item?') || !canUpdate) return;
         try {
             await fetchAPI(`/tasks/${itemId}`, { method: 'DELETE' });
             setBacklogItems((prev) => prev.filter((i) => i.id !== itemId));
             if (promoteItem?.id === itemId) setPromoteItem(null);
         } catch (err) {
-            alert(err.message || 'Gagal menghapus backlog.');
+            alert(err.message || 'Failed to delete backlog item.');
         }
     };
 
@@ -322,7 +322,7 @@ export default function ProjectBoardBacklog() {
             setBacklogItems(backlogRes.data || []);
             setBoardTasks(tasksRes.data || []);
         } catch (err) {
-            alert(err.message || 'Gagal memindahkan ke board.');
+            alert(err.message || 'Failed to move to the board.');
         } finally {
             setIsPromoting(false);
         }
@@ -383,7 +383,7 @@ export default function ProjectBoardBacklog() {
                             onClick={() => navigate(`/board/${projectId}`)}
                         >
                             <LayoutGrid className="size-3.5" />
-                            <span className="hidden sm:inline">Buka Board</span>
+                            <span className="hidden sm:inline">Open Board</span>
                         </Button>
                         {canUpdate && (
                             <Button
@@ -392,7 +392,7 @@ export default function ProjectBoardBacklog() {
                                 onClick={() => setShowAddDialog(true)}
                             >
                                 <Plus className="size-3.5" />
-                                <span className="hidden sm:inline">Tambah</span>
+                                <span className="hidden sm:inline">Add</span>
                             </Button>
                         )}
                     </div>
@@ -407,7 +407,7 @@ export default function ProjectBoardBacklog() {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm">
                             <Inbox className="size-4 text-slate-400 shrink-0" />
-                            <span className="font-semibold text-slate-700 dark:text-slate-200">Daftar Backlog</span>
+                            <span className="font-semibold text-slate-700 dark:text-slate-200">Backlog List</span>
                             {backlogItems.length > 0 && (
                                 <>
                                     <span className="text-slate-300 dark:text-slate-600">·</span>
@@ -417,7 +417,7 @@ export default function ProjectBoardBacklog() {
                             {selectedIds.size > 0 && (
                                 <>
                                     <span className="text-slate-300 dark:text-slate-600">·</span>
-                                    <span className="font-semibold text-primary">{selectedIds.size} dipilih</span>
+                                    <span className="font-semibold text-primary">{selectedIds.size} selected</span>
                                 </>
                             )}
                         </div>
@@ -428,11 +428,11 @@ export default function ProjectBoardBacklog() {
                     {!backlogLoading && backlogItems.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-300/70 dark:border-white/10 rounded-xl bg-white/50 backdrop-blur-sm dark:bg-white/5">
                             <Inbox className="size-12 mb-3 opacity-20" />
-                            <p className="text-sm font-medium">Backlog masih kosong</p>
+                            <p className="text-sm font-medium">Backlog is still empty</p>
                             <p className="text-xs mt-1 text-slate-400">
                                 {canUpdate
-                                    ? 'Klik tombol "Tambah" di kanan atas untuk menambahkan item'
-                                    : 'Belum ada item backlog untuk project ini'}
+                                    ? 'Click the "Add" button in the top right to add an item'
+                                    : 'No backlog items for this project yet'}
                             </p>
                         </div>
                     )}
@@ -452,12 +452,12 @@ export default function ProjectBoardBacklog() {
                                             checked={allSelected}
                                             ref={(el) => { if (el) el.indeterminate = someSelected; }}
                                             onChange={handleSelectAll}
-                                            title={allSelected ? 'Batal pilih semua' : 'Pilih semua'}
+                                            title={allSelected ? 'Deselect all' : 'Select all'}
                                         />
                                     </div>
                                 )}
                                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 pl-1">Task</div>
-                                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Prioritas</div>
+                                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Priority</div>
                                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">MH</div>
                                 {canUpdate && <div />}
                             </div>
@@ -480,21 +480,21 @@ export default function ProjectBoardBacklog() {
                                             <div className="px-4 py-4 space-y-3">
                                                 <div className="grid sm:grid-cols-2 gap-3">
                                                     <div className="space-y-1">
-                                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Judul *</label>
+                                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Title *</label>
                                                         <Input autoFocus value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="h-8 text-sm" />
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Feature / Modul</label>
-                                                        <Input value={editFeatureTitle} onChange={(e) => setEditFeatureTitle(e.target.value)} className="h-8 text-sm" placeholder="Opsional..." />
+                                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Feature / Module</label>
+                                                        <Input value={editFeatureTitle} onChange={(e) => setEditFeatureTitle(e.target.value)} className="h-8 text-sm" placeholder="Optional..." />
                                                     </div>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Deskripsi</label>
-                                                    <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2} className="text-sm resize-none" placeholder="Opsional..." />
+                                                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Description</label>
+                                                    <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2} className="text-sm resize-none" placeholder="Optional..." />
                                                 </div>
                                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
                                                     <div className="space-y-1">
-                                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Prioritas</label>
+                                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Priority</label>
                                                         <Select value={editPriority} onValueChange={setEditPriority}>
                                                             <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                                                             <SelectContent>
@@ -505,7 +505,7 @@ export default function ProjectBoardBacklog() {
                                                         </Select>
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Estimasi MH</label>
+                                                        <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Estimated MH</label>
                                                         <div className="relative">
                                                             <Input type="number" min="0" step="0.5" placeholder="0" value={editMh} onChange={(e) => setEditMh(e.target.value)} className="h-8 text-sm pr-9" />
                                                             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-400 pointer-events-none">MH</span>
@@ -513,11 +513,11 @@ export default function ProjectBoardBacklog() {
                                                     </div>
                                                     <div className="sm:col-span-2 flex items-center justify-end gap-2">
                                                         <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={cancelEdit} disabled={isSavingEdit}>
-                                                            <X className="size-3" /> Batal
+                                                            <X className="size-3" /> Cancel
                                                         </Button>
                                                         <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => handleSaveEdit(item)} disabled={!editTitle.trim() || isSavingEdit}>
                                                             {isSavingEdit ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
-                                                            Simpan
+                                                            Save
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -573,7 +573,7 @@ export default function ProjectBoardBacklog() {
                                                     <div className="flex items-center justify-end gap-0.5">
                                                         <button
                                                             type="button"
-                                                            title="Pindah ke Board"
+                                                            title="Move to Board"
                                                             onClick={() => { setPromoteItem(item); setPromoteAsSubtask(false); setPromoteParentId(''); }}
                                                             className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors"
                                                         >
@@ -589,7 +589,7 @@ export default function ProjectBoardBacklog() {
                                                         </button>
                                                         <button
                                                             type="button"
-                                                            title="Hapus"
+                                                            title="Delete"
                                                             onClick={() => handleDelete(item.id)}
                                                             className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
                                                         >
@@ -613,17 +613,17 @@ export default function ProjectBoardBacklog() {
                                         <>
                                             <span
                                                 className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 rounded-full px-2 h-5"
-                                                title={`Total MH ${selectedIds.size} task yang dicentang`}
+                                                title={`Total MH of ${selectedIds.size} checked task(s)`}
                                             >
                                                 <Clock className="size-2.5" />
-                                                Dicentang: {formatMh(selectedMh)} MH
+                                                Checked: {formatMh(selectedMh)} MH
                                             </span>
                                             <span
                                                 className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-700/60 rounded-full px-2 h-5"
-                                                title={`Total MH ${backlogItems.length - selectedIds.size} task yang belum dicentang`}
+                                                title={`Total MH of ${backlogItems.length - selectedIds.size} unchecked task(s)`}
                                             >
                                                 <Clock className="size-2.5" />
-                                                Belum: {formatMh(uncheckedMh)} MH
+                                                Unchecked: {formatMh(uncheckedMh)} MH
                                             </span>
                                         </>
                                     ) : (
@@ -648,7 +648,7 @@ export default function ProjectBoardBacklog() {
                                 {selectedIds.size}
                             </span>
                             <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                task dipilih
+                                task{selectedIds.size === 1 ? '' : 's'} selected
                             </span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -659,7 +659,7 @@ export default function ProjectBoardBacklog() {
                                 onClick={() => setSelectedIds(new Set())}
                                 disabled={isPromotingBulk}
                             >
-                                Batalkan
+                                Cancel
                             </Button>
                             <Button
                                 size="sm"
@@ -668,7 +668,7 @@ export default function ProjectBoardBacklog() {
                                 disabled={isPromotingBulk}
                             >
                                 <ArrowRight className="size-3.5" />
-                                Pindah {selectedIds.size} Task ke Board
+                                Move {selectedIds.size} Task{selectedIds.size === 1 ? '' : 's'} to Board
                             </Button>
                         </div>
                     </div>
@@ -684,21 +684,21 @@ export default function ProjectBoardBacklog() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Plus className="size-4 text-primary" />
-                            Tambah ke Backlog
+                            Add to Backlog
                         </DialogTitle>
                         <DialogDescription>
-                            Isi detail task yang akan ditambahkan ke backlog.
+                            Fill in the details of the task to add to the backlog.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-3 py-1">
                         <div className="space-y-1">
                             <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                Judul <span className="text-rose-400">*</span>
+                                Title <span className="text-rose-400">*</span>
                             </label>
                             <Input
                                 autoFocus
-                                placeholder="Nama task..."
+                                placeholder="Task name..."
                                 value={addTitle}
                                 onChange={(e) => setAddTitle(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAdd()}
@@ -708,10 +708,10 @@ export default function ProjectBoardBacklog() {
 
                         <div className="space-y-1">
                             <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                Feature / Modul
+                                Feature / Module
                             </label>
                             <Input
-                                placeholder="Opsional..."
+                                placeholder="Optional..."
                                 value={addFeatureTitle}
                                 onChange={(e) => setAddFeatureTitle(e.target.value)}
                                 className="h-9 text-sm"
@@ -720,10 +720,10 @@ export default function ProjectBoardBacklog() {
 
                         <div className="space-y-1">
                             <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                Deskripsi
+                                Description
                             </label>
                             <Textarea
-                                placeholder="Detail atau catatan tambahan..."
+                                placeholder="Additional details or notes..."
                                 value={addDescription}
                                 onChange={(e) => setAddDescription(e.target.value)}
                                 rows={3}
@@ -734,7 +734,7 @@ export default function ProjectBoardBacklog() {
                         <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
                                 <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                    Prioritas
+                                    Priority
                                 </label>
                                 <Select value={addPriority} onValueChange={setAddPriority}>
                                     <SelectTrigger className="h-9 text-sm">
@@ -749,7 +749,7 @@ export default function ProjectBoardBacklog() {
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                    Estimasi MH
+                                    Estimated MH
                                 </label>
                                 <div className="relative">
                                     <Input
@@ -771,7 +771,7 @@ export default function ProjectBoardBacklog() {
 
                     <DialogFooter className="gap-2">
                         <Button variant="ghost" size="sm" onClick={() => setShowAddDialog(false)} disabled={isAdding}>
-                            Batal
+                            Cancel
                         </Button>
                         <Button
                             size="sm"
@@ -782,7 +782,7 @@ export default function ProjectBoardBacklog() {
                             {isAdding
                                 ? <Loader2 className="size-3.5 animate-spin" />
                                 : <Plus className="size-3.5" />}
-                            Tambah ke Backlog
+                            Add to Backlog
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -794,10 +794,10 @@ export default function ProjectBoardBacklog() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <ArrowRight className="size-4 text-primary" />
-                            Pindah {selectedIds.size} Task ke Board
+                            Move {selectedIds.size} Task{selectedIds.size === 1 ? '' : 's'} to Board
                         </DialogTitle>
                         <DialogDescription>
-                            Pilih cara memindahkan <span className="font-semibold text-slate-700 dark:text-slate-200">{selectedIds.size} task</span> yang dipilih ke board.
+                            Choose how to move the <span className="font-semibold text-slate-700 dark:text-slate-200">{selectedIds.size} selected task{selectedIds.size === 1 ? '' : 's'}</span> to the board.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -816,9 +816,9 @@ export default function ProjectBoardBacklog() {
                                 onChange={() => { setBulkAsSubtask(false); setBulkParentId(''); }}
                             />
                             <div>
-                                <p className="text-sm font-semibold text-slate-900 dark:text-white">Sebagai Task baru</p>
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white">As new Tasks</p>
                                 <p className="text-xs text-slate-500 mt-0.5">
-                                    Semua task masuk ke kolom "To Do" sebagai task mandiri
+                                    All tasks go into the "To Do" column as standalone tasks
                                 </p>
                             </div>
                         </label>
@@ -837,14 +837,14 @@ export default function ProjectBoardBacklog() {
                                 onChange={() => setBulkAsSubtask(true)}
                             />
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-slate-900 dark:text-white">Sebagai Subtask</p>
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white">As Subtasks</p>
                                 <p className="text-xs text-slate-500 mt-0.5">
-                                    Jadikan semua task sebagai subtask dari satu task di board
+                                    Make all tasks subtasks of one task on the board
                                 </p>
                                 {bulkAsSubtask && (
                                     <Select value={bulkParentId} onValueChange={setBulkParentId}>
                                         <SelectTrigger className="mt-2.5 h-9 text-sm">
-                                            <SelectValue placeholder="Pilih parent task..." />
+                                            <SelectValue placeholder="Select parent task..." />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {boardTasks.map((t) => (
@@ -861,7 +861,7 @@ export default function ProjectBoardBacklog() {
 
                     <DialogFooter className="gap-2">
                         <Button variant="ghost" size="sm" onClick={() => setShowBulkPromoteDialog(false)} disabled={isPromotingBulk}>
-                            Batal
+                            Cancel
                         </Button>
                         <Button
                             size="sm"
@@ -872,7 +872,7 @@ export default function ProjectBoardBacklog() {
                             {isPromotingBulk
                                 ? <Loader2 className="size-3.5 animate-spin" />
                                 : <ArrowRight className="size-3.5" />}
-                            Pindah ke Board
+                            Move to Board
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -884,10 +884,10 @@ export default function ProjectBoardBacklog() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <ArrowRight className="size-4 text-primary" />
-                            Pindah ke Board
+                            Move to Board
                         </DialogTitle>
                         <DialogDescription className="sr-only">
-                            Pilih cara memindahkan task ke board.
+                            Choose how to move the task to the board.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -918,7 +918,7 @@ export default function ProjectBoardBacklog() {
                             {Number(promoteItem.estimated_hours) > 0 && (
                                 <div className="flex items-center gap-1 text-[11px] text-slate-400">
                                     <Clock className="size-3" />
-                                    Estimasi {formatMh(promoteItem.estimated_hours)} MH
+                                    Estimated {formatMh(promoteItem.estimated_hours)} MH
                                 </div>
                             )}
                         </div>
@@ -939,9 +939,9 @@ export default function ProjectBoardBacklog() {
                                 onChange={() => { setPromoteAsSubtask(false); setPromoteParentId(''); }}
                             />
                             <div>
-                                <p className="text-sm font-semibold text-slate-900 dark:text-white">Sebagai Task baru</p>
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white">As a new Task</p>
                                 <p className="text-xs text-slate-500 mt-0.5">
-                                    Masuk ke kolom "To Do" sebagai task mandiri
+                                    Goes into the "To Do" column as a standalone task
                                 </p>
                             </div>
                         </label>
@@ -960,14 +960,14 @@ export default function ProjectBoardBacklog() {
                                 onChange={() => setPromoteAsSubtask(true)}
                             />
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-slate-900 dark:text-white">Sebagai Subtask</p>
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white">As a Subtask</p>
                                 <p className="text-xs text-slate-500 mt-0.5">
-                                    Jadikan subtask dari task yang sudah ada di board
+                                    Make it a subtask of a task that's already on the board
                                 </p>
                                 {promoteAsSubtask && (
                                     <Select value={promoteParentId} onValueChange={setPromoteParentId}>
                                         <SelectTrigger className="mt-2.5 h-9 text-sm">
-                                            <SelectValue placeholder="Pilih parent task..." />
+                                            <SelectValue placeholder="Select parent task..." />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {boardTasks.map((t) => (
@@ -984,7 +984,7 @@ export default function ProjectBoardBacklog() {
 
                     <DialogFooter className="gap-2">
                         <Button variant="ghost" size="sm" onClick={() => setPromoteItem(null)}>
-                            Batal
+                            Cancel
                         </Button>
                         <Button
                             size="sm"
@@ -995,7 +995,7 @@ export default function ProjectBoardBacklog() {
                             {isPromoting
                                 ? <Loader2 className="size-3.5 animate-spin" />
                                 : <ArrowRight className="size-3.5" />}
-                            Pindah ke Board
+                            Move to Board
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -13,7 +13,7 @@
 - **RBAC:** Custom — tabel `modules` (top-level, sumber nama modul/menu) → `permissions` (FK `module_id`, NOT NULL, `restrictOnDelete`) → `permission_role` pivot ke `roles`. Middleware `permission:{slug}`. Modul di-provision otomatis dari `App\Support\PermissionCatalog::menuActionMap()` lewat `sync()`. Akun dengan `users.is_superuser = true` bypass semua permission check (`User::hasPermission()`, `UserAccess::isPrivileged()`) — menggantikan hardcode email check yang lama.
 
 ## App Rules & Logic
-- Gunakan bahasa Indonesia untuk semua teks di UI.
+- Gunakan Bahasa Inggris untuk semua teks di UI.
 - Desain dark mode — background `#000040`, card `#151b28`, surface `#1e2532`.
 - Semua route API dilindungi `auth:sanctum` + `permission:{slug}` middleware.
 - RBAC berbasis slug permission (bukan Spatie), dikelola dari modul System Roles.

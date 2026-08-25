@@ -74,7 +74,7 @@ export default function EpicSearchInput({
 
             {showHint && (
                 <p className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                    Ketik minimal {MIN_QUERY_LENGTH} karakter untuk mencari epic yang sudah ada
+                    Type at least {MIN_QUERY_LENGTH} characters to search existing epics
                 </p>
             )}
 

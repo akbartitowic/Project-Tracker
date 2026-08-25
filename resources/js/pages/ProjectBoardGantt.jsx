@@ -140,7 +140,7 @@ export default function ProjectBoardGantt() {
 
     const exportToPDF = () => {
         if (!project || !ganttRows.length) {
-            alert('Belum ada task dengan timeline');
+            alert('No tasks with a timeline yet');
             return;
         }
 
@@ -190,7 +190,7 @@ export default function ProjectBoardGantt() {
             // Add timestamp
             doc.setFontSize(10);
             doc.setTextColor(100);
-            doc.text(`Generated: ${new Date().toLocaleString('id-ID')}`, 10, 17);
+            doc.text(`Generated: ${new Date().toLocaleString('en-US')}`, 10, 17);
 
             // Add table
             doc.setTextColor(0);
@@ -227,7 +227,7 @@ export default function ProjectBoardGantt() {
             setExporting(false);
         } catch (err) {
             console.error('Failed to export PDF', err);
-            alert('Gagal export PDF: ' + err.message);
+            alert('Failed to export PDF: ' + err.message);
             setExporting(false);
         }
     };
@@ -270,7 +270,7 @@ export default function ProjectBoardGantt() {
                                 <Badge variant="outline">{scheduledCount} scheduled</Badge>
                                 {withoutDatesCount > 0 && (
                                     <Badge variant="outline" className="text-slate-500">
-                                        {withoutDatesCount} tanpa timeline lengkap
+                                        {withoutDatesCount} without a full timeline
                                     </Badge>
                                 )}
                             </div>
@@ -299,14 +299,14 @@ export default function ProjectBoardGantt() {
                         <CardContent className="p-8 text-center">
                             <GanttChart className="size-12 mx-auto text-slate-300 mb-4" />
                             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                                Belum ada task dengan timeline
+                                No tasks with a timeline yet
                             </h2>
                             <p className="text-sm text-slate-500 mt-2">
-                                Task atau subtask perlu memiliki <strong>start date</strong> dan{' '}
-                                <strong>due date</strong> agar muncul di Gantt.
+                                Tasks or subtasks need a <strong>start date</strong> and{' '}
+                                <strong>due date</strong> to appear in the Gantt.
                             </p>
                             <Button className="mt-6" onClick={() => navigate(`/board/${projectId}`)}>
-                                Buka Board
+                                Open Board
                             </Button>
                         </CardContent>
                     </Card>
@@ -366,7 +366,7 @@ export default function ProjectBoardGantt() {
                                                     </p>
                                                     <p className="text-[10px] text-slate-500 truncate">
                                                         {row.task.status}
-                                                        {bar ? ` · ${bar.durationDays} hari` : ''}
+                                                        {bar ? ` · ${bar.durationDays} days` : ''}
                                                     </p>
                                                 </div>
                                             </div>
@@ -479,7 +479,7 @@ export default function ProjectBoardGantt() {
                                 <span className="size-2.5 rounded-sm bg-emerald-500" /> Done
                             </span>
                             <span className="flex items-center gap-1">
-                                <span className="w-0.5 h-3 bg-primary" /> Hari ini
+                                <span className="w-0.5 h-3 bg-primary" /> Today
                             </span>
                         </div>
                     </Card>

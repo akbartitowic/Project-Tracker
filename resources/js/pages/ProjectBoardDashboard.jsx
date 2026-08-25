@@ -450,7 +450,7 @@ export default function ProjectBoardDashboard() {
                                                         )}
                                                         {m.taskCount === 0 && (
                                                             <span className="block text-[10px] text-slate-400 italic">
-                                                                belum ada assign
+                                                                not assigned yet
                                                             </span>
                                                         )}
                                                     </td>
@@ -467,7 +467,7 @@ export default function ProjectBoardDashboard() {
                             )}
                             {isScrum && !isFreelance && memberTeamRows.length > 0 && (
                                 <p className="text-[10px] text-slate-500 mt-3 leading-relaxed">
-                                    <strong>MH allocated</strong> = jam billable pada task/subtask yang di-assign ke member.
+                                    <strong>MH allocated</strong> = billable hours on tasks/subtasks assigned to the member.
                                 </p>
                             )}
                         </CardContent>

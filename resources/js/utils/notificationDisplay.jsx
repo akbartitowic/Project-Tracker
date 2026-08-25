@@ -4,7 +4,7 @@ export function formatNotificationTime(iso) {
     if (!iso) return "";
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "";
-    return d.toLocaleString("id-ID", {
+    return d.toLocaleString("en-US", {
         day: "numeric",
         month: "short",
         hour: "2-digit",
@@ -19,7 +19,7 @@ export function describeNotification(data) {
             iconClass: "bg-primary/10 text-primary",
             title: (
                 <>
-                    Kamu di-assign ke task{" "}
+                    You were assigned to task{" "}
                     <span className="font-semibold">{data.task_title}</span>
                 </>
             ),
@@ -32,7 +32,7 @@ export function describeNotification(data) {
             iconClass: "bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
             title: (
                 <>
-                    Task <span className="font-semibold">{data.task_title}</span> sudah jatuh tempo
+                    Task <span className="font-semibold">{data.task_title}</span> is due
                 </>
             ),
             subtitle: data.due_date ? `Due date: ${data.due_date}` : null,
@@ -44,7 +44,7 @@ export function describeNotification(data) {
             iconClass: "bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
             title: (
                 <>
-                    MH top up role <span className="font-semibold">{data.role_name}</span> sudah mencapai{" "}
+                    MH top-up for role <span className="font-semibold">{data.role_name}</span> has reached{" "}
                     <span className="font-semibold">{data.threshold}%</span>
                 </>
             ),
@@ -58,9 +58,9 @@ export function describeNotification(data) {
         title: (
             <>
                 <span className="font-semibold text-slate-900 dark:text-white">
-                    {data.mentioned_by_name || "Seseorang"}
+                    {data.mentioned_by_name || "Someone"}
                 </span>{" "}
-                mention kamu di task <span className="font-semibold">{data.task_title}</span>
+                mentioned you on task <span className="font-semibold">{data.task_title}</span>
             </>
         ),
         subtitle: data.note_excerpt || null,

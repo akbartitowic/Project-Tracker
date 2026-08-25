@@ -60,7 +60,7 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                             variant="outline"
                             size="icon"
                             className="relative size-10 rounded-lg border-slate-200 dark:border-white/10 dark:bg-[#151b28] text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors duration-200"
-                            aria-label="Notifikasi"
+                            aria-label="Notifications"
                         >
                             <Bell className="size-5" />
                             {unreadCount > 0 && (
@@ -75,7 +75,7 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-[360px] p-0 dark:border-white/10 dark:bg-[#151b28]">
                         <div className="flex items-center justify-between px-3 py-2">
-                            <DropdownMenuLabel className="p-0 text-sm">Notifikasi</DropdownMenuLabel>
+                            <DropdownMenuLabel className="p-0 text-sm">Notifications</DropdownMenuLabel>
                             {unreadCount > 0 && (
                                 <button
                                     type="button"
@@ -85,7 +85,7 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                                         markAllAsRead();
                                     }}
                                 >
-                                    Tandai semua dibaca
+                                    Mark all as read
                                 </button>
                             )}
                         </div>
@@ -94,11 +94,11 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                             {loading ? (
                                 <div className="flex items-center justify-center py-8 text-slate-500">
                                     <Loader2 className="size-5 animate-spin mr-2" />
-                                    Memuat…
+                                    Loading…
                                 </div>
                             ) : notifications.length === 0 ? (
                                 <p className="text-xs text-slate-500 italic px-3 py-6 text-center">
-                                    Tidak ada notifikasi.
+                                    No notifications.
                                 </p>
                             ) : (
                                 <ul className="divide-y divide-slate-200/80 dark:divide-white/10">
@@ -140,7 +140,7 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                                                             }}
                                                             className="flex items-center gap-1 rounded-md border border-accent/30 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/10 transition-colors"
                                                         >
-                                                            Detail
+                                                            Details
                                                             <ChevronRight className="size-3" />
                                                         </button>
                                                     </div>
@@ -163,12 +163,12 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                                             loadNotifications(page - 1);
                                         }}
                                         className="p-1 rounded-md text-slate-400 hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
-                                        aria-label="Halaman sebelumnya"
+                                        aria-label="Previous page"
                                     >
                                         <ChevronLeft className="size-4" />
                                     </button>
                                     <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                                        Halaman {page} / {totalPages}
+                                        Page {page} / {totalPages}
                                     </span>
                                     <button
                                         type="button"
@@ -178,7 +178,7 @@ export default function Header({ title = "Executive Overview", onMenuClick }) {
                                             loadNotifications(page + 1);
                                         }}
                                         className="p-1 rounded-md text-slate-400 hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
-                                        aria-label="Halaman berikutnya"
+                                        aria-label="Next page"
                                     >
                                         <ChevronRight className="size-4" />
                                     </button>

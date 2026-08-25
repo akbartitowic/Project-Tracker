@@ -26,13 +26,13 @@ export default function Layout() {
         if (pathname.startsWith('/sales/pitch/new')) return 'New Pitch';
         if (pathname.startsWith('/sales/pitch/')) return 'Sales — Pitch';
         if (pathname === '/sales') return 'Sales';
-        if (pathname === '/presales-project-categories') return 'Bisnis - Category Company';
-        if (pathname === '/sales-category-projects') return 'Bisnis - Category Project';
+        if (pathname === '/presales-project-categories') return 'Business - Category Company';
+        if (pathname === '/sales-category-projects') return 'Business - Category Project';
         if (pathname.startsWith('/presales')) return MENU_NEW_PROJECT;
         if (pathname === '/finance-realization-report') return 'Finance - Realization Report';
         if (pathname === '/finance-monitoring') return 'Finance - Monitoring';
         if (pathname.startsWith('/finance-monitoring/')) return 'Finance - Project Monitoring';
-        if (pathname === '/integrasi/projects') return 'Integrasi Monitoring';
+        if (pathname === '/integrasi/projects') return 'Integration Monitoring';
         if (pathname === '/integrasi/connector') return 'Connector Monitoring';
         return 'Overview';
     };

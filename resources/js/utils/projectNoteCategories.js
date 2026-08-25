@@ -2,19 +2,19 @@ export const PROJECT_NOTE_CATEGORIES = {
     weekly: {
         key: 'weekly',
         label: 'Note',
-        description: 'Catatan umum project: update progress, meeting notes, atau hal penting lainnya.',
+        description: 'General project notes: progress updates, meeting notes, or other important info.',
         isLink: false,
     },
     development: {
         key: 'development',
-        label: 'Link Development',
-        description: 'Repo, staging, API docs, atau environment development.',
+        label: 'Development Link',
+        description: 'Repo, staging, API docs, or dev environment.',
         isLink: true,
     },
     document: {
         key: 'document',
-        label: 'Link Dokumen',
-        description: 'Dokumen requirement, desain, kontrak, atau file penting.',
+        label: 'Document Link',
+        description: 'Requirement docs, designs, contracts, or important files.',
         isLink: true,
     },
 };

@@ -40,20 +40,20 @@ export default function RateLimitToast() {
                     <Clock className="size-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-white">Terlalu banyak permintaan</p>
+                    <p className="text-sm font-semibold text-white">Too many requests</p>
                     <p className="mt-1 text-xs text-slate-400">
-                        {toast.message || 'Silakan tunggu sebentar sebelum mencoba lagi.'}
+                        {toast.message || 'Please wait a moment before trying again.'}
                     </p>
                     {toast.retryAfter > 0 && (
                         <p className="mt-1.5 text-[11px] font-medium text-accent">
-                            Coba lagi dalam {toast.retryAfter} detik
+                            Try again in {toast.retryAfter}s
                         </p>
                     )}
                 </div>
                 <button
                     onClick={() => setToast(null)}
                     className="shrink-0 text-slate-500 hover:text-slate-300 text-lg leading-none"
-                    aria-label="Tutup"
+                    aria-label="Close"
                 >
                     &times;
                 </button>

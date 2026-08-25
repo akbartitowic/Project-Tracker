@@ -28,7 +28,7 @@ const formatDurationDays = (startDate, status, endDate) => {
     if (Number.isNaN(end.getTime())) return '-';
 
     const diffDays = Math.max(0, Math.ceil((end.getTime() - start.getTime()) / MS_PER_DAY));
-    return `${diffDays} hari`;
+    return `${diffDays} days`;
 };
 
 export default function ProjectList() {
@@ -140,7 +140,7 @@ export default function ProjectList() {
             <div className="flex flex-col gap-2 mb-8">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">List Project</h1>
                 <p className="text-slate-500 dark:text-text-secondary">
-                    Menampilkan project aktif dan done beserta ringkasan durasi, progress, dan statistik task.
+                    Shows active and done projects with a summary of duration, progress, and task stats.
                 </p>
             </div>
 
@@ -157,7 +157,7 @@ export default function ProjectList() {
                     <div className="flex flex-col gap-4">
                         <div>
                             <CardTitle className="flex items-center gap-2"><KanbanSquare className="size-5 text-primary" /> Project Overview</CardTitle>
-                            <CardDescription>Ringkasan per project sesuai metodologi Scrum/Waterfall.</CardDescription>
+                            <CardDescription>Per-project summary by Scrum/Waterfall methodology.</CardDescription>
                         </div>
                         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
@@ -219,7 +219,7 @@ export default function ProjectList() {
                                     <Search className="absolute left-3 top-3 size-4 text-slate-400" />
                                     <Input
                                         className="pl-10"
-                                        placeholder="Cari project..."
+                                        placeholder="Search projects..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                     />
@@ -231,12 +231,12 @@ export default function ProjectList() {
                                             <SelectValue placeholder="Sort by" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="newest">Terbaru</SelectItem>
-                                            <SelectItem value="oldest">Terlama</SelectItem>
-                                            <SelectItem value="name_asc">Nama A-Z</SelectItem>
-                                            <SelectItem value="name_desc">Nama Z-A</SelectItem>
-                                            <SelectItem value="tasks_desc">Total task terbanyak</SelectItem>
-                                            <SelectItem value="reopen_desc">Re-open tertinggi</SelectItem>
+                                            <SelectItem value="newest">Newest</SelectItem>
+                                            <SelectItem value="oldest">Oldest</SelectItem>
+                                            <SelectItem value="name_asc">Name A-Z</SelectItem>
+                                            <SelectItem value="name_desc">Name Z-A</SelectItem>
+                                            <SelectItem value="tasks_desc">Most tasks</SelectItem>
+                                            <SelectItem value="reopen_desc">Highest re-open</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -251,7 +251,7 @@ export default function ProjectList() {
                                 <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500">
                                     <th className="text-left font-medium pb-3 px-2">Project</th>
                                     <th className="text-left font-medium pb-3 px-2">Status</th>
-                                    <th className="text-left font-medium pb-3 px-2">Berjalan</th>
+                                    <th className="text-left font-medium pb-3 px-2">Duration</th>
                                     {!isFreelance && <th className="text-left font-medium pb-3 px-2">Scrum (MH)</th>}
                                     <th className="text-left font-medium pb-3 px-2">Waterfall Progress</th>
                                     <th className="text-right font-medium pb-3 px-2">Total Task</th>
@@ -263,7 +263,7 @@ export default function ProjectList() {
                                 {loading ? (
                                     <tr><td colSpan={isFreelance ? "7" : "8"} className="py-10 text-center text-slate-400">Loading projects...</td></tr>
                                 ) : visibleProjects.length === 0 ? (
-                                    <tr><td colSpan={isFreelance ? "7" : "8"} className="py-10 text-center text-slate-400">{projectTab === 'done' ? 'Belum ada project Done.' : 'Belum ada project Active.'}</td></tr>
+                                    <tr><td colSpan={isFreelance ? "7" : "8"} className="py-10 text-center text-slate-400">{projectTab === 'done' ? 'No Done projects yet.' : 'No Active projects yet.'}</td></tr>
                                 ) : (
                                     pagedProjects.map((project) => {
                                         const methodology = normalizeMethodology(project.methodology);
@@ -296,7 +296,7 @@ export default function ProjectList() {
                                                         {isScrum ? (
                                                             <div className="text-slate-700 dark:text-slate-300">
                                                                 <div className="inline-flex items-center gap-1.5"><Activity className="size-3.5 text-primary" /> Total {formatHours(totalMh)}h</div>
-                                                                <div className="text-[11px] text-slate-500">Sisa {formatHours(remainingMh)}h</div>
+                                                                <div className="text-[11px] text-slate-500">Remaining {formatHours(remainingMh)}h</div>
                                                             </div>
                                                         ) : (
                                                             <span className="text-slate-400">-</span>
@@ -307,7 +307,7 @@ export default function ProjectList() {
                                                     {isWaterfall ? (
                                                         <div className="text-slate-700 dark:text-slate-300">
                                                             <div className="inline-flex items-center gap-1.5"><CheckCircle2 className="size-3.5 text-emerald-500" /> {formatHours(waterfallProgress)}%</div>
-                                                            <div className="text-[11px] text-slate-500">Done ratio task</div>
+                                                            <div className="text-[11px] text-slate-500">Task completion ratio</div>
                                                         </div>
                                                     ) : (
                                                         <span className="text-slate-400">-</span>

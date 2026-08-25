@@ -104,12 +104,12 @@ export default function Dashboard() {
                 <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-                            {shouldShowMemberDashboard ? 'Ringkasan kerja saya' : 'Dashboard'}
+                            {shouldShowMemberDashboard ? 'My Work Summary' : 'Dashboard'}
                         </h1>
                         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                             {shouldShowMemberDashboard
-                                ? 'Project dan task yang Anda tangani.'
-                                : 'Gambaran singkat project, task, dan kesehatan kuota manhour.'}
+                                ? "Projects and tasks you're handling."
+                                : 'A quick snapshot of projects, tasks, and manhour quota health.'}
                         </p>
                     </div>
                     {!shouldShowMemberDashboard && (
@@ -119,7 +119,7 @@ export default function Dashboard() {
                                 Project Board
                             </Button>
                             <Button size="sm" className="!rounded-xl gap-1.5 bg-accent font-bold text-white shadow-lg shadow-accent/20 hover:bg-orange-600" onClick={() => navigate('/reports')}>
-                                Laporan
+                                Reports
                                 <ArrowRight className="size-3.5" />
                             </Button>
                         </div>
@@ -130,19 +130,19 @@ export default function Dashboard() {
                     {shouldShowMemberDashboard ? (
                         <>
                             <KpiCard
-                                label="Project di-handle"
+                                label="Projects Handled"
                                 value={memberStats.totalProjectsHandled}
                                 icon={Rocket}
                                 iconClass="bg-primary/10 text-primary"
                             />
                             <KpiCard
-                                label="Task aktif"
+                                label="Active Tasks"
                                 value={memberStats.activeTasks}
                                 icon={Users}
                                 iconClass="bg-orange-500/10 text-orange-600"
                             />
                             <KpiCard
-                                label="Task selesai"
+                                label="Completed Tasks"
                                 value={taskCounts?.Done || 0}
                                 icon={CheckCircle2}
                                 iconClass="bg-emerald-500/10 text-emerald-600"
@@ -151,14 +151,14 @@ export default function Dashboard() {
                     ) : (
                         <>
                             <KpiCard
-                                label="Project aktif"
+                                label="Active Projects"
                                 value={stats.activeProjects}
                                 hint={`Total ${stats.totalProjects} · Done ${stats.doneProjects}`}
                                 icon={Rocket}
                                 iconClass="bg-primary/10 text-primary"
                             />
                             <KpiCard
-                                label="Task aktif"
+                                label="Active Tasks"
                                 value={stats.activeTasks}
                                 icon={Users}
                                 iconClass="bg-violet-500/10 text-violet-600"
@@ -166,14 +166,14 @@ export default function Dashboard() {
                             <KpiCard
                                 label="Scrum"
                                 value={stats.scrumProjects}
-                                hint="Metodologi Agile"
+                                hint="Agile methodology"
                                 icon={LayoutGrid}
                                 iconClass="bg-blue-500/10 text-blue-600"
                             />
                             <KpiCard
                                 label="Waterfall"
                                 value={stats.waterfallProjects}
-                                hint="Metodologi fixed scope"
+                                hint="Fixed-scope methodology"
                                 icon={LayoutGrid}
                                 iconClass="bg-slate-500/10 text-slate-600"
                             />
@@ -182,7 +182,7 @@ export default function Dashboard() {
                 </section>
 
                 <section>
-                    <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Task per status</h2>
+                    <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Tasks by Status</h2>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                         {['To Do', 'In Progress', 'Review', 'Reopen', 'Done'].map((status) => (
                             <div
@@ -207,14 +207,14 @@ export default function Dashboard() {
                                     <div>
                                         <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                                             <AlertCircle className="size-4 text-rose-500" />
-                                            Project perlu perhatian
+                                            Projects Needing Attention
                                         </h2>
-                                        <p className="text-xs text-slate-500 mt-0.5">Kuota manhour &gt; 85% terpakai</p>
+                                        <p className="text-xs text-slate-500 mt-0.5">Manhour quota &gt; 85% used</p>
                                     </div>
                                 </div>
                                 {criticalProjects.length === 0 ? (
                                     <p className="rounded-2xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500 dark:border-slate-700">
-                                        Semua project dalam batas aman.
+                                        All projects are within a safe range.
                                     </p>
                                 ) : (
                                     <ul className="space-y-2">
@@ -229,7 +229,7 @@ export default function Dashboard() {
                                                     </p>
                                                     <p className="flex items-center gap-1 text-xs text-slate-500">
                                                         <Clock className="size-3" />
-                                                        {Math.max(0, (proj.estimated_hours || 0) - (proj.allocated_hours || 0)).toFixed(1)}h tersisa
+                                                        {Math.max(0, (proj.estimated_hours || 0) - (proj.allocated_hours || 0)).toFixed(1)}h left
                                                         · {getMethodologyLabel(proj.methodology)}
                                                     </p>
                                                 </div>
@@ -251,14 +251,14 @@ export default function Dashboard() {
                         </Card>
                         <Card className="border-white/60 bg-white/70 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl">
                             <CardContent className="flex h-full flex-col p-4 sm:p-5">
-                                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Aksi cepat</h2>
-                                <p className="mt-1 text-xs text-slate-500">Navigasi ke area yang sering dipakai.</p>
+                                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Quick Actions</h2>
+                                <p className="mt-1 text-xs text-slate-500">Navigate to frequently used areas.</p>
                                 <div className="mt-4 flex flex-1 flex-col gap-2">
                                     <Button variant="outline" className="!rounded-xl justify-start h-10 backdrop-blur-sm" onClick={() => navigate('/board')}>
-                                        Buka Project Board
+                                        Open Project Board
                                     </Button>
                                     <Button variant="outline" className="!rounded-xl justify-start h-10 backdrop-blur-sm" onClick={() => navigate('/reports')}>
-                                        Laporan &amp; portfolio
+                                        Reports &amp; portfolio
                                     </Button>
                                     <Button variant="outline" className="!rounded-xl justify-start h-10 backdrop-blur-sm" onClick={() => navigate('/team-load')}>
                                         Team Load

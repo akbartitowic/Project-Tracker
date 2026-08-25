@@ -239,7 +239,7 @@ class AuthController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Foto profil berhasil diperbarui',
+            'message' => 'Profile photo updated successfully',
             'user' => $this->serializeUser($user),
         ]);
     }
@@ -255,7 +255,7 @@ class AuthController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Foto profil dihapus',
+            'message' => 'Profile photo removed',
             'user' => $this->serializeUser($user),
         ]);
     }

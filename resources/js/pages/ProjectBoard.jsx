@@ -123,10 +123,10 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
           : null;
 
     const createdLabel = task.created_at
-        ? new Date(task.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+        ? new Date(task.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
         : null;
     const updatedLabel = task.updated_at
-        ? new Date(task.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+        ? new Date(task.updated_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
         : null;
 
     return (
@@ -168,7 +168,7 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                         )}
                         {task.duplicated_from_id && (
                             <span
-                                title={`Disalin dari task #${task.duplicated_from_id}`}
+                                title={`Copied from task #${task.duplicated_from_id}`}
                                 className="flex items-center gap-0.5 rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
                             >
                                 <Copy className="size-2.5" />
@@ -236,12 +236,12 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
 
                             {createdLabel && (
                                 <p className="mt-1.5 text-[10px] text-slate-400 dark:text-slate-500">
-                                    Dibuat: {createdLabel}
+                                    Created: {createdLabel}
                                 </p>
                             )}
                             {updatedLabel && (
                                 <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
-                                    Diperbarui: {updatedLabel}
+                                    Updated: {updatedLabel}
                                 </p>
                             )}
                         </>
@@ -252,7 +252,7 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                             <span className="truncate">{assigneeLabel}</span>
                             {otherAssignees.length > 0 && (
                                 <span
-                                    title={`Menempel juga: ${otherAssignees.map((a) => a.name).join(', ')}`}
+                                    title={`Also attached: ${otherAssignees.map((a) => a.name).join(', ')}`}
                                     className="shrink-0 rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
                                 >
                                     +{otherAssignees.length}
@@ -264,7 +264,7 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                             {task.status === 'To Do' && onMoveToBacklog && (
                                 <button
                                     type="button"
-                                    title="Kembalikan ke Backlog"
+                                    title="Move back to Backlog"
                                     className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-950/30 dark:hover:text-amber-400"
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -291,7 +291,7 @@ function DraggableTaskCard({ task, onClick, assigneeName, isFreelance, formatHou
                             {onDelete && (
                                 <button
                                     type="button"
-                                    title="Hapus Task"
+                                    title="Delete Task"
                                     className="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400"
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -341,7 +341,7 @@ function formatTaskTimestamp(value) {
     if (!value) return null;
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function TaskMetaSection({ task, taskId }) {
@@ -573,10 +573,10 @@ export default function ProjectBoard() {
         if (selectedProject?.id?.toString() === project.id.toString() && tasks.length > 0) {
             const openTasks = tasks.filter((t) => t.status !== 'Done').length;
             if (openTasks > 0) {
-                hint = `\n\nPerhatian: masih ada ${openTasks} task yang belum Done.`;
+                hint = `\n\nWarning: ${openTasks} task${openTasks === 1 ? '' : 's'} still not Done.`;
             }
         }
-        if (!window.confirm(`Tandai project "${project.name}" sebagai Done/Closed? Status ini hanya diubah manual.${hint}`)) {
+        if (!window.confirm(`Mark project "${project.name}" as Done/Closed? This status is only changed manually.${hint}`)) {
             return;
         }
         await applyProjectStatusUpdate(project, { status: 'Done' });
@@ -584,7 +584,7 @@ export default function ProjectBoard() {
 
     const handleReopenProject = async (project) => {
         if (!project) return;
-        if (!window.confirm(`Buka kembali project "${project.name}"? Status Done akan dihapus.`)) {
+        if (!window.confirm(`Reopen project "${project.name}"? The Done status will be removed.`)) {
             return;
         }
         await applyProjectStatusUpdate(project, { reopen: true });
@@ -622,7 +622,7 @@ export default function ProjectBoard() {
     const removeAssignmentRow = (index) => {
         const row = assignmentRows[index];
         if (row && String(row.user_id) === String(user?.id)) {
-            alert('Kamu tidak bisa menghapus dirimu sendiri dari project ini.');
+            alert("You can't remove yourself from this project.");
             return;
         }
         setAssignmentRows((prev) => prev.filter((_, idx) => idx !== index));
@@ -646,7 +646,7 @@ export default function ProjectBoard() {
             setProjects((prev) => prev.map((p) => (
                 String(p.id) === key ? { ...p, is_favorite: !nextFavorite } : p
             )));
-            alert(error.message || 'Gagal memperbarui favorit project.');
+            alert(error.message || 'Failed to update project favorite.');
         }
     }, [isProjectPinned]);
 
@@ -654,13 +654,13 @@ export default function ProjectBoard() {
         if (!assigningProject) return;
         const validRows = assignmentRows.filter((row) => row.user_id && row.project_role_id);
         if (validRows.length === 0) {
-            alert('Minimal 1 anggota project harus diisi.');
+            alert('At least 1 project member is required.');
             return;
         }
         const currentUserAssignedBefore = projectMembers.some((member) => Number(member.user_id) === Number(user?.id));
         const currentUserAssignedAfter = validRows.some((row) => Number(row.user_id) === Number(user?.id));
         if (currentUserAssignedBefore && !currentUserAssignedAfter) {
-            alert('Kamu tidak bisa menghapus dirimu sendiri dari project ini.');
+            alert("You can't remove yourself from this project.");
             return;
         }
 
@@ -1189,7 +1189,7 @@ export default function ProjectBoard() {
                 // Revert only this task, so it doesn't clobber other concurrent updates
                 setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: oldStatus } : t));
                 console.error("Failed to move task", error);
-                alert(error.message || 'Gagal memindahkan task, silakan coba lagi.');
+                alert(error.message || 'Failed to move task, please try again.');
             }
         }
     };
@@ -1272,9 +1272,9 @@ export default function ProjectBoard() {
             setIsTaskBulkEditMode(false);
             await loadBoard(selectedProject.id);
             await syncSelectedProjectFromList(selectedProject.id);
-            alert(`${deletedCount} task berhasil dihapus.`);
+            alert(`${deletedCount} task deleted successfully.`);
         } catch (error) {
-            alert(error.message || 'Gagal menghapus task terpilih.');
+            alert(error.message || 'Failed to delete the selected tasks.');
         } finally {
             setIsBulkDeleting(false);
         }
@@ -1352,7 +1352,7 @@ export default function ProjectBoard() {
             }
             setTasks((prev) => prev.filter((t) => Number(t.id) !== Number(deletedTaskId)));
         } catch (err) {
-            alert(err.message || 'Gagal menghapus task.');
+            alert(err.message || 'Failed to delete task.');
         } finally {
             setIsDeletingTask(false);
         }
@@ -1371,7 +1371,7 @@ export default function ProjectBoard() {
             setTasks((prev) => prev.filter((t) => Number(t.id) !== Number(backlogConfirmTask.id)));
             setBacklogConfirmTask(null);
         } catch (err) {
-            alert(err.message || 'Gagal memindahkan task ke backlog.');
+            alert(err.message || 'Failed to move task to backlog.');
         } finally {
             setIsMovingToBacklog(false);
         }
@@ -1395,7 +1395,7 @@ export default function ProjectBoard() {
             setDuplicateConfirmTask(null);
             await loadBoard(selectedProject.id);
         } catch (err) {
-            alert(err.message || 'Gagal menduplikasi task.');
+            alert(err.message || 'Failed to duplicate task.');
         } finally {
             setIsDuplicatingTask(false);
         }
@@ -1588,7 +1588,7 @@ export default function ProjectBoard() {
                         <div>
                             <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Project Board</h1>
                             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                                Pilih project untuk membuka kanban dan mengelola task.
+                                Select a project to open its kanban board and manage tasks.
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -1614,12 +1614,12 @@ export default function ProjectBoard() {
                             </div>
                             {isEditMode && sortedDisplayedProjects.length > 0 && (
                                 <Button variant="outline" size="sm" onClick={() => toggleAllProjects(sortedDisplayedProjects)}>
-                                    {selectedProjectIds.length === sortedDisplayedProjects.length ? 'Batal semua' : 'Pilih semua'}
+                                    {selectedProjectIds.length === sortedDisplayedProjects.length ? 'Deselect all' : 'Select all'}
                                 </Button>
                             )}
                             {isEditMode && selectedProjectIds.length > 0 && (
                                 <Button variant="destructive" size="sm" onClick={() => setIsDeleteModalOpen(true)}>
-                                    Hapus ({selectedProjectIds.length})
+                                    Delete ({selectedProjectIds.length})
                                 </Button>
                             )}
                             <Button
@@ -1630,7 +1630,7 @@ export default function ProjectBoard() {
                                     if (isEditMode) setSelectedProjectIds([]);
                                 }}
                             >
-                                {isEditMode ? 'Selesai' : 'Kelola'}
+                                {isEditMode ? 'Done' : 'Manage'}
                             </Button>
                         </div>
                     </header>
@@ -1647,7 +1647,7 @@ export default function ProjectBoard() {
                                     setSelectedProjectIds([]);
                                 }}
                             >
-                                Aktif
+                                Active
                                 <span className="text-xs opacity-80">({activeProjects.length})</span>
                             </Button>
                             <Button
@@ -1674,7 +1674,7 @@ export default function ProjectBoard() {
                                 }}
                             >
                                 <Star className={cn('size-3.5', projectListTab === 'favorite' ? 'fill-current' : 'fill-amber-400 text-amber-500')} />
-                                Favorit
+                                Favorite
                                 <span className="text-xs opacity-80">({favoriteProjects.length})</span>
                             </Button>
                         </div>
@@ -1684,7 +1684,7 @@ export default function ProjectBoard() {
                                 <Input
                                     value={projectListSearch}
                                     onChange={(e) => setProjectListSearch(e.target.value)}
-                                    placeholder="Cari project..."
+                                    placeholder="Search projects..."
                                     className="h-9 pl-8 bg-white/70 backdrop-blur-xl focus-visible:ring-accent focus-visible:border-accent dark:border-white/10 dark:bg-[#151b28]"
                                 />
                             </div>
@@ -1695,12 +1695,12 @@ export default function ProjectBoard() {
                                         <SelectValue placeholder="Sort by" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="newest">Terbaru</SelectItem>
-                                        <SelectItem value="oldest">Terlama</SelectItem>
-                                        <SelectItem value="name_asc">Nama A-Z</SelectItem>
-                                        <SelectItem value="name_desc">Nama Z-A</SelectItem>
-                                        <SelectItem value="quota_desc">Kuota MH terbesar</SelectItem>
-                                        <SelectItem value="usage_desc">Usage tertinggi</SelectItem>
+                                        <SelectItem value="newest">Newest</SelectItem>
+                                        <SelectItem value="oldest">Oldest</SelectItem>
+                                        <SelectItem value="name_asc">Name A-Z</SelectItem>
+                                        <SelectItem value="name_desc">Name Z-A</SelectItem>
+                                        <SelectItem value="quota_desc">Highest MH quota</SelectItem>
+                                        <SelectItem value="usage_desc">Highest usage</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1711,11 +1711,11 @@ export default function ProjectBoard() {
                         <div className="rounded-xl border border-dashed border-slate-200 bg-white/40 py-16 text-center text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 dark:bg-white/5">
                             {displayedProjects.length === 0
                                 ? projectListTab === 'done'
-                                    ? 'Belum ada project Done.'
+                                    ? 'No Done projects yet.'
                                     : projectListTab === 'favorite'
-                                        ? 'Belum ada project favorit. Klik bintang ★ pada project untuk menambahkan.'
-                                        : 'Belum ada project aktif.'
-                                : 'Tidak ada hasil pencarian.'}
+                                        ? 'No favorite projects yet. Click the ★ star on a project to add it.'
+                                        : 'No active projects yet.'
+                                : 'No search results.'}
                         </div>
                     ) : listViewMode === 'grid' ? (
                         <div className="space-y-4">
@@ -1844,8 +1844,8 @@ export default function ProjectBoard() {
                                                     <p className="mt-2 flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
                                                         <Clock className="size-3 shrink-0" />
                                                         {project.methodology === 'Agile Scrum'
-                                                            ? `${formatHours(project.remaining_manhours)}h sisa · ${Number(project.usage_percentage || 0).toFixed(0)}%`
-                                                            : `${formatHours(project.total_manhours)}h kuota`}
+                                                            ? `${formatHours(project.remaining_manhours)}h remaining · ${Number(project.usage_percentage || 0).toFixed(0)}%`
+                                                            : `${formatHours(project.total_manhours)}h quota`}
                                                     </p>
                                                 )}
                                             </div>
@@ -2024,7 +2024,7 @@ export default function ProjectBoard() {
                             <DialogHeader>
                                 <DialogTitle>Assign Project Members</DialogTitle>
                                 <DialogDescription>
-                                    {assigningProject ? `Set anggota project untuk "${assigningProject.name}".` : 'Set anggota project.'}
+                                    {assigningProject ? `Set project members for "${assigningProject.name}".` : 'Set project members.'}
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="max-h-[60vh] space-y-3 overflow-y-auto py-2">
@@ -2036,7 +2036,7 @@ export default function ProjectBoard() {
                                                 value={row.user_id || 'Unassigned'}
                                                 onChange={(next) => updateAssignmentRow(index, 'user_id', next === 'Unassigned' ? '' : String(next))}
                                                 options={assignmentUserOptions}
-                                                placeholder="Cari user (min. 2 karakter)..."
+                                                placeholder="Search user (min. 2 characters)..."
                                                 className="mt-1"
                                                 inputClassName="bg-white dark:bg-slate-900"
                                             />
@@ -2257,7 +2257,7 @@ export default function ProjectBoard() {
                                 {filterMemberId && (
                                     <button
                                         type="button"
-                                        title="Hapus filter"
+                                        title="Clear filter"
                                         onClick={() => setFilterMemberId(null)}
                                         className="inline-flex size-7 items-center justify-center rounded-full text-[10px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                                     >
@@ -2273,7 +2273,7 @@ export default function ProjectBoard() {
                             size="sm"
                             className={cn('h-8 gap-1.5', String(filterMemberId) === String(user?.id) && 'shadow-md shadow-primary/20')}
                             onClick={() => setFilterMemberId((prev) => String(prev) === String(user?.id) ? null : String(user?.id))}
-                            title="Tampilkan hanya task saya"
+                            title="Show only my tasks"
                         >
                             <Star className={cn('size-3.5', String(filterMemberId) === String(user?.id) && 'fill-current')} />
                             My Task
@@ -2285,10 +2285,10 @@ export default function ProjectBoard() {
                                 onValueChange={(val) => setFilterProjectRoleId(val === 'all' ? null : val)}
                             >
                                 <SelectTrigger className="h-8 w-auto min-w-[140px] gap-1.5 text-xs">
-                                    <SelectValue placeholder="Semua Role" />
+                                    <SelectValue placeholder="All Roles" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Semua Role</SelectItem>
+                                    <SelectItem value="all">All Roles</SelectItem>
                                     {roleQuotas.map((q) => (
                                         <SelectItem key={q.project_role_id} value={String(q.project_role_id)}>
                                             {q.role_name}
@@ -2304,10 +2304,10 @@ export default function ProjectBoard() {
                                 onValueChange={(val) => setFilterEpic(val === 'all' ? null : val)}
                             >
                                 <SelectTrigger className="h-8 w-auto min-w-[140px] gap-1.5 text-xs">
-                                    <SelectValue placeholder="Semua Epic" />
+                                    <SelectValue placeholder="All Epics" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">Semua Epic</SelectItem>
+                                    <SelectItem value="all">All Epics</SelectItem>
                                     {epicOptions.map((epic) => (
                                         <SelectItem key={epic} value={epic}>
                                             {epic}
@@ -2437,7 +2437,7 @@ export default function ProjectBoard() {
                             }}
                             className="flex w-full items-center justify-between py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
                         >
-                            <span>Statistik</span>
+                            <span>Statistics</span>
                             <ChevronDown className={cn('size-3.5 transition-transform duration-200', showMetrics && 'rotate-180')} />
                         </button>
 
@@ -2469,7 +2469,7 @@ export default function ProjectBoard() {
                                                     <p className="tabular-nums text-base font-bold text-slate-900 dark:text-white">
                                                         {formatHours(headerUsedManhours)} <span className="text-xs font-medium text-slate-500">hrs</span>
                                                     </p>
-                                                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Terpakai</p>
+                                                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Used</p>
                                                 </div>
                                                 <div className="px-1 text-center">
                                                     <p className="flex items-center justify-center gap-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
@@ -2488,7 +2488,7 @@ export default function ProjectBoard() {
                                                     )}>
                                                         {formatHours(headerRemainingManhours)} <span className="text-xs font-medium text-slate-500">hrs</span>
                                                     </p>
-                                                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Sisa</p>
+                                                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Remaining</p>
                                                 </div>
                                             </div>
                                             <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
@@ -2626,7 +2626,7 @@ export default function ProjectBoard() {
                     {/* ── Mobile: card list ── */}
                     <div className="sm:hidden space-y-2">
                         {visibleTasks.length === 0 && (
-                            <p className="text-center text-slate-400 py-10 text-sm">{(filterMemberId || filterProjectRoleId || filterEpic) ? 'Tidak ada task untuk filter ini.' : 'Belum ada task.'}</p>
+                            <p className="text-center text-slate-400 py-10 text-sm">{(filterMemberId || filterProjectRoleId || filterEpic) ? 'No tasks match this filter.' : 'No tasks yet.'}</p>
                         )}
                         {visibleTasks.map((task) => (
                             <div
@@ -2712,7 +2712,7 @@ export default function ProjectBoard() {
                             </thead>
                             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                 {visibleTasks.length === 0 && (
-                                    <tr><td colSpan={8} className="px-6 py-10 text-center text-sm text-slate-400">{(filterMemberId || filterProjectRoleId || filterEpic) ? 'Tidak ada task untuk filter ini.' : 'Belum ada task.'}</td></tr>
+                                    <tr><td colSpan={8} className="px-6 py-10 text-center text-sm text-slate-400">{(filterMemberId || filterProjectRoleId || filterEpic) ? 'No tasks match this filter.' : 'No tasks yet.'}</td></tr>
                                 )}
                                 {visibleTasks.map(task => (
                                     <tr key={task.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${selectedTaskIds.includes(task.id) ? 'bg-primary/5 dark:bg-primary/10' : ''}`} onClick={(e) => {
@@ -2842,7 +2842,7 @@ export default function ProjectBoard() {
                                 className="mt-1 inline-flex w-fit items-center gap-1 text-xs text-primary hover:underline"
                             >
                                 <Copy className="size-3" />
-                                Disalin dari Task #{editingTask.duplicated_from_id}
+                                Copied from Task #{editingTask.duplicated_from_id}
                             </button>
                         )}
                     </DialogHeader>
@@ -3017,7 +3017,7 @@ export default function ProjectBoard() {
                                 <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10 p-3 space-y-2">
                                     <p className="text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
                                         <Clock className="size-3.5" />
-                                        Override "Diperbarui" (khusus role tertentu)
+                                        Override "Updated" (specific roles only)
                                     </p>
                                     <Input
                                         type="date"
@@ -3026,7 +3026,7 @@ export default function ProjectBoard() {
                                         className="w-full sm:w-1/2"
                                     />
                                     <p className="text-[11px] text-amber-600 dark:text-amber-500">
-                                        Mengubah tanggal ini akan menimpa tanggal "Diperbarui" yang tampil di kartu task.
+                                        Changing this date will override the "Updated" date shown on the task card.
                                     </p>
                                 </div>
                             )}
@@ -3088,16 +3088,16 @@ export default function ProjectBoard() {
                                 <p className="text-xs text-slate-500 dark:text-slate-400">
                                     {newTaskBillable
                                         ? selectedProject?.methodology === 'Waterfall'
-                                            ? 'Digunakan untuk Team Load (perlu assignee + start & due date) dan kuota billable.'
-                                            : 'Memotong kuota billable. Rush hour ×1.3 hanya untuk task billable.'
-                                        : 'Opsional — tidak memotong kuota project, tetapi dipakai untuk perhitungan Team Load (assignee + tanggal).'}
+                                            ? 'Used for Team Load (needs assignee + start & due date) and the billable quota.'
+                                            : 'Deducts from the billable quota. Rush hour ×1.3 applies to billable tasks only.'
+                                        : "Optional — doesn't deduct from the project quota, but is used for Team Load calculations (assignee + dates)."}
                                 </p>
                                 <div className={`grid grid-cols-1 gap-3 ${newTaskBillable && selectedProject?.methodology !== 'Waterfall' ? 'sm:grid-cols-[1fr_auto] sm:items-end' : ''}`}>
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                                             Estimated Manhours
                                             {!newTaskBillable && (
-                                                <span className="text-slate-400 font-normal"> (opsional)</span>
+                                                <span className="text-slate-400 font-normal"> (optional)</span>
                                             )}
                                         </label>
                                         <Input
@@ -3108,11 +3108,11 @@ export default function ProjectBoard() {
                                             min="0"
                                             step="0.5"
                                             disabled={hasAssigneeMhSplit}
-                                            placeholder={newTaskBillable ? '0' : 'Kosongkan jika tidak dipakai'}
+                                            placeholder={newTaskBillable ? '0' : 'Leave empty if not used'}
                                         />
                                         {hasAssigneeMhSplit && (
                                             <p className="text-[11px] text-slate-400">
-                                                Diatur dari pembagian MH per assignee di bagian "Assignees" di bawah.
+                                                Set from the per-assignee MH split in the "Assignees" section below.
                                             </p>
                                         )}
                                     </div>
@@ -3226,7 +3226,7 @@ export default function ProjectBoard() {
                                 onClick={() => openDeleteTaskConfirm(editingTask)}
                                 disabled={isSubmitting}>
                                 <Trash2 className="size-4" />
-                                Hapus Task
+                                Delete Task
                             </Button>
                         )}
                         <Button type="button" variant="outline" onClick={closeTaskModal}>Cancel</Button>
@@ -3250,19 +3250,19 @@ export default function ProjectBoard() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-red-600">
                             <Trash2 className="size-4" />
-                            Hapus Task
+                            Delete Task
                         </DialogTitle>
                         <DialogDescription>
-                            Task <strong className="text-slate-700 dark:text-slate-200">"{taskToDelete?.title}"</strong> akan dihapus permanen beserta semua subtask dan catatannya. Tindakan ini tidak bisa dibatalkan.
+                            Task <strong className="text-slate-700 dark:text-slate-200">"{taskToDelete?.title}"</strong> will be permanently deleted along with all its subtasks and notes. This action cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="mt-2">
                         <Button type="button" variant="outline" onClick={() => { setConfirmDeleteTaskOpen(false); setTaskToDelete(null); }} disabled={isDeletingTask}>
-                            Batal
+                            Cancel
                         </Button>
                         <Button type="button" variant="destructive" onClick={handleDeleteTask} disabled={isDeletingTask}>
                             {isDeletingTask && <Loader2 className="mr-2 size-4 animate-spin" />}
-                            Ya, Hapus
+                            Yes, Delete
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -3274,19 +3274,19 @@ export default function ProjectBoard() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-red-600">
                             <Trash2 className="size-4" />
-                            Hapus {selectedTaskIds.length} Task?
+                            Delete {selectedTaskIds.length} Task{selectedTaskIds.length === 1 ? '' : 's'}?
                         </DialogTitle>
                         <DialogDescription>
-                            <strong className="text-slate-700 dark:text-slate-200">{selectedTaskIds.length} task</strong> yang dipilih akan dihapus permanen beserta semua subtask dan catatannya. Tindakan ini tidak bisa dibatalkan.
+                            <strong className="text-slate-700 dark:text-slate-200">{selectedTaskIds.length} task{selectedTaskIds.length === 1 ? '' : 's'}</strong> selected will be permanently deleted along with all subtasks and notes. This action cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="mt-2">
                         <Button type="button" variant="outline" onClick={() => setIsBulkDeleteConfirmOpen(false)} disabled={isBulkDeleting}>
-                            Batal
+                            Cancel
                         </Button>
                         <Button type="button" variant="destructive" onClick={handleBulkDeleteSubmit} disabled={isBulkDeleting}>
                             {isBulkDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
-                            Ya, Hapus {selectedTaskIds.length} Task
+                            Yes, Delete {selectedTaskIds.length} Task{selectedTaskIds.length === 1 ? '' : 's'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -3298,9 +3298,9 @@ export default function ProjectBoard() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
                             <Inbox className="size-4" />
-                            Kembalikan ke Backlog?
+                            Move Back to Backlog?
                         </DialogTitle>
-                        <DialogDescription className="sr-only">Konfirmasi memindahkan task ke backlog</DialogDescription>
+                        <DialogDescription className="sr-only">Confirm moving the task to the backlog</DialogDescription>
                     </DialogHeader>
 
                     {backlogConfirmTask && (
@@ -3314,7 +3314,7 @@ export default function ProjectBoard() {
                                 )}
                             </div>
                             <p className="text-sm text-slate-600 dark:text-slate-400">
-                                Task ini akan dipindahkan kembali ke Backlog dan tidak lagi terlihat di Board. Kamu bisa memindahkannya lagi ke Board kapan saja.
+                                This task will be moved back to the Backlog and will no longer be visible on the Board. You can move it back to the Board anytime.
                             </p>
                         </div>
                     )}
@@ -3327,7 +3327,7 @@ export default function ProjectBoard() {
                             onClick={() => setBacklogConfirmTask(null)}
                             disabled={isMovingToBacklog}
                         >
-                            Batal
+                            Cancel
                         </Button>
                         <Button
                             type="button"
@@ -3339,7 +3339,7 @@ export default function ProjectBoard() {
                             {isMovingToBacklog
                                 ? <Loader2 className="size-3.5 animate-spin" />
                                 : <Inbox className="size-3.5" />}
-                            Ya, Pindahkan ke Backlog
+                            Yes, Move to Backlog
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -3353,7 +3353,7 @@ export default function ProjectBoard() {
                             <Copy className="size-4" />
                             Duplicate Task?
                         </DialogTitle>
-                        <DialogDescription className="sr-only">Konfirmasi duplikasi task</DialogDescription>
+                        <DialogDescription className="sr-only">Confirm duplicating the task</DialogDescription>
                     </DialogHeader>
 
                     {duplicateConfirmTask && (
@@ -3367,7 +3367,7 @@ export default function ProjectBoard() {
                                 )}
                             </div>
                             <p className="text-sm text-slate-600 dark:text-slate-400">
-                                Sebuah task baru akan dibuat di kolom "To Do" dengan konten yang sama, lengkap dengan info relasi ke task asli. Task asli tidak akan berubah.
+                                A new task will be created in the "To Do" column with the same content, including a link back to the original task. The original task won't change.
                             </p>
                             {duplicateConfirmTask.subtasks?.length > 0 && (
                                 <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
@@ -3375,7 +3375,7 @@ export default function ProjectBoard() {
                                         checked={duplicateIncludeSubtasks}
                                         onCheckedChange={(v) => setDuplicateIncludeSubtasks(!!v)}
                                     />
-                                    Sertakan {duplicateConfirmTask.subtasks.length} subtask
+                                    Include {duplicateConfirmTask.subtasks.length} subtask{duplicateConfirmTask.subtasks.length === 1 ? '' : 's'}
                                 </label>
                             )}
                         </div>
@@ -3389,7 +3389,7 @@ export default function ProjectBoard() {
                             onClick={() => setDuplicateConfirmTask(null)}
                             disabled={isDuplicatingTask}
                         >
-                            Batal
+                            Cancel
                         </Button>
                         <Button
                             type="button"
@@ -3401,7 +3401,7 @@ export default function ProjectBoard() {
                             {isDuplicatingTask
                                 ? <Loader2 className="size-3.5 animate-spin" />
                                 : <Copy className="size-3.5" />}
-                            Ya, Duplicate
+                            Yes, Duplicate
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -3413,7 +3413,7 @@ export default function ProjectBoard() {
                     <DialogHeader>
                         <DialogTitle>Assign Project Members</DialogTitle>
                         <DialogDescription>
-                            {assigningProject ? `Set anggota project untuk "${assigningProject.name}".` : 'Set anggota project.'}
+                            {assigningProject ? `Set project members for "${assigningProject.name}".` : 'Set project members.'}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto">
@@ -3425,7 +3425,7 @@ export default function ProjectBoard() {
                                         value={row.user_id || 'Unassigned'}
                                         onChange={(next) => updateAssignmentRow(index, 'user_id', next === 'Unassigned' ? '' : String(next))}
                                         options={assignmentUserOptions}
-                                        placeholder="Cari user (min. 2 karakter)..."
+                                        placeholder="Search user (min. 2 characters)..."
                                         className="mt-1"
                                         inputClassName="bg-white dark:bg-slate-900"
                                     />

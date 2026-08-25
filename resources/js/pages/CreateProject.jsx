@@ -176,7 +176,7 @@ export default function CreateProject() {
 
         try {
             if (selectedLead?.converted_project_id) {
-                alert('Opportunity ini sudah pernah diproses ke project board.');
+                alert('This opportunity has already been processed to the project board.');
                 navigate(`/board/${selectedLead.converted_project_id}`);
                 return;
             }
@@ -253,10 +253,10 @@ export default function CreateProject() {
                             <div className="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
                                 <p className="text-xs text-slate-600 italic flex items-center gap-2">
                                     <Link2 className="size-3.5 text-primary" />
-                                    Data project, methodology, role quota, dan team diprefill dari Presales.
+                                    Project data, methodology, role quota, and team are prefilled from Presales.
                                 </p>
                                 <p className="text-xs text-slate-500 mt-1">
-                                    Jika butuh ubah struktur resource, update di menu Presales terlebih dahulu.
+                                    If you need to change the resource structure, update it in the Presales menu first.
                                 </p>
                             </div>
                         )}

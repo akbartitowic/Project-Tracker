@@ -218,7 +218,7 @@ class RbacTest extends TestCase
 
         $create = $this->postJson('/api/menu-items', [
             'permission_slug' => 'dashboard.read',
-            'section' => 'Bisnis',
+            'section' => 'Business',
             'path' => '/test-item',
             'label' => 'Test Item',
             'icon' => 'Star',

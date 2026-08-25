@@ -10,7 +10,7 @@ export function formatTaskDateShort(value) {
     if (!value) return null;
     const d = new Date(`${toDateInputValue(value)}T12:00:00`);
     if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 /** @param {string|null|undefined} start @param {string|null|undefined} due */

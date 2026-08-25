@@ -49,7 +49,7 @@ export default function TaskAssigneesSection({
             });
             await onChanged?.(res);
         } catch (err) {
-            setError(err.message || 'Gagal memperbarui assignee.');
+            setError(err.message || 'Failed to update assignees.');
         }
     };
 
@@ -103,7 +103,7 @@ export default function TaskAssigneesSection({
 
     if (!taskId) {
         return (
-            <p className="text-xs text-slate-500 italic">Simpan task terlebih dahulu untuk mengatur assignee.</p>
+            <p className="text-xs text-slate-500 italic">Save the task first to manage assignees.</p>
         );
     }
 
@@ -117,7 +117,7 @@ export default function TaskAssigneesSection({
             {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
 
             {assignees.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">Belum ada assignee.</p>
+                <p className="text-xs text-slate-500 italic">No assignees yet.</p>
             ) : (
                 <ul className="space-y-1.5">
                     {assignees.map((a) => (
@@ -158,7 +158,7 @@ export default function TaskAssigneesSection({
                                 ) : (
                                     <>
                                         <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                                            {a.is_active ? 'Aktif' : 'Non-aktif'}
+                                            {a.is_active ? 'Active' : 'Inactive'}
                                         </span>
                                         <Switch
                                             checked={a.is_active}
@@ -171,7 +171,7 @@ export default function TaskAssigneesSection({
                             {canManage && savingUserId !== a.id && (
                                 <button
                                     type="button"
-                                    title="Hapus assignee"
+                                    title="Remove assignee"
                                     className="flex size-6 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400"
                                     onClick={() => handleRemove(a.id)}
                                 >
@@ -186,7 +186,7 @@ export default function TaskAssigneesSection({
             {showMhSplit && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Total MH dari pembagian di atas: <span className="font-semibold tabular-nums">{totalMh}h</span> — otomatis jadi Estimated Manhours task ini.
+                        Total MH from the split above: <span className="font-semibold tabular-nums">{totalMh}h</span> — automatically becomes this task's Estimated Manhours.
                     </p>
                     {canManage && assignees.length >= 2 && (
                         <Button
@@ -200,14 +200,14 @@ export default function TaskAssigneesSection({
                             {savingUserId === 'mh-split'
                                 ? <Loader2 className="size-3.5 animate-spin" />
                                 : <Scale className="size-3.5" />}
-                            Bagi Rata
+                            Split Evenly
                         </Button>
                     )}
                 </div>
             )}
             {assignees.length >= 2 && hasSubtasks && (
                 <p className="rounded-md border border-dashed border-slate-300 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                    MH task ini otomatis dihitung dari total subtask, jadi tidak bisa dibagi manual per assignee di sini.
+                    This task's MH is calculated automatically from its subtasks, so it can't be split manually per assignee here.
                 </p>
             )}
 
@@ -217,17 +217,17 @@ export default function TaskAssigneesSection({
                         value={pendingAdd}
                         onChange={setPendingAdd}
                         options={assigneeSelectOptions.filter((o) => !assignees.some((a) => a.id === o.id))}
-                        placeholder="Ketik min. 2 karakter untuk tambah assignee..."
+                        placeholder="Type at least 2 characters to add an assignee..."
                         showUnassignedOption={false}
                         className="flex-1"
                     />
                     <Button type="button" size="sm" variant="outline" disabled={pendingAdd === UNASSIGNED} onClick={handleAdd}>
-                        Tambah
+                        Add
                     </Button>
                 </div>
             )}
             <p className="text-[11px] text-slate-400">
-                Nyalakan toggle <span className="font-semibold">Aktif</span> untuk assignee yang sedang mengerjakan task ini — bisa lebih dari satu sekaligus. Assignee yang di-nonaktifkan tetap menempel di task (mis. Dev sudah Done, QA dinyalakan aktif, Dev tinggal dimatikan tapi tetap tercatat).
+                Turn on the <span className="font-semibold">Active</span> toggle for assignees currently working on this task — more than one can be active at once. Deactivated assignees stay attached to the task (e.g. Dev is already Done, QA gets activated, Dev can be turned off while staying on record).
             </p>
         </div>
     );

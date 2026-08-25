@@ -10,7 +10,7 @@ export default function AssigneeSearchSelect({
     value = UNASSIGNED,
     onChange,
     options = [],
-    placeholder = 'Cari nama atau role...',
+    placeholder = 'Search name or role...',
     className,
     inputClassName,
     showUnassignedOption = true,
@@ -89,7 +89,7 @@ export default function AssigneeSearchSelect({
 
             {showHint && (
                 <p className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                    Ketik minimal {MIN_QUERY_LENGTH} karakter untuk mencari assignee
+                    Type at least {MIN_QUERY_LENGTH} characters to search for an assignee
                 </p>
             )}
 
@@ -113,7 +113,7 @@ export default function AssigneeSearchSelect({
                         </li>
                     )}
                     {filteredOptions.length === 0 ? (
-                        <li className="px-3 py-2 text-sm text-slate-500">Tidak ada hasil</li>
+                        <li className="px-3 py-2 text-sm text-slate-500">No results</li>
                     ) : (
                         filteredOptions.map((opt) => (
                             <li key={opt.id}>

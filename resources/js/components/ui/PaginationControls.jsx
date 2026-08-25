@@ -6,9 +6,9 @@ const PAGE_SIZE_OPTIONS = [10, 12, 20, 50, 100];
 
 export default function PaginationControls({
     page, pageSize, total, onPageChange, onPageSizeChange,
-    emptyLabel = 'Tidak ada data',
-    perPageLabel = 'Per halaman',
-    formatShowing = (from, to, t) => `Menampilkan ${from}–${to} dari ${t}`,
+    emptyLabel = 'No data',
+    perPageLabel = 'Per page',
+    formatShowing = (from, to, t) => `Showing ${from}–${to} of ${t}`,
 }) {
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const from = total === 0 ? 0 : (page - 1) * pageSize + 1;

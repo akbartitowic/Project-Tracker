@@ -89,7 +89,7 @@ export async function fetchAPI(endpoint, options = {}) {
                 message.includes('method is not supported')
             ) {
                 message +=
-                    ' Pastikan permintaan ke URL API dengan awalan /api (bukan path halaman React seperti /sales/pitch/...).';
+                    ' Make sure the request targets a URL with the /api prefix (not a React page path like /sales/pitch/...).';
             }
             if (response.status === 429) {
                 const retryAfter =

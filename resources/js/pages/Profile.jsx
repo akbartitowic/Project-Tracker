@@ -39,7 +39,7 @@ export default function Profile() {
             const res = await updateProfile(data);
             if (res.success) {
                 if (res.forceLogout) {
-                    alert('Password berhasil diubah. Semua sesi/device akan logout — silakan login kembali.');
+                    alert('Password changed successfully. All sessions/devices will be logged out — please log in again.');
                     window.location.href = '/login';
                     return;
                 }
@@ -139,12 +139,12 @@ export default function Profile() {
                                         <User className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-slate-400 group-focus-within:text-primary transition-colors" />
                                         <Input
                                             className="pl-11 h-11 rounded-xl focus:ring-primary"
-                                            placeholder="Nama panggilan"
+                                            placeholder="Nickname"
                                             value={data.nickname}
                                             onChange={e => setData({ ...data, nickname: e.target.value })}
                                         />
                                     </div>
-                                    <p className="text-[11px] text-slate-400 ml-1">Jika diisi, nama ini yang tampil di sidebar.</p>
+                                    <p className="text-[11px] text-slate-400 ml-1">If set, this name is shown in the sidebar.</p>
                                 </div>
                             </div>
                             <div className="space-y-1.5">
@@ -212,7 +212,7 @@ export default function Profile() {
                                         Task email notifications
                                     </p>
                                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        Kirim email saat task di-assign dan reminder harian saat due task belum Done/Hold.
+                                        Sends an email when a task is assigned, plus a daily reminder while a due task isn't Done/Hold.
                                     </p>
                                 </div>
                             </label>
@@ -282,7 +282,7 @@ export default function Profile() {
                         <div className="mt-6 pt-6 border-t border-primary/10">
                             <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Active Since</p>
                             <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                                {user?.created_at ? new Date(user.created_at).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : 'March 2026'}
+                                {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'March 2026'}
                             </p>
                         </div>
                     </Card>

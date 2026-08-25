@@ -19,7 +19,7 @@ export default function ForceChangePassword() {
         setError('');
 
         if (data.password !== data.password_confirmation) {
-            setError('Konfirmasi password baru tidak cocok.');
+            setError('New password confirmation does not match.');
             return;
         }
 
@@ -27,13 +27,13 @@ export default function ForceChangePassword() {
         try {
             const res = await forceChangePassword(data);
             if (res.success) {
-                alert(res.message || 'Password berhasil diubah. Silakan login kembali.');
+                alert(res.message || 'Password changed successfully. Please log in again.');
                 window.location.href = '/login';
                 return;
             }
-            setError(res.message || 'Gagal mengubah password.');
+            setError(res.message || 'Failed to change password.');
         } catch (err) {
-            setError(err.message || 'Gagal mengubah password.');
+            setError(err.message || 'Failed to change password.');
         } finally {
             setIsLoading(false);
         }
@@ -58,10 +58,10 @@ export default function ForceChangePassword() {
                         <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
                             <ShieldAlert className="size-6" />
                         </div>
-                        <h2 className="text-xl font-black text-white tracking-tight">Password Kamu Sudah Kedaluwarsa</h2>
+                        <h2 className="text-xl font-black text-white tracking-tight">Your Password Has Expired</h2>
                         <p className="text-slate-400 font-medium mt-1 text-sm">
-                            Demi keamanan, password wajib diganti setiap 6 bulan{user?.name ? `, ${user.name}` : ''}.
-                            Silakan buat password baru untuk melanjutkan.
+                            For security, passwords must be changed every 6 months{user?.name ? `, ${user.name}` : ''}.
+                            Please set a new password to continue.
                         </p>
                     </div>
 
@@ -74,7 +74,7 @@ export default function ForceChangePassword() {
 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Password Saat Ini</label>
+                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Current Password</label>
                             <div className="relative group">
                                 <Lock className="pointer-events-none absolute left-4 top-1/2 z-10 size-5 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-accent" />
                                 <PasswordInput
@@ -89,13 +89,13 @@ export default function ForceChangePassword() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Password Baru</label>
+                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">New Password</label>
                             <div className="relative group">
                                 <KeyRound className="pointer-events-none absolute left-4 top-1/2 z-10 size-5 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-accent" />
                                 <PasswordInput
                                     required
                                     minLength={8}
-                                    placeholder="Minimal 8 karakter"
+                                    placeholder="Minimum 8 characters"
                                     className="h-13 rounded-2xl border-white/10 bg-white/5 pl-12 text-white placeholder:text-slate-400 transition-all focus:border-accent focus:ring-accent"
                                     toggleButtonClassName="text-slate-400 hover:bg-white/10 hover:text-white dark:hover:bg-white/10"
                                     value={data.password}
@@ -105,13 +105,13 @@ export default function ForceChangePassword() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Konfirmasi Password Baru</label>
+                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider ml-1">Confirm New Password</label>
                             <div className="relative group">
                                 <KeyRound className="pointer-events-none absolute left-4 top-1/2 z-10 size-5 -translate-y-1/2 text-slate-500 transition-colors group-focus-within:text-accent" />
                                 <PasswordInput
                                     required
                                     minLength={8}
-                                    placeholder="Ulangi password baru"
+                                    placeholder="Repeat the new password"
                                     className="h-13 rounded-2xl border-white/10 bg-white/5 pl-12 text-white placeholder:text-slate-400 transition-all focus:border-accent focus:ring-accent"
                                     toggleButtonClassName="text-slate-400 hover:bg-white/10 hover:text-white dark:hover:bg-white/10"
                                     value={data.password_confirmation}
@@ -121,7 +121,7 @@ export default function ForceChangePassword() {
                         </div>
 
                         <p className="text-xs text-slate-400 leading-relaxed">
-                            Password baru tidak boleh sama dengan 3 password terakhir yang pernah kamu gunakan.
+                            Your new password can't be the same as your last 3 passwords.
                         </p>
 
                         <Button
@@ -129,7 +129,7 @@ export default function ForceChangePassword() {
                             disabled={isLoading}
                             className="w-full h-13 bg-accent hover:bg-orange-600 text-white font-bold rounded-2xl shadow-lg shadow-accent/20 transition-all hover:scale-[1.02] active:scale-[0.98] mt-2"
                         >
-                            {isLoading ? 'Menyimpan...' : 'Ganti Password'}
+                            {isLoading ? 'Saving...' : 'Change Password'}
                         </Button>
                     </form>
                 </div>

@@ -24,7 +24,7 @@ function formatNoteTime(iso) {
     if (!iso) return '';
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleString('id-ID', {
+    return d.toLocaleString('en-US', {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
@@ -72,7 +72,7 @@ export default function ProjectNotesPanel({
             const res = await fetchAPI(`/projects/${projectId}/notes`);
             setNotes(res.data || []);
         } catch (e) {
-            setError(e.message || 'Gagal memuat project notes.');
+            setError(e.message || 'Failed to load project notes.');
             setNotes([]);
         } finally {
             setLoading(false);
@@ -148,14 +148,14 @@ export default function ProjectNotesPanel({
             }
             resetForm();
         } catch (e) {
-            setError(e.message || 'Gagal menyimpan.');
+            setError(e.message || 'Failed to save.');
         } finally {
             setSaving(false);
         }
     };
 
     const handleDelete = async (noteId) => {
-        if (!window.confirm('Hapus catatan ini?')) return;
+        if (!window.confirm('Delete this note?')) return;
         setDeletingId(noteId);
         setError('');
         try {
@@ -163,7 +163,7 @@ export default function ProjectNotesPanel({
             setNotes((prev) => prev.filter((n) => n.id !== noteId));
             if (editingId === noteId) resetForm();
         } catch (e) {
-            setError(e.message || 'Gagal menghapus.');
+            setError(e.message || 'Failed to delete.');
         } finally {
             setDeletingId(null);
         }
@@ -174,8 +174,8 @@ export default function ProjectNotesPanel({
     return (
         <div className="flex flex-col min-h-0 flex-1 gap-4">
             <p className="text-sm text-slate-500 dark:text-slate-400">
-                Catatan project untuk <strong className="text-slate-700 dark:text-slate-200">{projectName}</strong>
-                — note, link development, dan dokumen.
+                Project notes for <strong className="text-slate-700 dark:text-slate-200">{projectName}</strong>
+                — notes, development links, and documents.
             </p>
 
             <div className="flex flex-wrap gap-2">
@@ -212,11 +212,11 @@ export default function ProjectNotesPanel({
                 {loading ? (
                     <div className="flex items-center justify-center py-10 text-slate-500">
                         <Loader2 className="size-5 animate-spin mr-2" />
-                        Memuat…
+                        Loading…
                     </div>
                 ) : notesInCategory.length === 0 ? (
                     <p className="text-xs text-slate-500 italic px-4 py-8 text-center">
-                        Belum ada {getProjectNoteCategoryLabel(activeCategory).toLowerCase()}.
+                        No {getProjectNoteCategoryLabel(activeCategory).toLowerCase()} yet.
                     </p>
                 ) : (
                     <ul className="divide-y divide-slate-200/80 dark:divide-slate-700/80">
@@ -274,7 +274,7 @@ export default function ProjectNotesPanel({
                                                     className="p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"
                                                     onClick={() => handleDelete(note.id)}
                                                     disabled={deletingId === note.id}
-                                                    aria-label="Hapus"
+                                                    aria-label="Delete"
                                                 >
                                                     {deletingId === note.id ? (
                                                         <Loader2 className="size-3.5 animate-spin" />
@@ -294,16 +294,16 @@ export default function ProjectNotesPanel({
 
             <div className="rounded-xl border border-primary/20 bg-primary/5 dark:bg-primary/10 p-4 space-y-3">
                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                    {editingId ? 'Edit' : 'Tambah'} — {getProjectNoteCategoryLabel(activeCategory)}
+                    {editingId ? 'Edit' : 'Add'} — {getProjectNoteCategoryLabel(activeCategory)}
                 </p>
                 {isLink ? (
                     <>
                         <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-600">Judul link *</label>
+                            <label className="text-xs font-medium text-slate-600">Link title *</label>
                             <Input
                                 value={form.title}
                                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                                placeholder="Contoh: Repo GitHub, Figma Design"
+                                placeholder="e.g. GitHub Repo, Figma Design"
                                 className="h-9"
                             />
                         </div>
@@ -318,11 +318,11 @@ export default function ProjectNotesPanel({
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-600">Keterangan (opsional)</label>
+                            <label className="text-xs font-medium text-slate-600">Notes (optional)</label>
                             <Textarea
                                 value={form.body}
                                 onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-                                placeholder="Catatan singkat tentang link ini"
+                                placeholder="A short note about this link"
                                 className="min-h-[60px] text-sm resize-y"
                             />
                         </div>
@@ -330,20 +330,20 @@ export default function ProjectNotesPanel({
                 ) : (
                     <>
                         <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-600">Judul (opsional)</label>
+                            <label className="text-xs font-medium text-slate-600">Title (optional)</label>
                             <Input
                                 value={form.title}
                                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                                placeholder="Contoh: Kickoff meeting, Sprint review"
+                                placeholder="e.g. Kickoff meeting, Sprint review"
                                 className="h-9"
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-600">Catatan *</label>
+                            <label className="text-xs font-medium text-slate-600">Note *</label>
                             <Textarea
                                 value={form.body}
                                 onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-                                placeholder="Ringkasan progress, blocker, rencana minggu depan..."
+                                placeholder="Progress summary, blockers, next week's plan..."
                                 className="min-h-[100px] text-sm resize-y"
                             />
                         </div>
@@ -352,12 +352,12 @@ export default function ProjectNotesPanel({
                 <div className="flex gap-2 justify-end">
                     {editingId && (
                         <Button type="button" variant="outline" size="sm" onClick={resetForm}>
-                            Batal
+                            Cancel
                         </Button>
                     )}
                     <Button type="button" size="sm" disabled={saving} onClick={handleSave}>
                         {saving && <Loader2 className="size-3.5 mr-1.5 animate-spin" />}
-                        {editingId ? 'Simpan perubahan' : 'Tambah'}
+                        {editingId ? 'Save changes' : 'Add'}
                     </Button>
                 </div>
             </div>

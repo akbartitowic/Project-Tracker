@@ -9,7 +9,7 @@ function formatNoteTime(iso) {
     if (!iso) return '';
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleString('id-ID', {
+    return d.toLocaleString('en-US', {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
@@ -137,7 +137,7 @@ export default function TaskNotesSection({
             const res = await fetchAPI(`/tasks/${taskId}/notes`);
             setNotes(res.data || []);
         } catch (e) {
-            setError(e.message || 'Gagal memuat catatan.');
+            setError(e.message || 'Failed to load notes.');
             setNotes([]);
         } finally {
             setLoading(false);
@@ -213,7 +213,7 @@ export default function TaskNotesSection({
             setAttachedImages([]);
             setMentionState(null);
         } catch (err) {
-            setError(err.message || 'Gagal menyimpan catatan.');
+            setError(err.message || 'Failed to save note.');
         } finally {
             setPosting(false);
         }
@@ -239,11 +239,11 @@ export default function TaskNotesSection({
                     newAttachments.push(data.url);
                 } else {
                     console.error('Failed to upload image', data);
-                    setError(data.message || data.error || 'Gagal mengunggah gambar.');
+                    setError(data.message || data.error || 'Failed to upload image.');
                 }
             } catch (err) {
                 console.error('Upload failed', err);
-                setError('Gagal mengunggah gambar.');
+                setError('Failed to upload image.');
             }
         }
         if (newAttachments.length > 0) {
@@ -253,14 +253,14 @@ export default function TaskNotesSection({
     };
 
     const handleDelete = async (noteId) => {
-        if (!window.confirm('Hapus catatan ini?')) return;
+        if (!window.confirm('Delete this note?')) return;
         setDeletingId(noteId);
         setError('');
         try {
             await fetchAPI(`/tasks/${taskId}/notes/${noteId}`, { method: 'DELETE' });
             setNotes((prev) => prev.filter((n) => n.id !== noteId));
         } catch (err) {
-            setError(err.message || 'Gagal menghapus catatan.');
+            setError(err.message || 'Failed to delete note.');
         } finally {
             setDeletingId(null);
         }
@@ -268,7 +268,7 @@ export default function TaskNotesSection({
 
     if (!taskId) {
         return (
-            <p className="text-xs text-slate-500 italic">Simpan task terlebih dahulu untuk menambah catatan.</p>
+            <p className="text-xs text-slate-500 italic">Save the task first to add notes.</p>
         );
     }
 
@@ -299,11 +299,11 @@ export default function TaskNotesSection({
                 {loading ? (
                     <div className="flex items-center justify-center py-8 text-slate-500">
                         <Loader2 className="size-5 animate-spin mr-2" />
-                        Memuat…
+                        Loading…
                     </div>
                 ) : notes.length === 0 ? (
                     <p className="text-xs text-slate-500 italic px-3 py-6 text-center">
-                        Belum ada catatan. Anggota project dapat menambahkan komentar di sini.
+                        No notes yet. Project members can add comments here.
                     </p>
                 ) : (
                     <ul className="divide-y divide-slate-200/80 dark:divide-slate-700/80">
@@ -322,7 +322,7 @@ export default function TaskNotesSection({
                                                 <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                                                     {note.user_name || 'User'}
                                                     {isOwn && (
-                                                        <span className="text-slate-400 font-normal ml-1">(Anda)</span>
+                                                        <span className="text-slate-400 font-normal ml-1">(You)</span>
                                                     )}
                                                 </p>
                                                 <span className="text-[10px] text-slate-400 shrink-0">
@@ -339,7 +339,7 @@ export default function TaskNotesSection({
                                                 className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 shrink-0"
                                                 onClick={() => handleDelete(note.id)}
                                                 disabled={deletingId === note.id}
-                                                aria-label="Hapus catatan"
+                                                aria-label="Delete note"
                                             >
                                                 {deletingId === note.id ? (
                                                     <Loader2 className="size-3.5 animate-spin" />
@@ -410,13 +410,13 @@ export default function TaskNotesSection({
                                 handlePost();
                             }
                         }}
-                        placeholder="Tulis catatan atau komentar… (ketik @ untuk mention, Ctrl+Enter untuk kirim, Paste gambar di sini)"
+                        placeholder="Write a note or comment… (type @ to mention, Ctrl+Enter to send, paste an image here)"
                         className="min-h-[72px] resize-y text-sm"
                         maxLength={5000}
                     />
                     {uploadingImages && (
                         <div className="absolute right-2 top-2 flex items-center gap-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-slate-500 shadow dark:bg-slate-800/90 dark:text-slate-300">
-                            <Loader2 className="size-3 animate-spin" /> Mengunggah...
+                            <Loader2 className="size-3 animate-spin" /> Uploading...
                         </div>
                     )}
                     {mentionState && filteredMentions.length > 0 && (
@@ -499,7 +499,7 @@ export default function TaskNotesSection({
                         }}
                     >
                         {posting && <Loader2 className="size-3.5 mr-1.5 animate-spin" />}
-                        Kirim catatan
+                        Send note
                     </Button>
                 </div>
             </div>

@@ -6,7 +6,7 @@ function formatHistoryTime(iso) {
     if (!iso) return '';
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleString('id-ID', {
+    return d.toLocaleString('en-US', {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
@@ -15,18 +15,18 @@ function formatHistoryTime(iso) {
     });
 }
 
-/** Renders one change as a readable Indonesian sentence fragment — the field name stays bold, values are code-styled. */
+/** Renders one change as a readable sentence fragment — the field name stays bold, values are code-styled. */
 function ChangeDescription({ entry }) {
     const { field, old_value: oldValue, new_value: newValue } = entry;
 
-    if (field === 'Deskripsi') {
-        return <>mengubah <span className="font-semibold text-slate-700 dark:text-slate-200">{field}</span></>;
+    if (field === 'Description') {
+        return <>changed <span className="font-semibold text-slate-700 dark:text-slate-200">{field}</span></>;
     }
 
     if (!oldValue && newValue) {
         return (
             <>
-                mengatur <span className="font-semibold text-slate-700 dark:text-slate-200">{field}</span> menjadi{' '}
+                set <span className="font-semibold text-slate-700 dark:text-slate-200">{field}</span> to{' '}
                 <code className="rounded bg-primary/10 px-1 py-0.5 text-primary">{newValue}</code>
             </>
         );
@@ -35,16 +35,16 @@ function ChangeDescription({ entry }) {
     if (oldValue && !newValue) {
         return (
             <>
-                menghapus <span className="font-semibold text-slate-700 dark:text-slate-200">{field}</span>{' '}
-                <span className="text-slate-400">(sebelumnya <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-800">{oldValue}</code>)</span>
+                removed <span className="font-semibold text-slate-700 dark:text-slate-200">{field}</span>{' '}
+                <span className="text-slate-400">(was <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-800">{oldValue}</code>)</span>
             </>
         );
     }
 
     return (
         <>
-            mengubah <span className="font-semibold text-slate-700 dark:text-slate-200">{field}</span> dari{' '}
-            <code className="rounded bg-slate-100 px-1 py-0.5 line-through dark:bg-slate-800">{oldValue}</code> menjadi{' '}
+            changed <span className="font-semibold text-slate-700 dark:text-slate-200">{field}</span> from{' '}
+            <code className="rounded bg-slate-100 px-1 py-0.5 line-through dark:bg-slate-800">{oldValue}</code> to{' '}
             <code className="rounded bg-primary/10 px-1 py-0.5 text-primary">{newValue}</code>
         </>
     );
@@ -68,7 +68,7 @@ export default function TaskHistorySection({ taskId }) {
             setHasMore(!!res.has_more);
             setPage(nextPage);
         } catch (e) {
-            setError(e.message || 'Gagal memuat riwayat perubahan.');
+            setError(e.message || 'Failed to load change history.');
         } finally {
             setLoading(false);
             setLoadingMore(false);
@@ -84,7 +84,7 @@ export default function TaskHistorySection({ taskId }) {
 
     if (!taskId) {
         return (
-            <p className="text-xs text-slate-500 italic">Simpan task terlebih dahulu untuk melihat riwayat perubahan.</p>
+            <p className="text-xs text-slate-500 italic">Save the task first to see its change history.</p>
         );
     }
 
@@ -92,7 +92,7 @@ export default function TaskHistorySection({ taskId }) {
         <div className="space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                 <History className="size-3.5" />
-                Riwayat Perubahan
+                Change History
             </p>
 
             {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
@@ -101,11 +101,11 @@ export default function TaskHistorySection({ taskId }) {
                 {loading ? (
                     <div className="flex items-center justify-center py-8 text-slate-500">
                         <Loader2 className="size-5 animate-spin mr-2" />
-                        Memuat…
+                        Loading…
                     </div>
                 ) : entries.length === 0 ? (
                     <p className="px-3 py-6 text-center text-xs italic text-slate-500">
-                        Belum ada perubahan tercatat untuk task ini.
+                        No changes recorded for this task yet.
                     </p>
                 ) : (
                     <ul className="divide-y divide-slate-200/80 dark:divide-slate-700/80">
@@ -143,9 +143,9 @@ export default function TaskHistorySection({ taskId }) {
                     className="w-full rounded-lg border border-dashed border-slate-300 py-1.5 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800/50"
                 >
                     {loadingMore ? (
-                        <span className="inline-flex items-center gap-1.5"><Loader2 className="size-3 animate-spin" /> Memuat…</span>
+                        <span className="inline-flex items-center gap-1.5"><Loader2 className="size-3 animate-spin" /> Loading…</span>
                     ) : (
-                        'Muat lebih banyak'
+                        'Load more'
                     )}
                 </button>
             )}

@@ -9,7 +9,7 @@ use App\Models\User;
 use Carbon\Carbon;
 
 /**
- * Structured, field-level change log for the task detail card's "Riwayat Perubahan" panel —
+ * Structured, field-level change log for the task detail card's "Change History" panel —
  * separate from the free-text `activity_logs` table (App\Traits\LogActivity), which stays
  * untouched and keeps powering the admin-wide System Logs page.
  */
@@ -23,18 +23,18 @@ class TaskChangeLogger
     ];
 
     private const FIELD_LABELS = [
-        'title' => 'Judul',
-        'feature_title' => 'Fitur',
-        'description' => 'Deskripsi',
+        'title' => 'Title',
+        'feature_title' => 'Feature',
+        'description' => 'Description',
         'status' => 'Status',
-        'priority' => 'Prioritas',
+        'priority' => 'Priority',
         'is_billable' => 'Billable',
         'assignee_id' => 'Assignee',
-        'estimated_hours' => 'Estimasi Jam',
+        'estimated_hours' => 'Estimated Hours',
         'project_role_id' => 'Role',
-        'category' => 'Kategori',
-        'due_date' => 'Tenggat',
-        'start_date' => 'Tanggal Mulai',
+        'category' => 'Category',
+        'due_date' => 'Due Date',
+        'start_date' => 'Start Date',
         'rush_hour' => 'Rush Hour',
         'assignees' => 'Assignee',
     ];
@@ -126,12 +126,12 @@ class TaskChangeLogger
         if ($field === 'description') {
             // Rich text, can be long HTML — don't dump content into the log. `formatValue` is
             // only reached here when the value actually changed, so a fixed marker is enough;
-            // the frontend renders "mengubah Deskripsi" for this field without a dari/menjadi diff.
-            return 'diperbarui';
+            // the frontend renders "changed Description" for this field without a from/to diff.
+            return 'updated';
         }
 
         if ($field === 'is_billable' || $field === 'rush_hour') {
-            return $value ? 'Ya' : 'Tidak';
+            return $value ? 'Yes' : 'No';
         }
 
         if ($field === 'due_date' || $field === 'start_date') {
@@ -141,7 +141,7 @@ class TaskChangeLogger
         }
 
         if ($field === 'estimated_hours') {
-            return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.') . ' jam';
+            return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.') . 'h';
         }
 
         if ($field === 'assignee_id') {

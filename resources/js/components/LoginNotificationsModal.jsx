@@ -40,10 +40,10 @@ export default function LoginNotificationsModal() {
                         <Bell className="size-5" />
                     </div>
                     <DialogTitle className="text-center">
-                        Kamu punya {total} notifikasi belum dibaca
+                        You have {total} unread notification{total === 1 ? '' : 's'}
                     </DialogTitle>
                     <DialogDescription className="text-center">
-                        Berikut aktivitas terbaru yang belum kamu lihat.
+                        Here's the recent activity you haven't seen yet.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -77,13 +77,13 @@ export default function LoginNotificationsModal() {
 
                 {extraCount > 0 && (
                     <p className="text-center text-xs text-slate-500 dark:text-slate-400">
-                        +{extraCount} notifikasi lainnya — buka lonceng notifikasi untuk lihat semua.
+                        +{extraCount} more notification{extraCount === 1 ? '' : 's'} — open the notification bell to see all.
                     </p>
                 )}
 
                 <DialogFooter className="sm:justify-center">
                     <Button type="button" variant="outline" onClick={dismissLoginNotifications} className="w-full sm:w-auto">
-                        Tutup
+                        Close
                     </Button>
                 </DialogFooter>
             </DialogContent>

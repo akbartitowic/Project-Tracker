@@ -25,7 +25,7 @@ async function uploadDescriptionImage(file, projectId) {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-        throw new Error(data.message || data.error || 'Gagal mengunggah gambar.');
+        throw new Error(data.message || data.error || 'Failed to upload image.');
     }
     return data.url;
 }
@@ -44,8 +44,8 @@ function insertImagesFromFiles(view, files, projectId, setUploading) {
                 const node = state.schema.nodes.image.create({ src: url });
                 view.dispatch(state.tr.replaceSelectionWith(node).scrollIntoView());
             } catch (err) {
-                console.error('Upload gambar deskripsi gagal', err);
-                alert(err.message || 'Gagal mengunggah gambar.');
+                console.error('Description image upload failed', err);
+                alert(err.message || 'Failed to upload image.');
             }
         }
         setUploading(false);
@@ -121,7 +121,7 @@ export default function DescriptionEditor({
             <EditorContent editor={editor} />
             {uploading && (
                 <div className="absolute right-2 top-2 flex items-center gap-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-slate-500 shadow dark:bg-slate-800/90 dark:text-slate-300">
-                    <Loader2 className="size-3 animate-spin" /> Mengunggah gambar...
+                    <Loader2 className="size-3 animate-spin" /> Uploading image...
                 </div>
             )}
         </div>

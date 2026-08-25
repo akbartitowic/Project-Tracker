@@ -48,7 +48,7 @@ function formatNoteTime(iso) {
     if (!iso) return '';
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleString('id-ID', {
+    return d.toLocaleString('en-US', {
         day: 'numeric', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
     });
@@ -230,16 +230,16 @@ function RichTextEditor({ content, onChange, placeholder }) {
                 <Sep />
 
                 {/* Alignment */}
-                <ToolbarBtn onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })} title="Rata kiri">
+                <ToolbarBtn onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })} title="Align left">
                     <AlignLeft className="size-3.5" />
                 </ToolbarBtn>
-                <ToolbarBtn onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })} title="Tengah">
+                <ToolbarBtn onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })} title="Align center">
                     <AlignCenter className="size-3.5" />
                 </ToolbarBtn>
-                <ToolbarBtn onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} title="Rata kanan">
+                <ToolbarBtn onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} title="Align right">
                     <AlignRight className="size-3.5" />
                 </ToolbarBtn>
-                <ToolbarBtn onClick={() => editor.chain().focus().setTextAlign('justify').run()} active={editor.isActive({ textAlign: 'justify' })} title="Rata kiri-kanan">
+                <ToolbarBtn onClick={() => editor.chain().focus().setTextAlign('justify').run()} active={editor.isActive({ textAlign: 'justify' })} title="Justify">
                     <AlignJustify className="size-3.5" />
                 </ToolbarBtn>
 
@@ -247,7 +247,7 @@ function RichTextEditor({ content, onChange, placeholder }) {
 
                 {/* Link */}
                 <div className="relative">
-                    <ToolbarBtn onClick={openLinkMenu} active={editor.isActive('link')} title="Sisipkan link">
+                    <ToolbarBtn onClick={openLinkMenu} active={editor.isActive('link')} title="Insert link">
                         <Link className="size-3.5" />
                     </ToolbarBtn>
                     {linkMenuOpen && (
@@ -325,7 +325,7 @@ export default function ProjectBoardNotes() {
             const res = await fetchAPI(`/projects/${pid}/notes`);
             setNotes(res.data || []);
         } catch (e) {
-            setError(e.message || 'Gagal memuat notes.');
+            setError(e.message || 'Failed to load notes.');
         } finally {
             setNotesLoading(false);
         }
@@ -403,21 +403,21 @@ export default function ProjectBoardNotes() {
             }
             resetForm();
         } catch (e) {
-            setError(e.message || 'Gagal menyimpan.');
+            setError(e.message || 'Failed to save.');
         } finally {
             setSaving(false);
         }
     };
 
     const handleDelete = async (noteId) => {
-        if (!window.confirm('Hapus catatan ini?') || !project) return;
+        if (!window.confirm('Delete this note?') || !project) return;
         setDeletingId(noteId);
         try {
             await fetchAPI(`/projects/${project.id}/notes/${noteId}`, { method: 'DELETE' });
             setNotes((prev) => prev.filter((n) => n.id !== noteId));
             if (editingId === noteId) resetForm();
         } catch (e) {
-            setError(e.message || 'Gagal menghapus.');
+            setError(e.message || 'Failed to delete.');
         } finally {
             setDeletingId(null);
         }
@@ -477,7 +477,7 @@ export default function ProjectBoardNotes() {
                         onClick={() => navigate(`/board/${projectId}`)}
                     >
                         <LayoutGrid className="size-3.5" />
-                        <span className="hidden sm:inline">Buka Board</span>
+                        <span className="hidden sm:inline">Open Board</span>
                     </Button>
                 </div>
             </div>
@@ -540,9 +540,9 @@ export default function ProjectBoardNotes() {
                         ) : notesInCategory.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-300/70 dark:border-white/10 rounded-xl bg-white/50 backdrop-blur-sm dark:bg-white/5">
                                 {(() => { const Icon = CATEGORY_ICON[activeCategory] || BookOpen; return <Icon className="size-10 mb-3 opacity-20" />; })()}
-                                <p className="text-sm font-medium">Belum ada {getProjectNoteCategoryLabel(activeCategory).toLowerCase()}</p>
+                                <p className="text-sm font-medium">No {getProjectNoteCategoryLabel(activeCategory).toLowerCase()} yet</p>
                                 <p className="text-xs mt-1">
-                                    {canUpdate ? 'Gunakan form di samping untuk menambahkan' : 'Belum ada catatan di kategori ini'}
+                                    {canUpdate ? 'Use the form on the side to add one' : 'No notes in this category yet'}
                                 </p>
                             </div>
                         ) : (
@@ -607,7 +607,7 @@ export default function ProjectBoardNotes() {
                                                                 type="button"
                                                                 className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                                                 onClick={resetForm}
-                                                                title="Batal edit"
+                                                                title="Cancel edit"
                                                             >
                                                                 <X className="size-3.5" />
                                                             </button>
@@ -626,7 +626,7 @@ export default function ProjectBoardNotes() {
                                                             className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
                                                             onClick={() => handleDelete(note.id)}
                                                             disabled={deletingId === note.id}
-                                                            title="Hapus"
+                                                            title="Delete"
                                                         >
                                                             {deletingId === note.id
                                                                 ? <Loader2 className="size-3.5 animate-spin" />
@@ -650,7 +650,7 @@ export default function ProjectBoardNotes() {
                             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                                 {editingId
                                     ? <><Pencil className="size-4 text-primary" /> Edit</>
-                                    : <><Plus className="size-4 text-primary" /> Tambah</>}
+                                    : <><Plus className="size-4 text-primary" /> Add</>}
                                 <span className="font-normal text-slate-500">— {getProjectNoteCategoryLabel(activeCategory)}</span>
                             </h2>
                             {editingId && (
@@ -669,12 +669,12 @@ export default function ProjectBoardNotes() {
                                 <>
                                     <div className="space-y-1">
                                         <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                            Judul <span className="text-rose-400">*</span>
+                                            Title <span className="text-rose-400">*</span>
                                         </label>
                                         <Input
                                             value={form.title}
                                             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                                            placeholder="Contoh: Repo GitHub, Figma Design"
+                                            placeholder="e.g. GitHub Repo, Figma Design"
                                             className="h-9 text-sm"
                                         />
                                     </div>
@@ -692,12 +692,12 @@ export default function ProjectBoardNotes() {
                                     </div>
                                     <div className="space-y-1">
                                         <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                            Keterangan
+                                            Notes
                                         </label>
                                         <Textarea
                                             value={form.body}
                                             onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-                                            placeholder="Catatan singkat tentang link ini..."
+                                            placeholder="A short note about this link..."
                                             rows={3}
                                             className="text-sm resize-none"
                                         />
@@ -707,23 +707,23 @@ export default function ProjectBoardNotes() {
                                 <>
                                     <div className="space-y-1">
                                         <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                            Judul
+                                            Title
                                         </label>
                                         <Input
                                             value={form.title}
                                             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                                            placeholder="Contoh: Sprint review, Kickoff meeting..."
+                                            placeholder="e.g. Sprint review, Kickoff meeting..."
                                             className="h-9 text-sm"
                                         />
                                     </div>
                                     <div className="space-y-1">
                                         <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                            Catatan <span className="text-rose-400">*</span>
+                                            Note <span className="text-rose-400">*</span>
                                         </label>
                                         <RichTextEditor
                                             content={form.body}
                                             onChange={(html) => setForm((f) => ({ ...f, body: html }))}
-                                            placeholder="Ringkasan progress, blocker, rencana minggu depan..."
+                                            placeholder="Progress summary, blockers, next week's plan..."
                                         />
                                     </div>
                                 </>
@@ -737,7 +737,7 @@ export default function ProjectBoardNotes() {
                                 {saving
                                     ? <Loader2 className="size-4 animate-spin" />
                                     : editingId ? <Pencil className="size-4" /> : <Plus className="size-4" />}
-                                {editingId ? 'Simpan Perubahan' : 'Tambah'}
+                                {editingId ? 'Save Changes' : 'Add'}
                             </Button>
                         </div>
                     </div>

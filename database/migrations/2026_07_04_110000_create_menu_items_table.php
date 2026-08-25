@@ -31,10 +31,10 @@ return new class extends Migration
         $items = [
             ['permission_slug' => 'dashboard.read', 'section' => null, 'path' => '/', 'label' => 'Dashboard', 'icon' => 'LayoutDashboard', 'variant' => 'primary', 'sort_order' => 0],
 
-            ['permission_slug' => 'sales.read', 'section' => 'Bisnis', 'path' => '/sales', 'label' => 'Sales', 'icon' => 'Handshake', 'variant' => 'primary', 'sort_order' => 0],
-            ['permission_slug' => 'list_company.read', 'section' => 'Bisnis', 'path' => '/presales-companies', 'label' => 'List Company', 'icon' => 'Building2', 'variant' => 'sub', 'sort_order' => 1],
-            ['permission_slug' => 'category_project.read', 'section' => 'Bisnis', 'path' => '/presales-project-categories', 'label' => 'Category Company', 'icon' => 'Tag', 'variant' => 'sub', 'sort_order' => 2],
-            ['permission_slug' => 'sales_category_project.read', 'section' => 'Bisnis', 'path' => '/sales-category-projects', 'label' => 'Category Project', 'icon' => 'Layers', 'variant' => 'sub', 'sort_order' => 3],
+            ['permission_slug' => 'sales.read', 'section' => 'Business', 'path' => '/sales', 'label' => 'Sales', 'icon' => 'Handshake', 'variant' => 'primary', 'sort_order' => 0],
+            ['permission_slug' => 'list_company.read', 'section' => 'Business', 'path' => '/presales-companies', 'label' => 'List Company', 'icon' => 'Building2', 'variant' => 'sub', 'sort_order' => 1],
+            ['permission_slug' => 'category_project.read', 'section' => 'Business', 'path' => '/presales-project-categories', 'label' => 'Category Company', 'icon' => 'Tag', 'variant' => 'sub', 'sort_order' => 2],
+            ['permission_slug' => 'sales_category_project.read', 'section' => 'Business', 'path' => '/sales-category-projects', 'label' => 'Category Project', 'icon' => 'Layers', 'variant' => 'sub', 'sort_order' => 3],
 
             ['permission_slug' => 'presales.read', 'section' => 'Operation', 'path' => '/presales', 'label' => 'New Project', 'icon' => 'Activity', 'variant' => 'primary', 'sort_order' => 0],
             ['permission_slug' => 'list_project.read', 'section' => 'Operation', 'path' => '/create-project', 'label' => 'List Project', 'icon' => 'PlusCircle', 'variant' => 'primary', 'sort_order' => 1],

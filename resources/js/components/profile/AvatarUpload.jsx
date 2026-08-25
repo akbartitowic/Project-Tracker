@@ -37,7 +37,7 @@ export default function AvatarUpload({ avatarUrl, name, disabled, onUpdated, onE
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) {
-                throw new Error(data.message || 'Gagal mengunggah foto profil');
+                throw new Error(data.message || 'Failed to upload profile photo');
             }
             if (preview && preview.startsWith('blob:')) {
                 URL.revokeObjectURL(preview);
@@ -65,7 +65,7 @@ export default function AvatarUpload({ avatarUrl, name, disabled, onUpdated, onE
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) {
-                throw new Error(data.message || 'Gagal menghapus foto profil');
+                throw new Error(data.message || 'Failed to remove profile photo');
             }
             if (preview && preview.startsWith('blob:')) {
                 URL.revokeObjectURL(preview);
@@ -84,11 +84,11 @@ export default function AvatarUpload({ avatarUrl, name, disabled, onUpdated, onE
         const file = e.target.files?.[0];
         if (!file) return;
         if (!file.type.startsWith('image/')) {
-            onError?.('Pilih file gambar (PNG, JPG, dll.).');
+            onError?.('Choose an image file (PNG, JPG, etc.).');
             return;
         }
         if (file.size > 4 * 1024 * 1024) {
-            onError?.('Ukuran foto maksimal 4 MB.');
+            onError?.('Photo size must not exceed 4 MB.');
             return;
         }
         if (preview && preview.startsWith('blob:')) {
@@ -104,7 +104,7 @@ export default function AvatarUpload({ avatarUrl, name, disabled, onUpdated, onE
                 type="button"
                 onClick={() => !disabled && !uploading && fileInputRef.current?.click()}
                 disabled={disabled || uploading}
-                title="Ganti foto profil"
+                title="Change profile photo"
                 className={cn(
                     'group relative size-24 rounded-full mx-auto mb-4 shadow-xl overflow-hidden',
                     'flex items-center justify-center',
@@ -115,7 +115,7 @@ export default function AvatarUpload({ avatarUrl, name, disabled, onUpdated, onE
                 )}
             >
                 {preview ? (
-                    <img src={preview} alt={name || 'Foto profil'} className="size-full object-cover" />
+                    <img src={preview} alt={name || 'Profile photo'} className="size-full object-cover" />
                 ) : (
                     <span className="text-4xl font-black text-primary uppercase">{name?.charAt(0)}</span>
                 )}
@@ -150,7 +150,7 @@ export default function AvatarUpload({ avatarUrl, name, disabled, onUpdated, onE
                     disabled={uploading}
                     className="flex items-center gap-1 text-[11px] text-rose-500 hover:text-rose-600 font-medium -mt-1 mb-2"
                 >
-                    <Trash2 className="size-3" /> Hapus foto
+                    <Trash2 className="size-3" /> Remove photo
                 </button>
             )}
         </div>

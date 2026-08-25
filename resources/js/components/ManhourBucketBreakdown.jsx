@@ -9,25 +9,25 @@ const formatPercent = (value) => `${Number(value || 0).toFixed(1)}%`;
 
 export default function ManhourBucketBreakdown({ buckets, overflowHours, hasTopup, compact = false }) {
     if (!buckets?.length) {
-        return <p className="text-xs text-slate-500 italic">Tidak ada kuota manhour.</p>;
+        return <p className="text-xs text-slate-500 italic">No manhour quota.</p>;
     }
 
     return (
         <div className={compact ? 'space-y-2' : 'space-y-3'}>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-                <strong className="text-slate-700 dark:text-slate-300">FIFO:</strong> konsumsi menguras{' '}
-                <strong>Initial</strong> dulu, lalu <strong>Top Up #1</strong>, <strong>#2</strong>, … sesuai urutan tanggal.
+                <strong className="text-slate-700 dark:text-slate-300">FIFO:</strong> consumption drains{' '}
+                <strong>Initial</strong> first, then <strong>Top Up #1</strong>, <strong>#2</strong>, … in date order.
             </p>
             <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
                 <table className="w-full text-xs">
                     <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-500 uppercase tracking-wide">
                         <tr>
-                            <th className="text-left px-3 py-2 font-medium">Urutan / Pool</th>
-                            <th className="text-right px-3 py-2 font-medium">Kuota</th>
-                            <th className="text-right px-3 py-2 font-medium">Terpakai</th>
-                            <th className="text-right px-3 py-2 font-medium">Sisa</th>
-                            <th className="text-right px-3 py-2 font-medium">Sisa %</th>
-                            {!compact && <th className="text-left px-3 py-2 font-medium hidden sm:table-cell">Catatan</th>}
+                            <th className="text-left px-3 py-2 font-medium">Order / Pool</th>
+                            <th className="text-right px-3 py-2 font-medium">Quota</th>
+                            <th className="text-right px-3 py-2 font-medium">Used</th>
+                            <th className="text-right px-3 py-2 font-medium">Remaining</th>
+                            <th className="text-right px-3 py-2 font-medium">Remaining %</th>
+                            {!compact && <th className="text-left px-3 py-2 font-medium hidden sm:table-cell">Notes</th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -78,7 +78,7 @@ export default function ManhourBucketBreakdown({ buckets, overflowHours, hasTopu
             </div>
             {hasTopup && Number(overflowHours) > 0 && (
                 <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
-                    Alokasi melebihi total kuota (Initial + semua Top Up): +{formatHours(overflowHours)}h.
+                    Allocation exceeds the total quota (Initial + all Top Ups): +{formatHours(overflowHours)}h.
                 </p>
             )}
         </div>
