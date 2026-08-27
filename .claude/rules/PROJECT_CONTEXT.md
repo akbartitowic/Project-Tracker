@@ -78,6 +78,7 @@
 - [x] Review Config (evaluation cycles, bobot per pertanyaan, skala skor 1–10)
 - [x] Review (trigger & monitor status)
 - [x] Public Review Link (share ke klien eksternal tanpa login)
+- [x] Nonaktifkan (exclude) submission review — toggle per submission di modal project (`/review?project=X`), kolom `project_reviews.excluded_at`/`excluded_by`, endpoint `PATCH /projects/{id}/reviews/{reviewId}/exclusion` (`review.update`). Submission excluded tetap tersimpan & tampil di history (redup + badge "Tidak dihitung") tapi di-skip dari Skor Overall, radar chart, dan proporsi dashboard. Reversible. Tidak ada hapus permanen. Tidak mempengaruhi gate `max_submissions`/`one_per_user`.
 
 ### Integration
 - [x] Integration Projects

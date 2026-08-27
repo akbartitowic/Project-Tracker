@@ -304,6 +304,7 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/projects/{id}/reviews/trigger-status', [ProjectReviewController::class, 'triggerStatus'])->middleware('permission:review.read');
     Route::get('/projects/{id}/reviews', [ProjectReviewController::class, 'index'])->middleware('permission:review.read');
     Route::get('/projects/{id}/reviews/{reviewId}', [ProjectReviewController::class, 'show'])->middleware('permission:review.read');
+    Route::patch('/projects/{id}/reviews/{reviewId}/exclusion', [ProjectReviewController::class, 'updateExclusion'])->middleware('permission:review.update');
     Route::post('/projects/{id}/evaluations/{evalId}/reviews', [ProjectReviewController::class, 'store'])->middleware('permission:review.create');
 
     // 16. Review Tokens (shareable links)

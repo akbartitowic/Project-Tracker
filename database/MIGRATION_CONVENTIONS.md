@@ -47,6 +47,7 @@ Keep total length **&lt; 48 chars** when possible.
 | task_field_changes | `tfc` |
 | password_histories | `ph` |
 | announcements | `an` |
+| project_reviews | `prv` |
 
 Add a new row here when you introduce a new table.
 

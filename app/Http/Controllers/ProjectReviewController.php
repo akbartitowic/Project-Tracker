@@ -11,11 +11,14 @@ use App\Models\ReviewQuestion;
 use App\Models\ReviewToken;
 use App\Models\Task;
 use App\Support\ProjectAccess;
+use App\Traits\LogActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProjectReviewController extends Controller
 {
+    use LogActivity;
+
     /**
      * GET /review/projects
      * Lightweight project list (id, name, methodology, status, review_enabled)
@@ -67,7 +70,10 @@ class ProjectReviewController extends Controller
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
-        $reviews = ProjectReview::with(['evaluation', 'submitter:id,name', 'answers.question'])
+        // Excluded submissions are returned too (so the history list can show
+        // them greyed out and let an editor toggle them back on) — they're only
+        // filtered out of the aggregation queries below.
+        $reviews = ProjectReview::with(['evaluation', 'submitter:id,name', 'answers.question', 'excludedBy:id,name'])
             ->where('project_id', $projectId)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -148,6 +154,7 @@ class ProjectReviewController extends Controller
         $avgByQuestion = ProjectReviewAnswer::query()
             ->whereIn('question_id', $questionIds)
             ->whereHas('review', function ($q) use ($validated, $user) {
+                $q->whereNull('excluded_at');
                 if (!empty($validated['project_ids'])) {
                     $q->whereIn('project_id', $validated['project_ids']);
                 } else {
@@ -204,7 +211,7 @@ class ProjectReviewController extends Controller
         // (one cycle) as clean as before.
         $multiCycle = $evals->count() > 1;
 
-        $reviewsQuery = ProjectReview::whereIn('evaluation_id', $evals->pluck('id'));
+        $reviewsQuery = ProjectReview::whereIn('evaluation_id', $evals->pluck('id'))->whereNull('excluded_at');
         ProjectAccess::applyMemberProjectScope($reviewsQuery, 'project_id', $user);
         if (!empty($requestedProjectIds)) {
             $reviewsQuery->whereIn('project_id', $requestedProjectIds);
@@ -220,6 +227,7 @@ class ProjectReviewController extends Controller
             ->whereIn('project_review_answers.question_id', $questionIds)
             ->whereIn('project_reviews.evaluation_id', $evals->pluck('id'))
             ->whereIn('project_reviews.project_id', $projectIds)
+            ->whereNull('project_reviews.excluded_at')
             ->groupBy('project_reviews.project_id', 'project_reviews.evaluation_id', 'project_review_answers.question_id')
             ->selectRaw('project_reviews.project_id, project_reviews.evaluation_id, project_review_answers.question_id, AVG(project_review_answers.score) as avg_score')
             ->get();
@@ -304,8 +312,11 @@ class ProjectReviewController extends Controller
             ->groupBy('evaluation_id');
 
         $summary = $evals->map(function ($eval) use ($projectId, $tokensByEval) {
+            // Excluded submissions don't count: the card score, "submitted"
+            // state and the Overall average all ignore them.
             $latest = ProjectReview::where('project_id', $projectId)
                 ->where('evaluation_id', $eval->id)
+                ->counted()
                 ->latest()
                 ->first();
 
@@ -506,7 +517,7 @@ class ProjectReviewController extends Controller
             ]);
         }
 
-        return response()->json(['data' => $this->serializeReview($review->load(['evaluation', 'submitter:id,name', 'answers.question']))], 201);
+        return response()->json(['data' => $this->serializeReview($review->load(['evaluation', 'submitter:id,name', 'answers.question', 'excludedBy:id,name']))], 201);
     }
 
     /**
@@ -520,9 +531,48 @@ class ProjectReviewController extends Controller
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
-        $review = ProjectReview::with(['evaluation.questions', 'submitter:id,name', 'answers.question'])
+        $review = ProjectReview::with(['evaluation.questions', 'submitter:id,name', 'answers.question', 'excludedBy:id,name'])
             ->where('project_id', $projectId)
             ->findOrFail($reviewId);
+
+        return response()->json(['data' => $this->serializeReview($review)]);
+    }
+
+    /**
+     * PATCH /projects/{id}/reviews/{reviewId}/exclusion
+     * Toggle whether a submission counts toward aggregations. Non-destructive:
+     * the submission and its answers stay intact and keep showing in the
+     * history list — they're just skipped by every score calculation while
+     * excluded_at is set. Reversible by sending { "excluded": false }.
+     */
+    public function updateExclusion(Request $request, int $projectId, int $reviewId)
+    {
+        $user = $request->user();
+        if (!ProjectAccess::canAccessProject($user, $projectId)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $validated = $request->validate(['excluded' => 'required|boolean']);
+
+        $review = ProjectReview::with(['evaluation', 'submitter:id,name', 'answers.question'])
+            ->where('project_id', $projectId)
+            ->findOrFail($reviewId);
+
+        if ($validated['excluded']) {
+            $review->excluded_at = now();
+            $review->excluded_by = $user->id;
+        } else {
+            $review->excluded_at = null;
+            $review->excluded_by = null;
+        }
+        $review->save();
+        $review->load('excludedBy:id,name');
+
+        $this->log(
+            'Review',
+            $validated['excluded'] ? 'Excluded Review from Scoring' : 'Re-included Review in Scoring',
+            "Review #{$review->id} · project #{$projectId} · {$review->evaluation?->name}"
+        );
 
         return response()->json(['data' => $this->serializeReview($review)]);
     }
@@ -541,6 +591,9 @@ class ProjectReviewController extends Controller
             'trigger_label'     => $r->evaluation?->trigger_label,
             'total_score'       => $r->total_score,
             'notes'             => $r->notes,
+            'is_excluded'       => $r->excluded_at !== null,
+            'excluded_at'       => $r->excluded_at?->toIso8601String(),
+            'excluded_by'       => $r->excludedBy?->name,
             'submitted_at'      => $r->created_at?->toIso8601String(),
             'submitted_by'      => $submitterName,
             'reviewer_name'     => $r->reviewer_name,

@@ -9,7 +9,7 @@ import {
     KanbanSquare, ChevronRight, Settings2, Clock,
     Send, ArrowLeft, Info, MessageSquare, Plus, AlertCircle,
     Link as LinkIcon, User, CheckCircle2, ClipboardCheck, Clipboard, MailCheck, MailX,
-    LayoutDashboard, Radar as RadarIcon, ChevronDown,
+    LayoutDashboard, Radar as RadarIcon, ChevronDown, EyeOff, RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -264,7 +264,7 @@ function ReviewSubmitForm({ project, evaluation, onSubmitted, onCancel }) {
 }
 
 /* ── Review detail (answers summary of one review) ── */
-function ReviewDetail({ review }) {
+function ReviewDetail({ review, canConfig, onToggleExclude, toggling }) {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -276,9 +276,49 @@ function ReviewDetail({ review }) {
                 </div>
                 <div className="flex items-center gap-2">
                     <LevelBadge score={review.total_score} />
-                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{review.total_score?.toFixed(1)}%</span>
+                    <span className={cn(
+                        'text-sm font-bold text-slate-700 dark:text-slate-200',
+                        review.is_excluded && 'line-through text-slate-400 dark:text-slate-500',
+                    )}>{review.total_score?.toFixed(1)}%</span>
                 </div>
             </div>
+
+            {/* Exclusion status + toggle */}
+            {(review.is_excluded || canConfig) && (
+                <div className={cn(
+                    'rounded-lg border px-3 py-2.5 flex items-center justify-between gap-3',
+                    review.is_excluded
+                        ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/10'
+                        : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40',
+                )}>
+                    <div className="flex items-start gap-2 min-w-0">
+                        <EyeOff className={cn('size-3.5 shrink-0 mt-0.5', review.is_excluded ? 'text-amber-500' : 'text-slate-400')} />
+                        <p className={cn('text-xs', review.is_excluded ? 'text-amber-700 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400')}>
+                            {review.is_excluded
+                                ? <>Penilaian ini <strong>tidak dihitung</strong> di Skor Overall, radar, maupun dashboard{review.excluded_by ? ` · dinonaktifkan oleh ${review.excluded_by}` : ''}.</>
+                                : <>Penilaian ini <strong>dihitung</strong> di Skor Overall, radar, dan dashboard.</>}
+                        </p>
+                    </div>
+                    {canConfig && onToggleExclude && (
+                        <Button
+                            size="sm" variant="outline"
+                            disabled={toggling}
+                            className={cn(
+                                'h-7 text-xs gap-1.5 shrink-0',
+                                review.is_excluded
+                                    ? 'text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                                    : 'text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20',
+                            )}
+                            onClick={() => onToggleExclude(review)}
+                        >
+                            {toggling
+                                ? <Loader2 className="size-3 animate-spin" />
+                                : review.is_excluded ? <RotateCcw className="size-3" /> : <EyeOff className="size-3" />}
+                            {review.is_excluded ? 'Hitung kembali' : 'Tandai tidak dihitung'}
+                        </Button>
+                    )}
+                </div>
+            )}
 
             <div className="space-y-3">
                 {review.answers?.map((a, idx) => {
@@ -750,6 +790,7 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
     const [loading,   setLoading]   = useState(true);
     const [activeEval, setActiveEval] = useState(null); // evaluation object for submit form
     const [detailReview, setDetailReview] = useState(null); // review object to view answers
+    const [togglingExclude, setTogglingExclude] = useState(false);
     const [evals,     setEvals]     = useState([]);
     const [pendingEmails, setPendingEmails] = useState([]);
     const [savingEmails,  setSavingEmails]  = useState(false);
@@ -795,6 +836,25 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
         finally { setSavingEmails(false); }
     };
 
+    // Toggle whether a submission counts toward Overall / radar / dashboard.
+    // Non-destructive — the submission stays in the history list either way.
+    const handleToggleExclude = async (review) => {
+        const excluded = !review.is_excluded;
+        if (excluded && !window.confirm(
+            'Nonaktifkan penilaian ini? Skornya tidak akan dihitung di Skor Overall, radar chart, maupun dashboard. Bisa diaktifkan lagi kapan saja.'
+        )) return;
+        setTogglingExclude(true);
+        try {
+            const res = await fetchAPI(`/projects/${project.id}/reviews/${review.id}/exclusion`, {
+                method: 'PATCH',
+                body: JSON.stringify({ excluded }),
+            });
+            setDetailReview(res.data);
+            await load();
+        } catch (e) { alert('Gagal memperbarui status penilaian: ' + e.message); }
+        finally { setTogglingExclude(false); }
+    };
+
     if (!project) return null;
 
     return (
@@ -817,7 +877,12 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
                             <ArrowLeft className="size-3" /> Kembali ke ringkasan
                         </button>
                         <p className="text-sm font-semibold text-slate-800 dark:text-white">{detailReview.evaluation_name}</p>
-                        <ReviewDetail review={detailReview} />
+                        <ReviewDetail
+                            review={detailReview}
+                            canConfig={canConfig}
+                            onToggleExclude={handleToggleExclude}
+                            toggling={togglingExclude}
+                        />
                     </div>
                 ) : activeEval ? (
                     <div className="space-y-3">
@@ -970,11 +1035,19 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
                                                     <button
                                                         key={r.id}
                                                         onClick={() => setDetailReview(r)}
-                                                        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+                                                        className={cn(
+                                                            'w-full flex items-center justify-between px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left',
+                                                            r.is_excluded && 'opacity-55',
+                                                        )}
                                                     >
                                                         <div>
-                                                            <p className="text-xs text-slate-600 dark:text-slate-300">
-                                                                Oleh <strong>{r.submitted_by}</strong>
+                                                            <p className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                                                <span>Oleh <strong>{r.submitted_by}</strong></span>
+                                                                {r.is_excluded && (
+                                                                    <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-semibold px-1.5 py-0.5">
+                                                                        <EyeOff className="size-2.5" /> Tidak dihitung
+                                                                    </span>
+                                                                )}
                                                             </p>
                                                             <p className="text-[10px] text-slate-400">
                                                                 {new Date(r.submitted_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -982,7 +1055,10 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <LevelBadge score={r.total_score} />
-                                                            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{r.total_score?.toFixed(1)}%</span>
+                                                            <span className={cn(
+                                                                'text-xs font-semibold text-slate-600 dark:text-slate-300',
+                                                                r.is_excluded && 'line-through',
+                                                            )}>{r.total_score?.toFixed(1)}%</span>
                                                             <ChevronRight className="size-3.5 text-slate-400" />
                                                         </div>
                                                     </button>
