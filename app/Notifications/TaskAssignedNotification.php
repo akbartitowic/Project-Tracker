@@ -17,7 +17,7 @@ class TaskAssignedNotification extends Notification
     {
         $channels = ['database'];
 
-        if ($notifiable->email && $notifiable->task_email_notifications_enabled) {
+        if ($notifiable->email && $notifiable->wantsEmailFor('task_assigned')) {
             $channels[] = 'mail';
         }
 

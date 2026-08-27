@@ -29,7 +29,11 @@ class User extends Authenticatable
         'role',
         'phone_number',
         'status',
-        'task_email_notifications_enabled',
+        'notify_task_assigned',
+        'notify_task_due_reminder',
+        'notify_task_mention',
+        'notify_mh_threshold',
+        'notify_login_alert',
         'timezone',
     ];
 
@@ -54,7 +58,11 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'password_changed_at' => 'datetime',
-            'task_email_notifications_enabled' => 'boolean',
+            'notify_task_assigned' => 'boolean',
+            'notify_task_due_reminder' => 'boolean',
+            'notify_task_mention' => 'boolean',
+            'notify_mh_threshold' => 'boolean',
+            'notify_login_alert' => 'boolean',
         ];
     }
 
@@ -84,6 +92,24 @@ class User extends Authenticatable
             return true;
         }
         return $this->password_changed_at->lt(now()->subMonths(6));
+    }
+
+    /**
+     * Per-user email opt-in, one flag per notification type (Notification Center).
+     * `$type` matches the `type` value already stored in each notification's
+     * `toDatabase()` payload. In-app (database channel) notifications are never
+     * gated by this — only whether the `mail` channel gets added in `via()`.
+     */
+    public function wantsEmailFor(string $type): bool
+    {
+        return match ($type) {
+            'task_assigned' => (bool) $this->notify_task_assigned,
+            'task_due_reminder' => (bool) $this->notify_task_due_reminder,
+            'task_mention' => (bool) $this->notify_task_mention,
+            'mh_topup_threshold' => (bool) $this->notify_mh_threshold,
+            'login_alert' => (bool) $this->notify_login_alert,
+            default => true,
+        };
     }
 
     public function hasPermission($slug)

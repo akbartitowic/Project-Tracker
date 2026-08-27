@@ -39,7 +39,9 @@ class PermissionCatalog
             'Project Roles' => ['create', 'read', 'update', 'delete'],
             'System Log' => ['read', 'delete'],
             'Settings' => ['read', 'update', 'reset'],
+            'Announcements' => ['create', 'read', 'update', 'delete'],
             'Profile' => ['read', 'update'],
+            'Notification Center' => ['read', 'update'],
             'Modules Management' => ['create', 'read', 'update', 'delete'],
         ];
     }
@@ -53,6 +55,8 @@ class PermissionCatalog
             'project_board.update',
             'profile.read',
             'profile.update',
+            'notification_center.read',
+            'notification_center.update',
         ];
     }
 
@@ -64,6 +68,8 @@ class PermissionCatalog
             'project_board.update',
             'profile.read',
             'profile.update',
+            'notification_center.read',
+            'notification_center.update',
         ];
     }
 

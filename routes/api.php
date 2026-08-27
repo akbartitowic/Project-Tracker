@@ -40,6 +40,7 @@ use App\Http\Controllers\ProjectReviewController;
 use App\Http\Controllers\ReviewTokenController;
 use App\Http\Controllers\PublicReviewController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\AnnouncementController;
 
 // Public review submission — no auth required
 Route::middleware('throttle:30,1')->prefix('public')->group(function () {
@@ -51,6 +52,7 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10
 Route::post('/signup', [AuthController::class, 'signup'])
     ->middleware(['throttle:5,1', 'signup.enabled']);
 Route::get('/branding', [SettingController::class, 'branding']);
+Route::get('/announcements/active', [AnnouncementController::class, 'active']);
 
 Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
@@ -59,6 +61,15 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::post('/profile/avatar', [AuthController::class, 'uploadAvatar'])->middleware('permission:profile.update');
     Route::delete('/profile/avatar', [AuthController::class, 'removeAvatar'])->middleware('permission:profile.update');
     Route::post('/force-password-change', [AuthController::class, 'forcePasswordChange']);
+    Route::get('/notification-preferences', [AuthController::class, 'notificationPreferences'])->middleware('permission:notification_center.read');
+    Route::put('/notification-preferences', [AuthController::class, 'updateNotificationPreferences'])->middleware('permission:notification_center.update');
+
+    Route::get('/announcements', [AnnouncementController::class, 'index'])->middleware('permission:announcements.read');
+    Route::post('/announcements', [AnnouncementController::class, 'store'])->middleware('permission:announcements.create');
+    Route::put('/announcements/{id}', [AnnouncementController::class, 'update'])->middleware('permission:announcements.update');
+    Route::delete('/announcements/{id}', [AnnouncementController::class, 'destroy'])->middleware('permission:announcements.delete');
+    Route::post('/announcements/{id}/attachment', [AnnouncementController::class, 'uploadAttachment'])->middleware('permission:announcements.update');
+    Route::delete('/announcements/{id}/attachment', [AnnouncementController::class, 'removeAttachment'])->middleware('permission:announcements.update');
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/notifications/unread', [NotificationController::class, 'unread']);

@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
     LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, BarChart3, Settings, Moon, Sun,
     Activity, Wallet, Tag, Lock, LogOut, User, ClipboardList, FileText, PieChart, ClipboardCheck,
-    Building2, Handshake, Layers, Plug, Cable, Gauge, Star, LayoutGrid, HelpCircle,
+    Building2, Handshake, Layers, Plug, Cable, Gauge, Star, LayoutGrid, HelpCircle, Bell, Megaphone,
     ChevronLeft, ChevronRight,
 } from "lucide-react";
 import AppLogo from '../AppLogo';
@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 const ICONS = {
     LayoutDashboard, PlusCircle, KanbanSquare, Users, Shield, BarChart3, Settings,
     Activity, Wallet, Tag, Lock, User, ClipboardList, FileText, PieChart, ClipboardCheck,
-    Building2, Handshake, Layers, Plug, Cable, Gauge, Star, LayoutGrid,
+    Building2, Handshake, Layers, Plug, Cable, Gauge, Star, LayoutGrid, Bell, Megaphone,
 };
 
 /** Sidebar section header display order — not part of `menu_items` data since it's a fixed, stable taxonomy. */

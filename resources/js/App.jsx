@@ -13,6 +13,8 @@ import SystemRoles from './pages/SystemRoles';
 import Modules from './pages/Modules';
 import SystemSettings from './pages/SystemSettings';
 import Profile from './pages/Profile';
+import NotificationCenter from './pages/NotificationCenter';
+import Announcements from './pages/Announcements';
 
 import Reports from './pages/Reports';
 import Presales from './pages/Presales';
@@ -123,7 +125,9 @@ function App() {
           <Route path="modules" element={<Modules />} />
           <Route path="project-roles" element={<ProjectRoles />} />
           <Route path="settings" element={<SystemSettings />} />
+          <Route path="announcements" element={<Announcements />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="notification-center" element={<NotificationCenter />} />
 
           <Route path="reports" element={<Reports />} />
           <Route path="generate-report" element={<GenerateReport />} />

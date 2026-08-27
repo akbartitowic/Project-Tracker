@@ -127,7 +127,7 @@ class AuthController extends Controller
      */
     private function sendLoginNotification(Request $request, User $user): void
     {
-        if (!$user->email) {
+        if (!$user->email || !$user->wantsEmailFor('login_alert')) {
             return;
         }
 
@@ -185,7 +185,6 @@ class AuthController extends Controller
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'phone_number' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8|confirmed',
-            'task_email_notifications_enabled' => 'nullable|boolean',
             'timezone' => 'nullable|timezone',
         ]);
 
@@ -193,9 +192,6 @@ class AuthController extends Controller
         $user->nickname = $validated['nickname'] ?: null;
         $user->email = $validated['email'];
         $user->phone_number = $validated['phone_number'] ?? $user->phone_number;
-        if (array_key_exists('task_email_notifications_enabled', $validated)) {
-            $user->task_email_notifications_enabled = (bool) $validated['task_email_notifications_enabled'];
-        }
         if (array_key_exists('timezone', $validated)) {
             $user->timezone = $validated['timezone'] ?: 'Asia/Jakarta';
         }
@@ -265,6 +261,61 @@ class AuthController extends Controller
         if ($path && Storage::disk('public')->exists($path)) {
             Storage::disk('public')->delete($path);
         }
+    }
+
+    private const NOTIFICATION_TYPES = [
+        'task_assigned',
+        'task_due_reminder',
+        'task_mention',
+        'mh_topup_threshold',
+        'login_alert',
+    ];
+
+    /** @return array<string, bool> */
+    private function serializeNotificationPreferences(User $user): array
+    {
+        return [
+            'task_assigned' => (bool) $user->notify_task_assigned,
+            'task_due_reminder' => (bool) $user->notify_task_due_reminder,
+            'task_mention' => (bool) $user->notify_task_mention,
+            'mh_topup_threshold' => (bool) $user->notify_mh_threshold,
+            'login_alert' => (bool) $user->notify_login_alert,
+        ];
+    }
+
+    public function notificationPreferences(Request $request)
+    {
+        return response()->json([
+            'status' => 'success',
+            'preferences' => $this->serializeNotificationPreferences($request->user()),
+        ]);
+    }
+
+    public function updateNotificationPreferences(Request $request)
+    {
+        $user = $request->user();
+
+        $rules = [];
+        foreach (self::NOTIFICATION_TYPES as $type) {
+            $rules[$type] = 'required|boolean';
+        }
+        $validated = $request->validate($rules);
+
+        $user->update([
+            'notify_task_assigned' => $validated['task_assigned'],
+            'notify_task_due_reminder' => $validated['task_due_reminder'],
+            'notify_task_mention' => $validated['task_mention'],
+            'notify_mh_threshold' => $validated['mh_topup_threshold'],
+            'notify_login_alert' => $validated['login_alert'],
+        ]);
+
+        $this->log('Auth', 'Updated Notification Preferences', "User: {$user->name}");
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Notification preferences updated successfully',
+            'preferences' => $this->serializeNotificationPreferences($user),
+        ]);
     }
 
     /**

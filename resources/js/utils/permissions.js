@@ -19,7 +19,9 @@ const ROUTE_PERMISSION_MAP = [
     { path: '/system-logs', permission: 'system_log.read' },
     { path: '/integrasi/projects', permission: 'integrasi.read' },
     { path: '/settings', permission: 'settings.read' },
+    { path: '/announcements', permission: 'announcements.read' },
     { path: '/profile', permission: 'profile.read' },
+    { path: '/notification-center', permission: 'notification_center.read' },
     { path: '/', permission: 'dashboard.read' },
 ];
 

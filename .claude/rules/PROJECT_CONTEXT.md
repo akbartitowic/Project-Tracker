@@ -34,6 +34,7 @@
 - [x] RBAC — Modules/Menus sebagai entitas DB nyata (tabel `modules`, FK dari `permissions`) + halaman admin "Modules" (`/modules`, read + toggle `is_active`/`sort_order`; nama modul tetap code-defined via `PermissionCatalog::menuActionMap()`). Menonaktifkan modul benar-benar memblokir akses (middleware + sidebar), bukan cuma kosmetik.
 - [x] Manajemen User (Team Users)
 - [x] Password Policy — wajib ganti password tiap 6 bulan (`User::isPasswordExpired()`), tidak boleh reuse 3 password terakhir (`App\Support\PasswordPolicy`, tabel `password_histories`), dipaksa ganti password via halaman `/force-change-password` saat login jika sudah expired
+- [x] Notification Center (`/notification-center`) — tiap user atur sendiri 5 toggle email notifikasi independen (task assigned, due reminder, mention, MH top-up threshold, login alert), gantikan toggle bundel lama di Profile. Modul RBAC sendiri (`notification_center.read`/`update`), digrant otomatis ke semua role yang sudah punya akses Profile.
 
 ### Core Project
 - [x] Project List
@@ -89,3 +90,4 @@
 - [x] System Settings (branding, SMTP, app config)
 - [x] System Logs (activity log audit trail)
 - [x] Report Schedules (email otomatis terjadwal)
+- [x] Announcements (`/announcements`) — broadcast informasi (info/success/warning/danger, optional expiry, optional lampiran dokumen max 10MB) yang tampil di halaman login untuk semua orang; publik lewat endpoint tanpa auth. Modul RBAC Admin-only secara default.

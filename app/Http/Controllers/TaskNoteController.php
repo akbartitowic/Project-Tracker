@@ -138,7 +138,7 @@ class TaskNoteController extends Controller
         $members = User::query()
             ->join('project_members', 'project_members.user_id', '=', 'users.id')
             ->where('project_members.project_id', $task->project_id)
-            ->select('users.id', 'users.name', 'users.email', 'users.task_email_notifications_enabled')
+            ->select('users.id', 'users.name', 'users.email', 'users.notify_task_mention')
             ->get()
             ->unique('id');
 
