@@ -15,4 +15,9 @@ class ProjectReviewAnswer extends Model
     {
         return $this->belongsTo(ReviewQuestion::class, 'question_id');
     }
+
+    public function review(): BelongsTo
+    {
+        return $this->belongsTo(ProjectReview::class, 'review_id');
+    }
 }

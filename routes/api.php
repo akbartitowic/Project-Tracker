@@ -288,6 +288,7 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::delete('/review/questions/{id}', [ReviewController::class, 'deleteQuestion'])->middleware('permission:review.delete');
 
     // 15. Project Review Submissions
+    Route::get('/review/radar', [ProjectReviewController::class, 'radar'])->middleware('permission:review.read');
     Route::get('/projects/{id}/reviews/summary', [ProjectReviewController::class, 'summary'])->middleware('permission:review.read');
     Route::get('/projects/{id}/reviews/trigger-status', [ProjectReviewController::class, 'triggerStatus'])->middleware('permission:review.read');
     Route::get('/projects/{id}/reviews', [ProjectReviewController::class, 'index'])->middleware('permission:review.read');

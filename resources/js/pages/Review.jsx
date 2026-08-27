@@ -9,7 +9,7 @@ import {
     KanbanSquare, ChevronRight, Settings2, Clock,
     Send, ArrowLeft, Info, MessageSquare, Plus, AlertCircle,
     Link as LinkIcon, User, CheckCircle2, ClipboardCheck, Clipboard, MailCheck, MailX,
-    LayoutDashboard,
+    LayoutDashboard, Radar as RadarIcon, ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 const fmtDateWIB = (iso) => {
@@ -1100,6 +1101,355 @@ function SegmentedBarChart({ title, headline, headlineSub, segments, emptyLabel,
     );
 }
 
+/* ── Radar/spider chart — pure SVG, no chart lib needed. Axes are numbered
+   positions (1, 2, 3…), not question text, since different evaluation cycles
+   can have different question sets; that's what keeps cycles/projects
+   comparable on one chart, same idea as SegmentedBarChart above. Each axis
+   label and data point carries a native tooltip (`title`) with the actual
+   question text — same lightweight tooltip convention used everywhere else
+   in this file (badges, share-link rows, etc.), no custom hover component. ── */
+const RADAR_COLORS = ['#0f9c8f', '#6366f1', '#f59e0b', '#ef4444', '#0ea5e9', '#a855f7'];
+
+// Curated palette for the first few series (brand-consistent), then falls
+// back to evenly spaced hues so an arbitrary number of projects still stay
+// visually distinguishable instead of repeating colors.
+function seriesColor(i, total) {
+    if (i < RADAR_COLORS.length) return RADAR_COLORS[i];
+    const hue = Math.round((360 * i) / Math.max(total, 1));
+    return `hsl(${hue}, 62%, 45%)`;
+}
+
+function RadarChart({ axes, series, maxValue = 10, size = 240 }) {
+    const n = axes.length;
+    const center = size / 2;
+    const radius = center - 26;
+    const ringCount = 5;
+
+    if (n < 3 || series.length === 0) {
+        return (
+            <div className="flex items-center justify-center text-xs text-slate-400 italic" style={{ height: size }}>
+                Belum ada data untuk filter ini.
+            </div>
+        );
+    }
+
+    const angleFor = (i) => (Math.PI * 2 * i) / n - Math.PI / 2;
+    const pointFor = (i, value) => {
+        const r = (Math.max(value, 0) / maxValue) * radius;
+        const a = angleFor(i);
+        return [center + r * Math.cos(a), center + r * Math.sin(a)];
+    };
+
+    return (
+        <svg width={size} height={size} className="mx-auto overflow-visible">
+            {Array.from({ length: ringCount }, (_, li) => {
+                const r = ((li + 1) / ringCount) * radius;
+                const pts = axes.map((_, i) => {
+                    const a = angleFor(i);
+                    return `${center + r * Math.cos(a)},${center + r * Math.sin(a)}`;
+                }).join(' ');
+                return <polygon key={li} points={pts} fill="none" className="stroke-slate-200 dark:stroke-slate-700" strokeWidth="1" />;
+            })}
+            {axes.map((_, i) => {
+                const a = angleFor(i);
+                return (
+                    <line
+                        key={i}
+                        x1={center} y1={center}
+                        x2={center + radius * Math.cos(a)} y2={center + radius * Math.sin(a)}
+                        className="stroke-slate-200 dark:stroke-slate-700" strokeWidth="1"
+                    />
+                );
+            })}
+            {axes.map((label, i) => {
+                const a = angleFor(i);
+                const lx = center + (radius + 13) * Math.cos(a);
+                const ly = center + (radius + 13) * Math.sin(a);
+                // Different series can ask a different question at the same
+                // position — list every distinct one so the label tooltip
+                // stays accurate instead of picking just the first series.
+                const questionsHere = [...new Set(series.map(s => s.questions?.[i]).filter(Boolean))];
+                return (
+                    <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" className="fill-slate-400 dark:fill-slate-500 text-[10px] font-medium">
+                        {questionsHere.length > 0 && <title>{questionsHere.join('\n\n')}</title>}
+                        {label}
+                    </text>
+                );
+            })}
+            {series.map((s) => {
+                const pts = axes.map((_, i) => pointFor(i, s.values[i] ?? 0).join(',')).join(' ');
+                return (
+                    <g key={s.key}>
+                        <polygon points={pts} fill={s.color} fillOpacity="0.14" stroke={s.color} strokeWidth="2" />
+                        {axes.map((_, i) => {
+                            const v = s.values[i];
+                            if (v == null) return null;
+                            const [x, y] = pointFor(i, v);
+                            const question = s.questions?.[i];
+                            return (
+                                <circle key={i} cx={x} cy={y} r="2.5" fill={s.color}>
+                                    <title>{`${s.label}${question ? ` — ${question}` : ` — poin ${i + 1}`}\nSkor: ${v}/10`}</title>
+                                </circle>
+                            );
+                        })}
+                    </g>
+                );
+            })}
+        </svg>
+    );
+}
+
+/* ── One methodology's radar panel. Two ways to compare, picked via the
+   "Bandingkan" toggle:
+   - Antar Siklus: one line per active evaluation cycle (or a single one when
+     a specific cycle is picked); Project filter scopes whose submitted
+     reviews feed the averages ("Seluruh Project" = aggregate).
+   - Antar Project: one line per project that has submitted reviews for one
+     specific cycle (comparing projects only makes sense against a single,
+     fixed question set) — Project filter is replaced by "every project with
+     data", each its own color. ── */
+function ReviewRadarPanel({ methodology, projects }) {
+    const methodologyProjects = useMemo(
+        () => projects.filter(p => p.methodology === methodology).sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+        [projects, methodology],
+    );
+
+    const [compareMode,     setCompareMode]     = useState('cycle'); // 'cycle' | 'project'
+    const [evaluations,     setEvaluations]     = useState([]);
+    const [cycleModeProjectIds, setCycleModeProjectIds] = useState([]); // used by compareMode='cycle' — [] means "Seluruh Project" (aggregate all)
+    const [evaluationFilter, setEvaluationFilter] = useState('all'); // used by compareMode='cycle'
+    const [projectModeEvalIds, setProjectModeEvalIds] = useState([]); // used by compareMode='project' — [] means "all loaded cycles"
+    const [projectModeProjectIds, setProjectModeProjectIds] = useState([]); // used by compareMode='project' — [] means "every project with data"
+    const [radar,           setRadar]           = useState(null);
+    const [loading,         setLoading]         = useState(true);
+
+    useEffect(() => {
+        fetchAPI(`/review/evaluations?methodology=${encodeURIComponent(methodology)}`)
+            .then(res => setEvaluations((res.data ?? []).filter(e => e.is_active)))
+            .catch(() => setEvaluations([]));
+    }, [methodology]);
+
+    // Narrows which projects' reviews feed the per-cycle averages; empty = every
+    // accessible project ("Seluruh Project"), a legitimate resting state (unlike
+    // the cycle picker below, there's no "must keep at least one" here).
+    const toggleCycleModeProject = (id) => {
+        setCycleModeProjectIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    };
+
+    // Antar Project mode compares against whichever cycles are toggled on;
+    // empty selection defaults to "every loaded cycle" so switching modes
+    // shows something immediately without needing a separate effect.
+    const activeProjectModeEvalIds = projectModeEvalIds.length > 0 ? projectModeEvalIds : evaluations.map(e => e.id);
+
+    const toggleProjectModeEval = (id) => {
+        setProjectModeEvalIds(prev => {
+            const current = prev.length > 0 ? prev : evaluations.map(e => e.id);
+            if (current.includes(id)) {
+                if (current.length === 1) return current; // keep at least one cycle selected
+                return current.filter(x => x !== id);
+            }
+            return [...current, id];
+        });
+    };
+
+    // Narrows which projects show up as lines; empty = every project that has
+    // data for the selected cycle(s) (the previous, still-default behavior).
+    const toggleProjectModeProject = (id) => {
+        setProjectModeProjectIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    };
+
+    const loadRadar = useCallback(async () => {
+        setLoading(true);
+        const params = new URLSearchParams({ methodology, compare: compareMode });
+
+        if (compareMode === 'cycle') {
+            cycleModeProjectIds.forEach(id => params.append('project_ids[]', id));
+            if (evaluationFilter !== 'all') params.set('evaluation_id', evaluationFilter);
+        } else {
+            activeProjectModeEvalIds.forEach(id => params.append('evaluation_ids[]', id));
+            projectModeProjectIds.forEach(id => params.append('project_ids[]', id));
+        }
+
+        try {
+            const res = await fetchAPI(`/review/radar?${params.toString()}`);
+            setRadar(res.data);
+        } catch {
+            setRadar({ axes: [], series: [] });
+        } finally {
+            setLoading(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- activeProjectModeEvalIds is derived from projectModeEvalIds+evaluations, both already deps
+    }, [methodology, compareMode, cycleModeProjectIds, evaluationFilter, projectModeEvalIds, projectModeProjectIds, evaluations]);
+
+    useEffect(() => { loadRadar(); }, [loadRadar]);
+
+    const cycleModeProjectLabel = cycleModeProjectIds.length === 0
+        ? 'Seluruh Project'
+        : cycleModeProjectIds.length === 1
+            ? (methodologyProjects.find(p => p.id === cycleModeProjectIds[0])?.name ?? '1 Project')
+            : `${cycleModeProjectIds.length} Project dipilih`;
+
+    const projectModeProjectLabel = projectModeProjectIds.length === 0
+        ? 'Seluruh Project'
+        : projectModeProjectIds.length === 1
+            ? (methodologyProjects.find(p => p.id === projectModeProjectIds[0])?.name ?? '1 Project')
+            : `${projectModeProjectIds.length} Project dipilih`;
+
+    const seriesList = radar?.series ?? [];
+    const coloredSeries = seriesList.map((s, i) => ({ ...s, color: seriesColor(i, seriesList.length) }));
+
+    return (
+        <div className="rounded-xl border border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">{methodology}</p>
+                    <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
+                        {[{ key: 'cycle', label: 'Antar Siklus' }, { key: 'project', label: 'Antar Project' }].map(m => (
+                            <button
+                                key={m.key}
+                                type="button"
+                                onClick={() => setCompareMode(m.key)}
+                                className={cn(
+                                    'px-2 py-1 rounded-md text-[10px] font-medium transition-all',
+                                    compareMode === m.key
+                                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                                )}
+                            >
+                                {m.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-1.5">
+                    {compareMode === 'cycle' && (
+                        <>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-7 w-[150px] justify-between text-[11px] font-normal px-2">
+                                        <span className="truncate">{cycleModeProjectLabel}</span>
+                                        <ChevronDown className="size-3 opacity-50 shrink-0" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                                    {methodologyProjects.length === 0 && (
+                                        <p className="px-2 py-1.5 text-xs text-slate-400 italic">Tidak ada project.</p>
+                                    )}
+                                    {methodologyProjects.map(p => (
+                                        <DropdownMenuCheckboxItem
+                                            key={p.id}
+                                            className="text-xs"
+                                            checked={cycleModeProjectIds.includes(p.id)}
+                                            onSelect={(e) => e.preventDefault()}
+                                            onCheckedChange={() => toggleCycleModeProject(p.id)}
+                                        >
+                                            {p.name}
+                                        </DropdownMenuCheckboxItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <Select value={evaluationFilter} onValueChange={setEvaluationFilter}>
+                                <SelectTrigger className="h-7 w-[130px] text-[11px]"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all" className="text-xs">Seluruh Siklus</SelectItem>
+                                    {evaluations.map(e => (
+                                        <SelectItem key={e.id} value={String(e.id)} className="text-xs">{e.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </>
+                    )}
+                    {compareMode === 'project' && (
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-7 w-[150px] justify-between text-[11px] font-normal px-2">
+                                        <span className="truncate">{projectModeProjectLabel}</span>
+                                        <ChevronDown className="size-3 opacity-50 shrink-0" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                                    {methodologyProjects.length === 0 && (
+                                        <p className="px-2 py-1.5 text-xs text-slate-400 italic">Tidak ada project.</p>
+                                    )}
+                                    {methodologyProjects.map(p => (
+                                        <DropdownMenuCheckboxItem
+                                            key={p.id}
+                                            className="text-xs"
+                                            checked={projectModeProjectIds.includes(p.id)}
+                                            onSelect={(e) => e.preventDefault()}
+                                            onCheckedChange={() => toggleProjectModeProject(p.id)}
+                                        >
+                                            {p.name}
+                                        </DropdownMenuCheckboxItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <span className="text-[10px] text-slate-400">Siklus:</span>
+                            {evaluations.map(e => {
+                                const active = activeProjectModeEvalIds.includes(e.id);
+                                return (
+                                    <button
+                                        key={e.id}
+                                        type="button"
+                                        onClick={() => toggleProjectModeEval(e.id)}
+                                        className={cn(
+                                            'text-[10px] font-medium px-2 py-1 rounded-full border transition-colors',
+                                            active
+                                                ? 'bg-primary/10 border-primary/30 text-primary'
+                                                : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300',
+                                        )}
+                                        title={active ? 'Klik untuk sembunyikan dari perbandingan' : 'Klik untuk sertakan dalam perbandingan'}
+                                    >
+                                        {e.name}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+                {loading ? (
+                    <div className="flex items-center justify-center gap-2 text-slate-400 text-xs" style={{ height: 240 }}>
+                        <Loader2 className="size-4 animate-spin" /> Memuat…
+                    </div>
+                ) : (
+                    <RadarChart axes={radar?.axes ?? []} series={coloredSeries} />
+                )}
+
+                {coloredSeries.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-800">
+                        {coloredSeries.map(s => (
+                            <div key={s.key} className="flex items-center gap-1.5 text-xs">
+                                <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                                <span className="text-slate-500 dark:text-slate-400">{s.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/* ── Radar section — Agile Scrum & Waterfall side by side. ── */
+function ReviewRadarSection({ projects }) {
+    return (
+        <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 flex items-center gap-1.5">
+                <RadarIcon className="size-3.5" /> Detail Penilaian per Pertanyaan
+            </p>
+            <div className="grid md:grid-cols-2 gap-3">
+                <ReviewRadarPanel methodology="Agile Scrum" projects={projects} />
+                <ReviewRadarPanel methodology="Waterfall" projects={projects} />
+            </div>
+        </div>
+    );
+}
+
 /* ── Review Dashboard — proportion charts + per-project review status list ── */
 function ReviewDashboard({ summaries, projects, onOpenProject }) {
     const [activeSegment, setActiveSegment] = useState(null); // { title, items: [{ project, subtitle }] }
@@ -1242,6 +1592,9 @@ function ReviewDashboard({ summaries, projects, onOpenProject }) {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Radar chart — per-question average score, split Agile Scrum / Waterfall */}
+            <ReviewRadarSection projects={projects} />
 
             {/* Per-project review status — who's reviewed, who's not, and how long the wait's been */}
             <div className="rounded-xl border border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl overflow-hidden">

@@ -12,6 +12,7 @@ use App\Models\ReviewToken;
 use App\Models\Task;
 use App\Support\ProjectAccess;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProjectReviewController extends Controller
 {
@@ -78,6 +79,206 @@ class ProjectReviewController extends Controller
         }
 
         return response()->json(['data' => $byEval]);
+    }
+
+    /**
+     * GET /review/radar
+     * Average score per question (by position within its evaluation cycle,
+     * not question text — cycles can have different question sets) for the
+     * dashboard's radar chart. Two comparison modes:
+     *  - compare=cycle (default): one series per active cycle (or a single
+     *    one when `evaluation_id` narrows to a specific cycle); `project_ids`
+     *    narrows which projects' reviews feed the averages (one or several),
+     *    omitted = aggregate across every project the requester can see.
+     *  - compare=project: one series per (project, cycle) pair that has
+     *    submitted reviews for any cycle in `evaluation_ids` (at least one
+     *    required). `project_ids` optionally narrows which projects are
+     *    considered, omitted = every project with data. Selecting several
+     *    cycles for the same project surfaces it as separate lines labeled
+     *    "Project — Cycle", so the same project can be compared against
+     *    itself across cycles, not just against other projects.
+     * Each series also carries its questions' text (parallel to `values`) so
+     * the frontend can show what a given axis position actually asked.
+     */
+    public function radar(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'methodology'      => 'required|in:Agile Scrum,Waterfall',
+            'compare'          => 'nullable|in:cycle,project',
+            'project_ids'      => 'nullable|array',
+            'project_ids.*'    => 'integer|exists:projects,id',
+            'evaluation_id'    => 'nullable|integer|exists:review_evaluations,id',
+            'evaluation_ids'   => 'nullable|array',
+            'evaluation_ids.*' => 'integer|exists:review_evaluations,id',
+        ]);
+
+        foreach ($validated['project_ids'] ?? [] as $projectId) {
+            ProjectAccess::assertCanAccessProject($user, $projectId);
+        }
+
+        if (($validated['compare'] ?? 'cycle') === 'project') {
+            $evalIds = $validated['evaluation_ids'] ?? [];
+            if (empty($evalIds)) {
+                return response()->json(['message' => 'Pilih minimal satu siklus evaluasi untuk membandingkan antar project.'], 422);
+            }
+            return response()->json(['data' => $this->radarByProject(
+                $validated['methodology'], $evalIds, $validated['project_ids'] ?? [], $user
+            )]);
+        }
+
+        return response()->json(['data' => $this->radarByCycle($validated, $user)]);
+    }
+
+    private function radarByCycle(array $validated, $user): array
+    {
+        $evalsQuery = ReviewEvaluation::with(['questions' => fn ($q) => $q->where('has_weight', true)->orderBy('order')])
+            ->where('methodology', $validated['methodology'])
+            ->where('is_active', true)
+            ->orderBy('order');
+
+        if (!empty($validated['evaluation_id'])) {
+            $evalsQuery->where('id', $validated['evaluation_id']);
+        }
+
+        $evals       = $evalsQuery->get();
+        $questionIds = $evals->flatMap(fn ($e) => $e->questions->pluck('id'))->all();
+
+        $avgByQuestion = ProjectReviewAnswer::query()
+            ->whereIn('question_id', $questionIds)
+            ->whereHas('review', function ($q) use ($validated, $user) {
+                if (!empty($validated['project_ids'])) {
+                    $q->whereIn('project_id', $validated['project_ids']);
+                } else {
+                    ProjectAccess::applyMemberProjectScope($q, 'project_id', $user);
+                }
+            })
+            ->groupBy('question_id')
+            ->selectRaw('question_id, AVG(score) as avg_score')
+            ->pluck('avg_score', 'question_id');
+
+        // Axes/series text only account for cycles that actually have matching
+        // data — a cycle with more questions but zero submissions must not
+        // inflate the axis count for the cycle(s) that do have data.
+        $series = [];
+        foreach ($evals as $eval) {
+            $values     = [];
+            $questions  = [];
+            $hasAnyData = false;
+
+            foreach ($eval->questions as $i => $q) {
+                $avg = $avgByQuestion->get($q->id);
+                if ($avg !== null) $hasAnyData = true;
+                $values[$i]    = $avg !== null ? round((float) $avg, 2) : null;
+                $questions[$i] = $q->question;
+            }
+
+            if ($hasAnyData) {
+                $series[] = [
+                    'key'       => 'eval_' . $eval->id,
+                    'label'     => $eval->name,
+                    'values'    => array_values($values),
+                    'questions' => array_values($questions),
+                ];
+            }
+        }
+
+        return $this->padSeriesToCommonAxes($series);
+    }
+
+    private function radarByProject(string $methodology, array $evalIds, array $requestedProjectIds, $user): array
+    {
+        $evals = ReviewEvaluation::with(['questions' => fn ($q) => $q->where('has_weight', true)->orderBy('order')])
+            ->where('methodology', $methodology)
+            ->whereIn('id', $evalIds)
+            ->orderBy('order')
+            ->get();
+
+        if ($evals->isEmpty()) {
+            return $this->padSeriesToCommonAxes([]);
+        }
+
+        // Only disambiguate the series label with the cycle name when more
+        // than one cycle is actually being compared — keeps the common case
+        // (one cycle) as clean as before.
+        $multiCycle = $evals->count() > 1;
+
+        $reviewsQuery = ProjectReview::whereIn('evaluation_id', $evals->pluck('id'));
+        ProjectAccess::applyMemberProjectScope($reviewsQuery, 'project_id', $user);
+        if (!empty($requestedProjectIds)) {
+            $reviewsQuery->whereIn('project_id', $requestedProjectIds);
+        }
+        $projectIds = $reviewsQuery->distinct()->pluck('project_id');
+
+        $projects    = Project::whereIn('id', $projectIds)->orderBy('name')->get(['id', 'name']);
+        $questionIds = $evals->flatMap(fn ($e) => $e->questions->pluck('id'))->all();
+
+        // Single grouped query across every project × cycle at once (avoids N+1).
+        $rows = DB::table('project_review_answers')
+            ->join('project_reviews', 'project_reviews.id', '=', 'project_review_answers.review_id')
+            ->whereIn('project_review_answers.question_id', $questionIds)
+            ->whereIn('project_reviews.evaluation_id', $evals->pluck('id'))
+            ->whereIn('project_reviews.project_id', $projectIds)
+            ->groupBy('project_reviews.project_id', 'project_reviews.evaluation_id', 'project_review_answers.question_id')
+            ->selectRaw('project_reviews.project_id, project_reviews.evaluation_id, project_review_answers.question_id, AVG(project_review_answers.score) as avg_score')
+            ->get();
+
+        $avgMap = []; // [project_id][evaluation_id][question_id] => avg
+        foreach ($rows as $r) {
+            $avgMap[$r->project_id][$r->evaluation_id][$r->question_id] = (float) $r->avg_score;
+        }
+
+        $series = [];
+        foreach ($projects as $project) {
+            foreach ($evals as $eval) {
+                $projEvalAvg = $avgMap[$project->id][$eval->id] ?? null;
+                if ($projEvalAvg === null) continue; // this project has no submission for this particular cycle
+
+                $values = [];
+                $qTexts = [];
+                foreach ($eval->questions as $i => $q) {
+                    $avg        = $projEvalAvg[$q->id] ?? null;
+                    $values[$i] = $avg !== null ? round($avg, 2) : null;
+                    $qTexts[$i] = $q->question;
+                }
+
+                $series[] = [
+                    'key'       => 'project_' . $project->id . '_eval_' . $eval->id,
+                    'label'     => $multiCycle ? "{$project->name} — {$eval->name}" : $project->name,
+                    'values'    => array_values($values),
+                    'questions' => array_values($qTexts),
+                ];
+            }
+        }
+
+        return $this->padSeriesToCommonAxes($series);
+    }
+
+    /**
+     * Pads every series' values/questions to the longest series actually
+     * present, and derives the shared axis count from that — never from
+     * evaluations/projects that ended up excluded for having no data.
+     */
+    private function padSeriesToCommonAxes(array $series): array
+    {
+        $maxAxes = 0;
+        foreach ($series as $s) {
+            $maxAxes = max($maxAxes, count($s['values']));
+        }
+
+        foreach ($series as &$s) {
+            for ($i = count($s['values']); $i < $maxAxes; $i++) {
+                $s['values'][$i]    = null;
+                $s['questions'][$i] = null;
+            }
+        }
+        unset($s);
+
+        return [
+            'axes'   => range(1, max($maxAxes, 1)),
+            'series' => $series,
+        ];
     }
 
     /**
