@@ -25,3 +25,6 @@ Thumbs.db
 
 # Graphify (local codebase-analysis CLI aid, not a project dependency)
 /graphify-out
+
+# Local discussion notes — not for commit
+/.claude/plans/newupdate.md
