@@ -21,18 +21,20 @@ class ProjectReviewController extends Controller
 
     /**
      * GET /review/projects
-     * Lightweight project list (id, name, methodology, status, review_enabled)
-     * for the "Project" tab on the Review Config page — deciding which
-     * projects are eligible to receive reviews at all.
+     * Project list backing both the /review dashboard and the "Project" tab on
+     * Review Config. Scoped by the Review module's "View All Projects"
+     * (`review.view_all`) permission: holders (and privileged users) see every
+     * project; everyone else sees only the projects they're assigned to.
      */
-    public function eligibleProjects()
+    public function eligibleProjects(Request $request)
     {
-        $projects = Project::query()
-            ->select('id', 'name', 'methodology', 'status', 'review_enabled')
-            ->orderBy('name')
-            ->get();
+        $query = Project::query()
+            ->select('id', 'name', 'methodology', 'status', 'review_enabled', 'start_date', 'end_date', 'review_client_emails')
+            ->orderBy('name');
 
-        return response()->json(['data' => $projects]);
+        ProjectAccess::applyReviewProjectScope($query, 'id', $request->user());
+
+        return response()->json(['data' => $query->get()]);
     }
 
     /**
@@ -66,7 +68,7 @@ class ProjectReviewController extends Controller
         $user    = $request->user();
         $project = Project::findOrFail($projectId);
 
-        if (!ProjectAccess::canAccessProject($user, $projectId)) {
+        if (!ProjectAccess::canAccessProjectReview($user, $projectId)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
@@ -121,7 +123,7 @@ class ProjectReviewController extends Controller
         ]);
 
         foreach ($validated['project_ids'] ?? [] as $projectId) {
-            ProjectAccess::assertCanAccessProject($user, $projectId);
+            ProjectAccess::assertCanAccessProjectReview($user, $projectId);
         }
 
         if (($validated['compare'] ?? 'cycle') === 'project') {
@@ -171,7 +173,7 @@ class ProjectReviewController extends Controller
                 if (!empty($validated['project_ids'])) {
                     $q->whereIn('project_id', $validated['project_ids']);
                 } else {
-                    ProjectAccess::applyMemberProjectScope($q, 'project_id', $user);
+                    ProjectAccess::applyReviewProjectScope($q, 'project_id', $user);
                 }
             })
             ->groupBy('question_id')
@@ -227,7 +229,7 @@ class ProjectReviewController extends Controller
         $reviewsQuery = ProjectReview::whereIn('evaluation_id', $evals->pluck('id'))
             ->whereNull('excluded_at')
             ->whereIn('project_id', $this->reviewEnabledProjectIds());
-        ProjectAccess::applyMemberProjectScope($reviewsQuery, 'project_id', $user);
+        ProjectAccess::applyReviewProjectScope($reviewsQuery, 'project_id', $user);
         if (!empty($requestedProjectIds)) {
             $reviewsQuery->whereIn('project_id', $requestedProjectIds);
         }
@@ -311,7 +313,7 @@ class ProjectReviewController extends Controller
     public function summary(Request $request, int $projectId)
     {
         $user = $request->user();
-        if (!ProjectAccess::canAccessProject($user, $projectId)) {
+        if (!ProjectAccess::canAccessProjectReview($user, $projectId)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
@@ -381,7 +383,7 @@ class ProjectReviewController extends Controller
     public function triggerStatus(Request $request, int $projectId)
     {
         $user = $request->user();
-        if (!ProjectAccess::canAccessProject($user, $projectId)) {
+        if (!ProjectAccess::canAccessProjectReview($user, $projectId)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
@@ -464,7 +466,7 @@ class ProjectReviewController extends Controller
     public function store(Request $request, int $projectId, int $evalId)
     {
         $user = $request->user();
-        if (!ProjectAccess::canAccessProject($user, $projectId)) {
+        if (!ProjectAccess::canAccessProjectReview($user, $projectId)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
@@ -542,7 +544,7 @@ class ProjectReviewController extends Controller
     public function show(Request $request, int $projectId, int $reviewId)
     {
         $user = $request->user();
-        if (!ProjectAccess::canAccessProject($user, $projectId)) {
+        if (!ProjectAccess::canAccessProjectReview($user, $projectId)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
@@ -563,7 +565,7 @@ class ProjectReviewController extends Controller
     public function updateExclusion(Request $request, int $projectId, int $reviewId)
     {
         $user = $request->user();
-        if (!ProjectAccess::canAccessProject($user, $projectId)) {
+        if (!ProjectAccess::canAccessProjectReview($user, $projectId)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 

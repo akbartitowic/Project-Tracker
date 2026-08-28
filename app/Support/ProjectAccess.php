@@ -98,6 +98,61 @@ class ProjectAccess
     }
 
     /**
+     * Review module: a role can be granted "View All Projects" (`review.view_all`)
+     * to see every project's review data on /review. Without it, the Review page
+     * is scoped to the user's assigned projects only — same as everywhere else.
+     */
+    public static function canViewAllReviews(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return self::isPrivileged($user) || $user->hasPermission('review.view_all');
+    }
+
+    public static function canAccessProjectReview(?User $user, int $projectId): bool
+    {
+        return self::canViewAllReviews($user) || self::canAccessProject($user, $projectId);
+    }
+
+    public static function assertCanAccessProjectReview(?User $user, int $projectId, int $status = 403): void
+    {
+        if (!self::canAccessProjectReview($user, $projectId)) {
+            throw new HttpResponseException(
+                response()->json(['error' => 'Forbidden'], $status)
+            );
+        }
+    }
+
+    /**
+     * No-op when the user has "View All Projects" for Review; otherwise restricts
+     * the query to the user's member projects (or nothing when they have none).
+     */
+    public static function applyReviewProjectScope($query, string $column, ?User $user): void
+    {
+        if (self::canViewAllReviews($user)) {
+            return;
+        }
+
+        self::applyMemberProjectScope($query, $column, $user);
+    }
+
+    /**
+     * Project IDs a user may see review data for, or null when all are allowed.
+     *
+     * @return null|array<int>
+     */
+    public static function reviewProjectIds(?User $user): ?array
+    {
+        if (self::canViewAllReviews($user)) {
+            return null;
+        }
+
+        return self::memberProjectIds($user);
+    }
+
+    /**
      * Finance monitoring may operate on any project when the user has finance read permission.
      */
     public static function canAccessProjectFinance(?User $user, int $projectId): bool

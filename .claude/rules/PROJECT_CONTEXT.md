@@ -79,6 +79,7 @@
 - [x] Review (trigger & monitor status)
 - [x] Public Review Link (share ke klien eksternal tanpa login)
 - [x] Nonaktifkan (exclude) submission review — toggle per submission di modal project (`/review?project=X`), kolom `project_reviews.excluded_at`/`excluded_by`, endpoint `PATCH /projects/{id}/reviews/{reviewId}/exclusion` (`review.update`). Submission excluded tetap tersimpan & tampil di history (redup + badge "Tidak dihitung") tapi di-skip dari Skor Overall, radar chart, dan proporsi dashboard. Reversible. Tidak ada hapus permanen. Tidak mempengaruhi gate `max_submissions`/`one_per_user`.
+- [x] Permission `review.view_all` ("View All Projects", dicentang per-role di Access Control → modul Review) — role dengan aksi ini (atau akun privileged) melihat data review SEMUA project di `/review`; tanpa itu hanya project yang di-assign. Ditegakkan lewat `ProjectAccess::canAccessProjectReview()`/`applyReviewProjectScope()` di seluruh `ProjectReviewController` + `GET /review/projects`. Default: cuma di-grant ke role Admin.
 
 ### Integration
 - [x] Integration Projects

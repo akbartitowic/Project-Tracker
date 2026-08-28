@@ -26,7 +26,7 @@ class PermissionCatalog
             'List Project' => ['create', 'read', 'update', 'delete'],
             'Project Board' => ['create', 'read', 'update', 'edit_last_update'],
             'Load' => ['read'],
-            'Review' => ['create', 'read', 'update', 'delete'],
+            'Review' => ['create', 'read', 'update', 'delete', 'view_all'],
             'Reports' => ['read'],
             'Generate Report' => ['create', 'read'],
             'Finance Monitoring' => ['create', 'read', 'update', 'delete'],
@@ -99,6 +99,7 @@ class PermissionCatalog
             'update' => 'Update',
             'delete' => 'Delete',
             'edit_last_update' => 'Update Date Task Manual',
+            'view_all' => 'View All Projects',
         ];
 
         $sortOrder = 0;

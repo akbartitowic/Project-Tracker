@@ -1896,7 +1896,9 @@ export default function Review() {
     const load = useCallback(async () => {
         setLoading(true); setError(null);
         try {
-            const res = await fetchAPI('/projects');
+            // /review/projects is scoped by the Review module's "View All Projects"
+            // permission: without it a user only gets their assigned projects here.
+            const res = await fetchAPI('/review/projects');
             const allProjects = res.data ?? res ?? [];
             // Only projects marked eligible for review (toggled in Review Config → tab Project)
             // show up here — `review_enabled` defaults to true when absent for backward compat.
