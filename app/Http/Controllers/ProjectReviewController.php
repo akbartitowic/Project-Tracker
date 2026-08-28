@@ -363,6 +363,15 @@ class ProjectReviewController extends Controller
                 'submitted_at'     => $latest?->created_at?->toIso8601String(),
                 'submitted_by'     => $latest?->submitter?->name ?? $latest?->reviewer_name,
                 'review_id'        => $latest?->id,
+                // Everyone who submitted a counted review for this evaluation —
+                // the card lists all of them, not just the latest.
+                'reviewers'        => $evalReviews->map(fn ($r) => [
+                    'review_id'    => $r->id,
+                    'name'         => $r->submitter?->name ?? $r->reviewer_name ?? 'Anonim',
+                    'company'      => $r->reviewer_company,
+                    'total_score'  => $r->total_score,
+                    'submitted_at' => $r->created_at?->toIso8601String(),
+                ])->values(),
                 // `has_emails` lets the frontend treat a link that already has client
                 // emails saved as "terkirim" even before the send button is clicked.
                 // `generated_at` = when the first review link was created for this

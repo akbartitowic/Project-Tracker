@@ -263,6 +263,140 @@ function ReviewSubmitForm({ project, evaluation, onSubmitted, onCancel }) {
     );
 }
 
+/* ── "Name (Company)" for a reviewer entry from summary.reviewers ── */
+const fmtReviewer = (r) => (r?.company ? `${r.name} (${r.company})` : (r?.name ?? 'Anonim'));
+
+/* ── Evaluation recap: aggregates every counted submission for one evaluation
+   — average score, all reviewers (each still openable individually), and per
+   question the average score + every comment. ── */
+function EvaluationAggregateDetail({ evalSummary, evalDetail, reviews, canConfig, onToggleExclude, togglingId, onOpenSubmission }) {
+    const counted  = reviews.filter(r => !r.is_excluded);
+    const excluded = reviews.filter(r => r.is_excluded);
+
+    // Aggregate answers per question, in the evaluation's configured order
+    // (weighted questions only — "info" questions carry no score).
+    const configuredOrder = (evalDetail?.questions ?? [])
+        .filter(q => q.has_weight !== false)
+        .map(q => q.id);
+
+    const qMap = new Map();
+    counted.forEach(r => (r.answers || []).forEach(a => {
+        if (!qMap.has(a.question_id)) {
+            qMap.set(a.question_id, { question: a.question, weight: a.weight, scores: [], comments: [] });
+        }
+        const q = qMap.get(a.question_id);
+        q.scores.push(a.score);
+        if (a.comment) q.comments.push({ by: r.submitted_by, comment: a.comment });
+    }));
+
+    const orderedQids = [
+        ...configuredOrder.filter(id => qMap.has(id)),
+        ...[...qMap.keys()].filter(id => !configuredOrder.includes(id)),
+    ];
+
+    const notes = counted.filter(r => r.notes).map(r => ({ by: r.submitted_by, notes: r.notes }));
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <div>
+                    <p className="text-[11px] text-slate-400">{evalSummary?.trigger_label}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                        Rata-rata {counted.length} penilaian
+                        {excluded.length > 0 && ` · ${excluded.length} tidak dihitung`}
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <LevelBadge score={evalSummary?.total_score} />
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{evalSummary?.total_score?.toFixed(1)}%</span>
+                </div>
+            </div>
+
+            {/* Reviewers — click a row to see that person's individual answers */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                {reviews.map(r => (
+                    <div key={r.id} className={cn('flex items-center gap-2 px-3 py-2', r.is_excluded && 'opacity-55')}>
+                        <button onClick={() => onOpenSubmission(r)} className="flex-1 min-w-0 text-left group">
+                            <p className="text-sm text-slate-800 dark:text-white truncate group-hover:text-primary flex items-center gap-1.5">
+                                {r.submitted_by}
+                                {r.is_excluded && (
+                                    <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-semibold px-1.5 py-0.5">
+                                        <EyeOff className="size-2.5" /> Tidak dihitung
+                                    </span>
+                                )}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                                {new Date(r.submitted_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </p>
+                        </button>
+                        <span className={cn('text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0', r.is_excluded && 'line-through')}>
+                            {r.total_score?.toFixed(1)}%
+                        </span>
+                        {canConfig && onToggleExclude && (
+                            <Button
+                                size="sm" variant="ghost"
+                                disabled={togglingId === r.id}
+                                title={r.is_excluded ? 'Hitung kembali' : 'Tandai tidak dihitung'}
+                                className={cn('h-6 px-1.5 shrink-0', r.is_excluded ? 'text-emerald-600' : 'text-amber-600')}
+                                onClick={() => onToggleExclude(r)}
+                            >
+                                {togglingId === r.id
+                                    ? <Loader2 className="size-3 animate-spin" />
+                                    : r.is_excluded ? <RotateCcw className="size-3" /> : <EyeOff className="size-3" />}
+                            </Button>
+                        )}
+                        <ChevronRight className="size-3.5 text-slate-400 shrink-0" />
+                    </div>
+                ))}
+            </div>
+
+            {/* Per-question average + all comments */}
+            <div className="space-y-3">
+                {orderedQids.map((qid, idx) => {
+                    const q     = qMap.get(qid);
+                    const avg   = q.scores.length ? q.scores.reduce((a, b) => a + b, 0) / q.scores.length : null;
+                    const level = getLevel(avg != null ? (avg / 10) * 100 : null);
+                    return (
+                        <div key={qid} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
+                            <div className="flex items-start gap-2">
+                                <span className="size-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-slate-800 dark:text-white">{q.question}</p>
+                                    {q.weight != null && <p className="text-[10px] text-primary">Bobot {q.weight}%</p>}
+                                </div>
+                                <span className={cn('text-sm font-bold shrink-0', level?.color)}>
+                                    {avg != null ? `${avg.toFixed(1)}/10` : '—'}
+                                </span>
+                            </div>
+                            {q.comments.length > 0 && (
+                                <div className="pl-7 space-y-1">
+                                    {q.comments.map((c, i) => (
+                                        <p key={i} className="text-xs text-slate-500 dark:text-slate-400 flex gap-1.5">
+                                            <MessageSquare className="size-3 shrink-0 mt-0.5" />
+                                            <span><strong className="text-slate-600 dark:text-slate-300">{c.by}:</strong> {c.comment}</span>
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {notes.length > 0 && (
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3.5 py-3 space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Catatan Umum</p>
+                    {notes.map((n, i) => (
+                        <p key={i} className="text-sm text-slate-700 dark:text-slate-300">
+                            <strong className="text-slate-600 dark:text-slate-400">{n.by}:</strong> {n.notes}
+                        </p>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 /* ── Review detail (answers summary of one review) ── */
 function ReviewDetail({ review, canConfig, onToggleExclude, toggling }) {
     return (
@@ -789,8 +923,9 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
     const [allReviews, setAllReviews] = useState({});
     const [loading,   setLoading]   = useState(true);
     const [activeEval, setActiveEval] = useState(null); // evaluation object for submit form
-    const [detailReview, setDetailReview] = useState(null); // review object to view answers
-    const [togglingExclude, setTogglingExclude] = useState(false);
+    const [detailReview, setDetailReview] = useState(null); // review object to view answers (one submission)
+    const [aggregateEvalId, setAggregateEvalId] = useState(null); // evaluation_id to show the multi-reviewer recap for
+    const [togglingExcludeId, setTogglingExcludeId] = useState(null); // review id currently being toggled
     const [evals,     setEvals]     = useState([]);
     const [pendingEmails, setPendingEmails] = useState([]);
     const [savingEmails,  setSavingEmails]  = useState(false);
@@ -843,16 +978,18 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
         if (excluded && !window.confirm(
             'Nonaktifkan penilaian ini? Skornya tidak akan dihitung di Skor Overall, radar chart, maupun dashboard. Bisa diaktifkan lagi kapan saja.'
         )) return;
-        setTogglingExclude(true);
+        setTogglingExcludeId(review.id);
         try {
             const res = await fetchAPI(`/projects/${project.id}/reviews/${review.id}/exclusion`, {
                 method: 'PATCH',
                 body: JSON.stringify({ excluded }),
             });
-            setDetailReview(res.data);
+            // Keep the individual detail view in sync if it's the one open;
+            // the recap/summary views refresh from load() below.
+            setDetailReview(prev => (prev && prev.id === review.id ? res.data : prev));
             await load();
         } catch (e) { alert('Gagal memperbarui status penilaian: ' + e.message); }
-        finally { setTogglingExclude(false); }
+        finally { setTogglingExcludeId(null); }
     };
 
     if (!project) return null;
@@ -874,15 +1011,38 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
                 ) : detailReview ? (
                     <div className="space-y-3">
                         <button onClick={() => setDetailReview(null)} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
-                            <ArrowLeft className="size-3" /> Kembali ke ringkasan
+                            <ArrowLeft className="size-3" /> {aggregateEvalId ? 'Kembali ke rekap' : 'Kembali ke ringkasan'}
                         </button>
                         <p className="text-sm font-semibold text-slate-800 dark:text-white">{detailReview.evaluation_name}</p>
                         <ReviewDetail
                             review={detailReview}
                             canConfig={canConfig}
                             onToggleExclude={handleToggleExclude}
-                            toggling={togglingExclude}
+                            toggling={togglingExcludeId === detailReview.id}
                         />
+                    </div>
+                ) : aggregateEvalId ? (
+                    <div className="space-y-3">
+                        <button onClick={() => setAggregateEvalId(null)} className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                            <ArrowLeft className="size-3" /> Kembali ke ringkasan
+                        </button>
+                        {(() => {
+                            const aggEval = (summary?.data ?? []).find(s => s.evaluation_id === aggregateEvalId);
+                            return (
+                                <>
+                                    <p className="text-sm font-semibold text-slate-800 dark:text-white">{aggEval?.evaluation_name}</p>
+                                    <EvaluationAggregateDetail
+                                        evalSummary={aggEval}
+                                        evalDetail={evals.find(e => e.id === aggregateEvalId)}
+                                        reviews={allReviews[aggregateEvalId] ?? []}
+                                        canConfig={canConfig}
+                                        onToggleExclude={handleToggleExclude}
+                                        togglingId={togglingExcludeId}
+                                        onOpenSubmission={(r) => setDetailReview(r)}
+                                    />
+                                </>
+                            );
+                        })()}
                     </div>
                 ) : activeEval ? (
                     <div className="space-y-3">
@@ -986,24 +1146,32 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
                                                     <p className="text-sm font-semibold text-slate-800 dark:text-white">{s.evaluation_name}</p>
                                                     <p className="text-[11px] text-slate-400">{s.trigger_label}</p>
                                                 </div>
-                                                <div className="flex flex-col items-end gap-0.5">
-                                                    {s.submitted ? (
-                                                        <>
-                                                            <div className="flex items-center gap-2">
-                                                                <LevelBadge score={s.total_score} />
-                                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{s.total_score?.toFixed(1)}%</span>
-                                                            </div>
-                                                            <span className="text-[10px] text-slate-400">
-                                                                {s.submission_count > 1
-                                                                    ? `rata-rata ${s.submission_count} penilaian`
-                                                                    : '1 penilaian'}
-                                                            </span>
-                                                        </>
-                                                    ) : (
-                                                        <span className="text-[11px] text-slate-400 italic">Belum ada review</span>
-                                                    )}
-                                                </div>
+                                                {s.submitted ? (
+                                                    <button
+                                                        onClick={() => setAggregateEvalId(s.evaluation_id)}
+                                                        className="flex flex-col items-end gap-0.5 hover:opacity-80 transition-opacity"
+                                                        title="Lihat rekap semua penilaian"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <LevelBadge score={s.total_score} />
+                                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{s.total_score?.toFixed(1)}%</span>
+                                                            <ChevronRight className="size-3.5 text-slate-400" />
+                                                        </div>
+                                                        <span className="text-[10px] text-slate-400">
+                                                            {s.submission_count > 1
+                                                                ? `rata-rata ${s.submission_count} penilaian`
+                                                                : '1 penilaian'}
+                                                        </span>
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-[11px] text-slate-400 italic">Belum ada review</span>
+                                                )}
                                             </div>
+                                            {s.reviewers?.length > 0 && (
+                                                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
+                                                    Oleh {s.reviewers.map(fmtReviewer).join(', ')}
+                                                </p>
+                                            )}
                                             {/* Trigger status bar */}
                                             {(() => {
                                                 const ts = triggerStatuses[s.evaluation_id];
