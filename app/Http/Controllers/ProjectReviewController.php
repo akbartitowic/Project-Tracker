@@ -328,14 +328,24 @@ class ProjectReviewController extends Controller
             ->get(['id', 'evaluation_id', 'is_active', 'email_sent_at', 'client_emails', 'created_at'])
             ->groupBy('evaluation_id');
 
-        $summary = $evals->map(function ($eval) use ($projectId, $tokensByEval) {
-            // Excluded submissions don't count: the card score, "submitted"
-            // state and the Overall average all ignore them.
-            $latest = ProjectReview::where('project_id', $projectId)
-                ->where('evaluation_id', $eval->id)
-                ->counted()
-                ->latest()
-                ->first();
+        // Every counted submission for this project's active evaluations, newest
+        // first. Excluded submissions never enter here (scopeCounted), so they
+        // don't affect any score. The per-evaluation card score is the AVERAGE of
+        // that evaluation's submissions, and the Overall further down is the flat
+        // average across every submission — not "latest only" anymore.
+        $allReviews = ProjectReview::where('project_id', $projectId)
+            ->whereIn('evaluation_id', $evals->pluck('id'))
+            ->counted()
+            ->with('submitter:id,name')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $reviewsByEval = $allReviews->groupBy('evaluation_id');
+
+        $summary = $evals->map(function ($eval) use ($reviewsByEval, $tokensByEval) {
+            $evalReviews = $reviewsByEval->get($eval->id, collect());
+            $latest      = $evalReviews->first();
+            $count       = $evalReviews->count();
 
             $evalTokens = $tokensByEval->get($eval->id, collect());
 
@@ -344,10 +354,14 @@ class ProjectReviewController extends Controller
                 'evaluation_name'  => $eval->name,
                 'evaluation_order' => $eval->order,
                 'trigger_label'    => $eval->trigger_label,
-                'submitted'        => $latest !== null,
-                'total_score'      => $latest?->total_score,
+                'submitted'        => $count > 0,
+                'submission_count' => $count,
+                // Average of every counted submission for this evaluation.
+                'total_score'      => $count ? round($evalReviews->avg('total_score'), 2) : null,
+                // Latest submission's raw score + who/when, for context in the UI.
+                'latest_score'     => $latest?->total_score,
                 'submitted_at'     => $latest?->created_at?->toIso8601String(),
-                'submitted_by'     => $latest?->submitter?->name,
+                'submitted_by'     => $latest?->submitter?->name ?? $latest?->reviewer_name,
                 'review_id'        => $latest?->id,
                 // `has_emails` lets the frontend treat a link that already has client
                 // emails saved as "terkirim" even before the send button is clicked.
@@ -364,15 +378,15 @@ class ProjectReviewController extends Controller
             ];
         });
 
-        // Overall: average of submitted scores
-        $submitted = $summary->filter(fn($s) => $s['submitted']);
-        $overall   = $submitted->count()
-            ? round($submitted->avg('total_score'), 2)
+        // Overall: flat average of every counted submission across all evaluations.
+        $overall = $allReviews->count()
+            ? round($allReviews->avg('total_score'), 2)
             : null;
 
         return response()->json([
-            'data'    => $summary,
-            'overall' => $overall,
+            'data'          => $summary,
+            'overall'       => $overall,
+            'overall_count' => $allReviews->count(),
         ]);
     }
 

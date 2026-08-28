@@ -909,6 +909,11 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
                                     <p className={cn('text-3xl font-bold mt-0.5', getLevel(summary.overall)?.color)}>
                                         {summary.overall?.toFixed(1)}%
                                     </p>
+                                    {summary.overall_count > 0 && (
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                            Rata-rata {summary.overall_count} penilaian yang masuk
+                                        </p>
+                                    )}
                                 </div>
                                 <LevelBadge score={summary.overall} />
                             </div>
@@ -981,11 +986,22 @@ function ReviewSummaryDialog({ open, onClose, project, canSubmit, canConfig }) {
                                                     <p className="text-sm font-semibold text-slate-800 dark:text-white">{s.evaluation_name}</p>
                                                     <p className="text-[11px] text-slate-400">{s.trigger_label}</p>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    {s.submitted
-                                                        ? <><LevelBadge score={s.total_score} /><span className="text-sm font-bold text-slate-700 dark:text-slate-200">{s.total_score?.toFixed(1)}%</span></>
-                                                        : <span className="text-[11px] text-slate-400 italic">Belum ada review</span>
-                                                    }
+                                                <div className="flex flex-col items-end gap-0.5">
+                                                    {s.submitted ? (
+                                                        <>
+                                                            <div className="flex items-center gap-2">
+                                                                <LevelBadge score={s.total_score} />
+                                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{s.total_score?.toFixed(1)}%</span>
+                                                            </div>
+                                                            <span className="text-[10px] text-slate-400">
+                                                                {s.submission_count > 1
+                                                                    ? `rata-rata ${s.submission_count} penilaian`
+                                                                    : '1 penilaian'}
+                                                            </span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-[11px] text-slate-400 italic">Belum ada review</span>
+                                                    )}
                                                 </div>
                                             </div>
                                             {/* Trigger status bar */}

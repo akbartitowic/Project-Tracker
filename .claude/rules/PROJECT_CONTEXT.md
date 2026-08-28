@@ -80,6 +80,7 @@
 - [x] Public Review Link (share ke klien eksternal tanpa login)
 - [x] Nonaktifkan (exclude) submission review — toggle per submission di modal project (`/review?project=X`), kolom `project_reviews.excluded_at`/`excluded_by`, endpoint `PATCH /projects/{id}/reviews/{reviewId}/exclusion` (`review.update`). Submission excluded tetap tersimpan & tampil di history (redup + badge "Tidak dihitung") tapi di-skip dari Skor Overall, radar chart, dan proporsi dashboard. Reversible. Tidak ada hapus permanen. Tidak mempengaruhi gate `max_submissions`/`one_per_user`.
 - [x] Permission `review.view_all` ("View All Projects", dicentang per-role di Access Control → modul Review) — role dengan aksi ini (atau akun privileged) melihat data review SEMUA project di `/review`; tanpa itu hanya project yang di-assign. Ditegakkan lewat `ProjectAccess::canAccessProjectReview()`/`applyReviewProjectScope()` di seluruh `ProjectReviewController` + `GET /review/projects`. Default: cuma di-grant ke role Admin.
+- [x] Skor per-evaluasi & Skor Overall di modal `/review?project=X` = rata-rata SEMUA submission yang dihitung (bukan latest). `summary()` mengembalikan `total_score` (avg per-eval), `latest_score`, `submission_count`, `overall` (avg flat semua submission), `overall_count`. Konsisten dengan radar chart yang memang selalu pakai AVG.
 
 ### Integration
 - [x] Integration Projects
