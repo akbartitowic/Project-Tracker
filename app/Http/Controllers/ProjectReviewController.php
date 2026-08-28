@@ -137,6 +137,18 @@ class ProjectReviewController extends Controller
         return response()->json(['data' => $this->radarByCycle($validated, $user)]);
     }
 
+    /**
+     * Reviews only feed the dashboard radar/aggregates while their project is
+     * still review-enabled (Review Config → Project tab). Toggling a project
+     * off there drops it from the chart immediately — matching how it's
+     * already left out of the project cards and proportion charts (which
+     * filter `review_enabled` on the frontend).
+     */
+    private function reviewEnabledProjectIds()
+    {
+        return Project::where('review_enabled', true)->select('id');
+    }
+
     private function radarByCycle(array $validated, $user): array
     {
         $evalsQuery = ReviewEvaluation::with(['questions' => fn ($q) => $q->where('has_weight', true)->orderBy('order')])
@@ -154,7 +166,8 @@ class ProjectReviewController extends Controller
         $avgByQuestion = ProjectReviewAnswer::query()
             ->whereIn('question_id', $questionIds)
             ->whereHas('review', function ($q) use ($validated, $user) {
-                $q->whereNull('excluded_at');
+                $q->whereNull('excluded_at')
+                  ->whereIn('project_id', $this->reviewEnabledProjectIds());
                 if (!empty($validated['project_ids'])) {
                     $q->whereIn('project_id', $validated['project_ids']);
                 } else {
@@ -211,7 +224,9 @@ class ProjectReviewController extends Controller
         // (one cycle) as clean as before.
         $multiCycle = $evals->count() > 1;
 
-        $reviewsQuery = ProjectReview::whereIn('evaluation_id', $evals->pluck('id'))->whereNull('excluded_at');
+        $reviewsQuery = ProjectReview::whereIn('evaluation_id', $evals->pluck('id'))
+            ->whereNull('excluded_at')
+            ->whereIn('project_id', $this->reviewEnabledProjectIds());
         ProjectAccess::applyMemberProjectScope($reviewsQuery, 'project_id', $user);
         if (!empty($requestedProjectIds)) {
             $reviewsQuery->whereIn('project_id', $requestedProjectIds);
