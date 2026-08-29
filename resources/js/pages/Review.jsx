@@ -1749,6 +1749,13 @@ function ReviewRadarSection({ projects }) {
 function ReviewDashboard({ summaries, projects, onOpenProject }) {
     const [activeSegment, setActiveSegment] = useState(null); // { title, items: [{ project, subtitle }] }
 
+    // "Status Review per Project" list controls (local to this section).
+    const [listTab, setListTab]           = useState('all');    // 'all' | 'Waterfall' | 'Agile Scrum'
+    const [listSort, setListSort]         = useState('urgent'); // urgent | name_asc | name_desc | score_desc | score_asc | recent
+    const [listPage, setListPage]         = useState(1);
+    const [listPageSize, setListPageSize] = useState(10);
+    useEffect(() => { setListPage(1); }, [listTab, listSort, projects]);
+
     if (projects.length === 0) return null;
 
     const withReview = projects.filter(p => summaries[p.id]?.overall != null);
@@ -1803,14 +1810,33 @@ function ReviewDashboard({ summaries, projects, onOpenProject }) {
 
     // Most urgent first: not-reviewed (oldest waiting link first) → partial → no-config → fully reviewed.
     const ORDER = { none: 0, partial: 1, no_config: 2, full: 3 };
-    const sortedStatuses = [...projectStatuses].sort((a, b) => {
+    const urgentSort = (a, b) => {
         if (ORDER[a.status] !== ORDER[b.status]) return ORDER[a.status] - ORDER[b.status];
         if (a.status === 'none' && (a.waitingSince || b.waitingSince)) {
             if (a.waitingSince && b.waitingSince) return new Date(a.waitingSince) - new Date(b.waitingSince);
             return a.waitingSince ? -1 : 1;
         }
         return (a.project.name || '').localeCompare(b.project.name || '');
-    });
+    };
+    const overallOf = (s) => summaries[s.project.id]?.overall;
+    const LIST_SORTERS = {
+        urgent:     urgentSort,
+        name_asc:   (a, b) => (a.project.name || '').localeCompare(b.project.name || ''),
+        name_desc:  (a, b) => (b.project.name || '').localeCompare(a.project.name || ''),
+        score_desc: (a, b) => (overallOf(b) ?? -1) - (overallOf(a) ?? -1),
+        score_asc:  (a, b) => (overallOf(a) ?? 101) - (overallOf(b) ?? 101),
+        recent:     (a, b) => new Date(b.lastSubmittedAt || 0) - new Date(a.lastSubmittedAt || 0),
+    };
+
+    // Status list: methodology tab → sort → paginate (default 10/page).
+    const wfCount = projectStatuses.filter(s => s.project.methodology === 'Waterfall').length;
+    const agCount = projectStatuses.filter(s => s.project.methodology === 'Agile Scrum').length;
+    const filteredStatuses = projectStatuses.filter(s => listTab === 'all' || s.project.methodology === listTab);
+    const sortedStatuses   = [...filteredStatuses].sort(LIST_SORTERS[listSort] ?? urgentSort);
+    const listTotal    = sortedStatuses.length;
+    const listPages    = Math.max(1, Math.ceil(listTotal / listPageSize));
+    const listPageSafe = Math.min(listPage, listPages);
+    const pagedStatuses = sortedStatuses.slice((listPageSafe - 1) * listPageSize, listPageSafe * listPageSize);
 
     const statusSegments = [
         { key: 'full',      label: 'Sudah Direview',  value: statusGroups.full.length,      barColor: 'bg-emerald-500',              dotColor: 'bg-emerald-500' },
@@ -1903,12 +1929,47 @@ function ReviewDashboard({ summaries, projects, onOpenProject }) {
 
             {/* Per-project review status — who's reviewed, who's not, and how long the wait's been */}
             <div className="rounded-xl border border-white/60 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#151b28] dark:shadow-xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-white">Status Review per Project</p>
-                    <p className="text-[11px] text-slate-400">{projects.length} project</p>
+                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-white">Status Review per Project</p>
+                        <p className="text-[11px] text-slate-400">{listTotal} project</p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="inline-flex rounded-lg border border-slate-200 bg-white/70 p-0.5 dark:border-white/10 dark:bg-[#0f1420]">
+                            {[['all', 'Semua', projectStatuses.length], ['Waterfall', 'Waterfall', wfCount], ['Agile Scrum', 'Agile Scrum', agCount]].map(([k, label, n]) => (
+                                <button
+                                    key={k}
+                                    type="button"
+                                    onClick={() => setListTab(k)}
+                                    className={cn(
+                                        'h-7 px-2.5 text-xs font-medium rounded-md transition-colors',
+                                        listTab === k ? 'bg-accent text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
+                                    )}
+                                >
+                                    {label} <span className="opacity-70">({n})</span>
+                                </button>
+                            ))}
+                        </div>
+                        <Select value={listSort} onValueChange={setListSort}>
+                            <SelectTrigger className="h-7 w-[150px] text-xs">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="urgent" className="text-xs">Paling mendesak</SelectItem>
+                                <SelectItem value="name_asc" className="text-xs">Nama A–Z</SelectItem>
+                                <SelectItem value="name_desc" className="text-xs">Nama Z–A</SelectItem>
+                                <SelectItem value="score_desc" className="text-xs">Skor tertinggi</SelectItem>
+                                <SelectItem value="score_asc" className="text-xs">Skor terendah</SelectItem>
+                                <SelectItem value="recent" className="text-xs">Terakhir direview</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {sortedStatuses.map(({ project: p, submittedCount, totalCount, status, waitingSince, lastSubmittedAt, cycles, dueCount }) => {
+                    {pagedStatuses.length === 0 && (
+                        <p className="text-xs text-slate-400 italic py-8 text-center">Tidak ada project di tab ini.</p>
+                    )}
+                    {pagedStatuses.map(({ project: p, submittedCount, totalCount, status, waitingSince, lastSubmittedAt, cycles, dueCount }) => {
                         const style = REVIEW_STATUS_STYLE[status];
                         const Icon = style.icon;
                         return (
@@ -1947,6 +2008,19 @@ function ReviewDashboard({ summaries, projects, onOpenProject }) {
                         );
                     })}
                 </div>
+                {listTotal > listPageSize && (
+                    <div className="px-4 pb-3">
+                        <PaginationControls
+                            page={listPageSafe}
+                            pageSize={listPageSize}
+                            total={listTotal}
+                            onPageChange={setListPage}
+                            onPageSizeChange={setListPageSize}
+                            perPageLabel="Per halaman"
+                            formatShowing={(from, to, t) => `${from}–${to} dari ${t}`}
+                        />
+                    </div>
+                )}
             </div>
         </div>
     );
