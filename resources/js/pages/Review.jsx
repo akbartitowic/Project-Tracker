@@ -1746,15 +1746,36 @@ function ReviewRadarSection({ projects }) {
 }
 
 /* ── Review Dashboard — proportion charts + per-project review status list ── */
+const LIST_TABS = ['all', 'Waterfall', 'Agile Scrum'];
+const LIST_SORT_KEYS = ['urgent', 'name_asc', 'name_desc', 'score_desc', 'score_asc', 'recent'];
+
 function ReviewDashboard({ summaries, projects, onOpenProject }) {
     const [activeSegment, setActiveSegment] = useState(null); // { title, items: [{ project, subtitle }] }
 
-    // "Status Review per Project" list controls (local to this section).
-    const [listTab, setListTab]           = useState('all');    // 'all' | 'Waterfall' | 'Agile Scrum'
-    const [listSort, setListSort]         = useState('urgent'); // urgent | name_asc | name_desc | score_desc | score_asc | recent
-    const [listPage, setListPage]         = useState(1);
+    // "Status Review per Project" list controls — kept in the URL (?list_tab / ?list_sort
+    // / ?list_page) so a tab, sort or page is shareable, bookmarkable and survives refresh.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const rawTab   = searchParams.get('list_tab');
+    const rawSort  = searchParams.get('list_sort');
+    const listTab  = LIST_TABS.includes(rawTab) ? rawTab : 'all';
+    const listSort = LIST_SORT_KEYS.includes(rawSort) ? rawSort : 'urgent';
+    const listPage = Math.max(1, Number(searchParams.get('list_page')) || 1);
     const [listPageSize, setListPageSize] = useState(10);
-    useEffect(() => { setListPage(1); }, [listTab, listSort, projects]);
+
+    const setListTab = (v) => setSearchParams(prev => {
+        if (v === 'all') prev.delete('list_tab'); else prev.set('list_tab', v);
+        prev.delete('list_page'); // back to page 1 when the tab changes
+        return prev;
+    });
+    const setListSort = (v) => setSearchParams(prev => {
+        if (v === 'urgent') prev.delete('list_sort'); else prev.set('list_sort', v);
+        prev.delete('list_page');
+        return prev;
+    });
+    const setListPage = (n) => setSearchParams(prev => {
+        if (!n || n <= 1) prev.delete('list_page'); else prev.set('list_page', String(n));
+        return prev;
+    }, { replace: true }); // pagination shouldn't spam browser history
 
     if (projects.length === 0) return null;
 
@@ -1835,6 +1856,8 @@ function ReviewDashboard({ summaries, projects, onOpenProject }) {
     const sortedStatuses   = [...filteredStatuses].sort(LIST_SORTERS[listSort] ?? urgentSort);
     const listTotal    = sortedStatuses.length;
     const listPages    = Math.max(1, Math.ceil(listTotal / listPageSize));
+    // Clamp for display; an out-of-range ?list_page in the URL just resolves to
+    // the last page rather than an empty list, and self-heals on the next change.
     const listPageSafe = Math.min(listPage, listPages);
     const pagedStatuses = sortedStatuses.slice((listPageSafe - 1) * listPageSize, listPageSafe * listPageSize);
 
