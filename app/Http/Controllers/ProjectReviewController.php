@@ -342,12 +342,25 @@ class ProjectReviewController extends Controller
 
         $reviewsByEval = $allReviews->groupBy('evaluation_id');
 
-        $summary = $evals->map(function ($eval) use ($reviewsByEval, $tokensByEval) {
+        $summary = $evals->map(function ($eval) use ($project, $projectId, $reviewsByEval, $tokensByEval) {
             $evalReviews = $reviewsByEval->get($eval->id, collect());
             $latest      = $evalReviews->first();
             $count       = $evalReviews->count();
 
             $evalTokens = $tokensByEval->get($eval->id, collect());
+
+            // Per-cycle trigger progress + a derived state, so the dashboard can
+            // show "not time yet" vs "ready to fill" instead of just "1/2".
+            $trigger = $this->computeTriggerStatus($eval, $projectId, $project);
+            if ($count > 0) {
+                $cycleState = 'submitted';            // already has a counted review
+            } elseif ($trigger['is_triggered'] === true) {
+                $cycleState = 'due';                  // threshold reached, still empty → needs attention
+            } elseif ($trigger['is_triggered'] === false) {
+                $cycleState = 'waiting';              // threshold not reached → not time to review yet
+            } else {
+                $cycleState = 'open';                 // date-based / no threshold / no budget → can't auto-tell
+            }
 
             return [
                 'evaluation_id'    => $eval->id,
@@ -356,6 +369,14 @@ class ProjectReviewController extends Controller
                 'trigger_label'    => $eval->trigger_label,
                 'submitted'        => $count > 0,
                 'submission_count' => $count,
+                'cycle_state'      => $cycleState,
+                'trigger'          => [
+                    'type'         => $trigger['trigger_type'],
+                    'basis'        => $trigger['trigger_basis'],
+                    'target'       => $trigger['trigger_value'],
+                    'current'      => $trigger['current_value'],
+                    'is_triggered' => $trigger['is_triggered'],
+                ],
                 // Average of every counted submission for this evaluation.
                 'total_score'      => $count ? round($evalReviews->avg('total_score'), 2) : null,
                 // Latest submission's raw score + who/when, for context in the UI.

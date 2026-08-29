@@ -1302,6 +1302,41 @@ const REVIEW_STATUS_STYLE = {
     no_config: { icon: Clock,        iconBg: 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500',         pill: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',           label: 'Tanpa Evaluasi' },
 };
 
+/* ── Per-evaluation-cycle state chip (from summary().data[].cycle_state) ──
+   submitted = sudah ada penilaian · due = target trigger tercapai tapi belum diisi
+   waiting = target belum tercapai (belum waktunya) · open = trigger manual/tak terhitung */
+const CYCLE_CHIP_STYLE = {
+    submitted: { cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', icon: CheckCircle2, text: 'terisi' },
+    due:       { cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',          icon: Clock,        text: 'siap diisi' },
+    waiting:   { cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',             icon: Clock,        text: 'belum waktunya' },
+    open:      { cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',             icon: Clock,        text: 'terjadwal manual' },
+};
+
+function CycleChips({ cycles }) {
+    if (!cycles?.length) return null;
+    return (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+            {cycles.map((c, i) => {
+                const s = CYCLE_CHIP_STYLE[c.state] ?? CYCLE_CHIP_STYLE.open;
+                const Icon = s.icon;
+                const pct = (c.state === 'waiting' && c.current != null && c.target != null)
+                    ? ` ${c.current}%/${c.target}%`
+                    : '';
+                return (
+                    <span
+                        key={i}
+                        title={c.name}
+                        className={cn('inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full', s.cls)}
+                    >
+                        <Icon className="size-2.5 shrink-0" />
+                        {c.label}: {s.text}{pct}
+                    </span>
+                );
+            })}
+        </div>
+    );
+}
+
 /* ── Horizontal segmented bar + legend — reusable proportion chart, no chart lib needed.
    Segments are clickable (bar slice or legend entry) when onSegmentClick is given. ── */
 function SegmentedBarChart({ title, headline, headlineSub, segments, emptyLabel, onSegmentClick }) {
@@ -1733,13 +1768,23 @@ function ReviewDashboard({ summaries, projects, onOpenProject }) {
         const submittedTimes = evals.filter(e => e.submitted && e.submitted_at).map(e => e.submitted_at).sort();
         const lastSubmittedAt = submittedTimes.length ? submittedTimes[submittedTimes.length - 1] : null;
 
+        // Per-cycle chips: sequential "Siklus N" + its state/trigger progress.
+        const cycles = evals.map((e, i) => ({
+            label:   `Siklus ${i + 1}`,
+            name:    e.evaluation_name,
+            state:   e.cycle_state ?? (e.submitted ? 'submitted' : 'open'),
+            current: e.trigger?.current ?? null,
+            target:  e.trigger?.target ?? null,
+        }));
+        const dueCount = cycles.filter(c => c.state === 'due').length;
+
         let status;
         if (totalCount === 0) status = 'no_config';
         else if (submittedCount === 0) status = 'none';
         else if (submittedCount === totalCount) status = 'full';
         else status = 'partial';
 
-        return { project: p, submittedCount, totalCount, status, waitingSince, lastSubmittedAt };
+        return { project: p, submittedCount, totalCount, status, waitingSince, lastSubmittedAt, cycles, dueCount };
     });
 
     // Grouped by status/score level — reused both for the chart segment values
@@ -1863,7 +1908,7 @@ function ReviewDashboard({ summaries, projects, onOpenProject }) {
                     <p className="text-[11px] text-slate-400">{projects.length} project</p>
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {sortedStatuses.map(({ project: p, submittedCount, totalCount, status, waitingSince, lastSubmittedAt }) => {
+                    {sortedStatuses.map(({ project: p, submittedCount, totalCount, status, waitingSince, lastSubmittedAt, cycles, dueCount }) => {
                         const style = REVIEW_STATUS_STYLE[status];
                         const Icon = style.icon;
                         return (
@@ -1884,10 +1929,15 @@ function ReviewDashboard({ summaries, projects, onOpenProject }) {
                                     </div>
                                     <p className="text-[11px] text-slate-400 mt-0.5 truncate">
                                         {status === 'no_config' && 'Belum ada evaluasi aktif untuk metodologi ini'}
-                                        {status === 'none' && (waitingSince ? `Menunggu review — link dibuat ${timeAgo(waitingSince)}` : 'Belum direview, link belum dibuat')}
-                                        {status === 'partial' && `${submittedCount}/${totalCount} evaluasi direview${lastSubmittedAt ? ` · terakhir ${timeAgo(lastSubmittedAt)}` : ''}`}
-                                        {status === 'full' && `Semua evaluasi direview${lastSubmittedAt ? ` · terakhir ${timeAgo(lastSubmittedAt)}` : ''}`}
+                                        {status === 'none' && (
+                                            dueCount > 0
+                                                ? `${dueCount} siklus siap diisi${waitingSince ? ` · link dibuat ${timeAgo(waitingSince)}` : ''}`
+                                                : (waitingSince ? `Menunggu — link dibuat ${timeAgo(waitingSince)}` : 'Belum ada siklus yang waktunya diisi')
+                                        )}
+                                        {status === 'partial' && `${submittedCount}/${totalCount} siklus terisi${dueCount > 0 ? ` · ${dueCount} siap diisi` : ' · sisanya belum waktunya'}`}
+                                        {status === 'full' && `Semua siklus terisi${lastSubmittedAt ? ` · terakhir ${timeAgo(lastSubmittedAt)}` : ''}`}
                                     </p>
+                                    <CycleChips cycles={cycles} />
                                 </div>
                                 <span className={cn('shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full', style.pill)}>
                                     {style.label}
