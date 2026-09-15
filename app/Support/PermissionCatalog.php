@@ -26,7 +26,7 @@ class PermissionCatalog
             'List Project' => ['create', 'read', 'update', 'delete'],
             'Project Board' => ['create', 'read', 'update', 'edit_last_update'],
             'Load' => ['read'],
-            'Review' => ['create', 'read', 'update', 'delete', 'view_all'],
+            'Review' => ['create', 'read', 'update', 'delete', 'view_all', 'calibrate'],
             'Reports' => ['read'],
             'Generate Report' => ['create', 'read'],
             'Finance Monitoring' => ['create', 'read', 'update', 'delete'],
@@ -43,6 +43,7 @@ class PermissionCatalog
             'Profile' => ['read', 'update'],
             'Notification Center' => ['read', 'update'],
             'Modules Management' => ['create', 'read', 'update', 'delete'],
+            'Client Monitoring' => ['read'],
         ];
     }
 
@@ -66,6 +67,23 @@ class PermissionCatalog
         return [
             'project_board.read',
             'project_board.update',
+            'profile.read',
+            'profile.update',
+            'notification_center.read',
+            'notification_center.update',
+        ];
+    }
+
+    /**
+     * Client accounts: view their own company's MH quota/usage only, plus manage
+     * their own profile/notification prefs. No board/finance/internal access.
+     *
+     * @return list<string>
+     */
+    public static function clientPermissionSlugs(): array
+    {
+        return [
+            'client_monitoring.read',
             'profile.read',
             'profile.update',
             'notification_center.read',
@@ -100,6 +118,7 @@ class PermissionCatalog
             'delete' => 'Delete',
             'edit_last_update' => 'Update Date Task Manual',
             'view_all' => 'View All Projects',
+            'calibrate' => 'Calibrate',
         ];
 
         $sortOrder = 0;

@@ -26,23 +26,49 @@ class UserController extends Controller
         }
     }
 
-    private function assertValidRoleAssignment(Request $request, int $roleId): void
+    private function assertValidRoleAssignment(Request $request, int $roleId, string $userType = 'internal'): void
     {
+        $role = Role::find($roleId);
+        $roleName = strtolower((string) ($role?->name ?? ''));
+
+        // A client account is scoped to one company's read-only data — it must
+        // never carry the Admin role (or its permission set), regardless of who's assigning it.
+        if ($userType === 'client' && $roleName === 'admin') {
+            abort(403, 'The Admin role cannot be assigned to a client account.');
+        }
+
         if (UserAccess::isPrivileged($request->user())) {
             return;
         }
 
-        $role = Role::find($roleId);
-        if ($role && strtolower((string) $role->name) === 'admin') {
+        if ($roleName === 'admin') {
             abort(403, 'Only administrators can assign the Admin role.');
         }
+    }
+
+    private function syncClientProjects(User $user, Request $request): void
+    {
+        if ($user->user_type !== 'client') {
+            if ($user->clientProjects()->exists()) {
+                $user->clientProjects()->sync([]);
+            }
+            return;
+        }
+
+        $projectIds = collect($request->input('client_project_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $user->clientProjects()->sync($projectIds);
     }
 
     public function index()
     {
         return response()->json([
-            'data' => User::with('role')
-                ->select('id', 'name', 'nickname', 'email', 'phone_number', 'status', 'role_id', 'role', 'created_at', 'updated_at')
+            'data' => User::with(['role', 'company:id,name', 'clientProjects:id'])
+                ->select('id', 'name', 'nickname', 'email', 'phone_number', 'status', 'role_id', 'role', 'user_type', 'company_id', 'created_at', 'updated_at')
                 ->get(),
         ]);
     }
@@ -57,12 +83,27 @@ class UserController extends Controller
             'phone_number' => 'nullable|string',
             'password' => 'required|string|min:8',
             'status' => 'required|string',
+            'user_type' => 'nullable|in:internal,client',
+            'company_id' => 'required_if:user_type,client|nullable|exists:companies,id',
+            'client_project_ids' => 'nullable|array',
+            'client_project_ids.*' => 'integer|exists:projects,id',
         ]);
 
-        $this->assertValidRoleAssignment($request, (int) $validated['role_id']);
+        $userType = $validated['user_type'] ?? 'internal';
+        $this->assertValidRoleAssignment($request, (int) $validated['role_id'], $userType);
 
         $validated['role'] = Role::find($validated['role_id'])->name;
+        $validated['user_type'] = $userType;
+        if ($userType !== 'client') {
+            $validated['company_id'] = null;
+        }
+        $clientProjectIds = $validated['client_project_ids'] ?? [];
+        unset($validated['client_project_ids']);
+
         $user = User::create($validated);
+        if ($userType === 'client' && $clientProjectIds !== []) {
+            $user->clientProjects()->sync($clientProjectIds);
+        }
 
         $this->log('System', 'Created User', "Created user '{$user->name}' ({$user->email}) with role: {$user->role}");
 
@@ -86,9 +127,14 @@ class UserController extends Controller
             'phone_number' => 'nullable|string',
             'password' => 'nullable|string|min:8',
             'status' => 'required|string',
+            'user_type' => 'nullable|in:internal,client',
+            'company_id' => 'required_if:user_type,client|nullable|exists:companies,id',
+            'client_project_ids' => 'nullable|array',
+            'client_project_ids.*' => 'integer|exists:projects,id',
         ]);
 
-        $this->assertValidRoleAssignment($request, (int) $validated['role_id']);
+        $userType = $validated['user_type'] ?? 'internal';
+        $this->assertValidRoleAssignment($request, (int) $validated['role_id'], $userType);
 
         if (empty($validated['password'])) {
             unset($validated['password']);
@@ -98,7 +144,14 @@ class UserController extends Controller
         $oldRoleName = $user->role;
 
         $validated['role'] = Role::find($validated['role_id'])->name;
+        $validated['user_type'] = $userType;
+        if ($userType !== 'client') {
+            $validated['company_id'] = null;
+        }
+        unset($validated['client_project_ids']);
+
         $changes = $user->update($validated) ? 1 : 0;
+        $this->syncClientProjects($user, $request);
 
         if ((int) $oldRoleId !== (int) $validated['role_id']) {
             $this->log(

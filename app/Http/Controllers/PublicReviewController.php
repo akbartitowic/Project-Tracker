@@ -59,11 +59,12 @@ class PublicReviewController extends Controller
                 'purpose'         => $eval->purpose,
                 'expires_at'      => $rt->expires_at?->toIso8601String(),
                 'questions'       => $eval->questions->map(fn($q) => [
-                    'id'          => $q->id,
-                    'question'    => $q->question,
-                    'description' => $q->description,
-                    'weight'      => $q->weight,
-                    'has_weight'  => $q->has_weight,
+                    'id'                   => $q->id,
+                    'question'             => $q->question,
+                    'description'          => $q->description,
+                    'description_required' => $q->description_required,
+                    'weight'               => $q->weight,
+                    'has_weight'           => $q->has_weight,
                 ])->values(),
             ],
         ]);

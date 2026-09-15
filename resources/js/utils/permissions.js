@@ -22,6 +22,7 @@ const ROUTE_PERMISSION_MAP = [
     { path: '/announcements', permission: 'announcements.read' },
     { path: '/profile', permission: 'profile.read' },
     { path: '/notification-center', permission: 'notification_center.read' },
+    { path: '/client-monitoring', permission: 'client_monitoring.read' },
     { path: '/', permission: 'dashboard.read' },
 ];
 
@@ -80,6 +81,9 @@ export function getDefaultLandingPath(user) {
     }
     if (hasPermission(user, 'project_board.read')) {
         return '/board';
+    }
+    if (hasPermission(user, 'client_monitoring.read')) {
+        return '/client-monitoring';
     }
     return '/';
 }

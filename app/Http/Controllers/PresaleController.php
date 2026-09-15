@@ -360,6 +360,7 @@ class PresaleController extends Controller
         DB::beginTransaction();
         try {
             $project = Project::create([
+                'company_id' => $presale->company_id,
                 'name' => $presale->project_name ?: $presale->name,
                 'status' => 'Planning',
                 'budget_status' => 'On Budget',

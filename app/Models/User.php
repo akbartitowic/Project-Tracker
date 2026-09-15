@@ -27,6 +27,8 @@ class User extends Authenticatable
         'password',
         'role_id',
         'role',
+        'user_type',
+        'company_id',
         'phone_number',
         'status',
         'notify_task_assigned',
@@ -78,6 +80,17 @@ class User extends Authenticatable
     public function role()
     {
         return $this->belongsTo(Role::class);
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /** Projects this client account is restricted to. Empty = unrestricted (all company projects). */
+    public function clientProjects()
+    {
+        return $this->belongsToMany(Project::class, 'client_user_projects');
     }
 
     public function passwordHistories()

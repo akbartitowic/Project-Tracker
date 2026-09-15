@@ -19,7 +19,9 @@ final class TaskBillable
     {
         $eligible = self::quotaEligibleCondition($taskAlias);
 
-        return "COALESCE(SUM(CASE WHEN COALESCE({$taskAlias}.is_billable, 1) = 1 AND {$eligible} THEN {$taskAlias}.estimated_hours ELSE 0 END), 0)";
+        // Portable across MySQL (booleans are tinyint) and Postgres (native boolean) —
+        // avoid COALESCE(bool_col, 1) = 1, which Postgres rejects as a bool/int type mismatch.
+        return "COALESCE(SUM(CASE WHEN ({$taskAlias}.is_billable IS NULL OR {$taskAlias}.is_billable = true) AND {$eligible} THEN {$taskAlias}.estimated_hours ELSE 0 END), 0)";
     }
 
     public static function applyNonBillable(array &$data): void

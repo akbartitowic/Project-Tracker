@@ -14,6 +14,8 @@ export default function CreateProject() {
     const [methodology, setMethodology] = useState('Agile Scrum');
     const [projectName, setProjectName] = useState('');
     const [quotationValue, setQuotationValue] = useState('');
+    const [companyId, setCompanyId] = useState('');
+    const [companiesList, setCompaniesList] = useState([]);
 
     // Member selection states
     const [members, setMembers] = useState([]);
@@ -48,6 +50,7 @@ export default function CreateProject() {
             setSelectedRoles([]);
             setMembers([]);
             setHourlyRate('');
+            setCompanyId('');
             return;
         }
 
@@ -55,6 +58,7 @@ export default function CreateProject() {
         setProjectName(lead.project_name || lead.name || '');
         setQuotationValue(lead.estimated_budget || lead.quotation_value || lead.estimated_value || '');
         setMethodology(lead.methodology || 'Agile Scrum');
+        setCompanyId(lead.company_id ? lead.company_id.toString() : '');
 
         const roleRequirements = lead.role_requirements || [];
         const mappedRoles = roleRequirements.map((item, idx) => ({
@@ -101,6 +105,12 @@ export default function CreateProject() {
                 setProjectRolesList(rolesData.data || []);
                 const allPresales = presalesData.data || [];
                 setPresalesOptions(allPresales);
+                try {
+                    const companiesData = await fetchAPI('/companies');
+                    setCompaniesList(companiesData.data || []);
+                } catch (companyError) {
+                    console.error("Failed to load companies:", companyError);
+                }
 
                 if (fromLead?.id) {
                     const matched = allPresales.find((p) => p.id?.toString() === fromLead.id?.toString());
@@ -187,6 +197,7 @@ export default function CreateProject() {
                 method: 'POST',
                 body: JSON.stringify({
                     name,
+                    company_id: companyId || null,
                     status: 'Planning',
                     budget_status: 'On Budget',
                     completion: 0,
@@ -276,6 +287,23 @@ export default function CreateProject() {
                             <Input type="text" id="projectName" name="projectName" required
                                 value={projectName} onChange={e => setProjectName(e.target.value)}
                                 className="bg-slate-50 dark:bg-background-dark py-6" />
+                        </label>
+                        <label className="flex flex-col gap-2">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Company</span>
+                            <select
+                                className="w-full bg-slate-50 dark:bg-background-dark border border-slate-200 dark:border-slate-800 rounded-lg p-3 text-sm disabled:opacity-60"
+                                value={companyId}
+                                onChange={(e) => setCompanyId(e.target.value)}
+                                disabled={isLinkedFromPresales}
+                            >
+                                <option value="">-- No Company --</option>
+                                {companiesList.map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                            {isLinkedFromPresales && (
+                                <span className="text-xs text-slate-500">Company comes from the linked Presales opportunity.</span>
+                            )}
                         </label>
                         <label className="flex flex-col gap-2">
                             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Quotation Value (IDR)</span>

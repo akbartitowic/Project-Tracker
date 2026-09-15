@@ -12,12 +12,32 @@ class ProjectReview extends Model
         'project_id', 'evaluation_id', 'submitted_by', 'notes', 'total_score',
         'reviewer_name', 'reviewer_company', 'reviewer_position', 'token_id',
         'excluded_at', 'excluded_by',
+        'calibrated_score', 'calibration_locked_at', 'calibration_locked_by',
     ];
 
     protected $casts = [
-        'total_score' => 'float',
-        'excluded_at' => 'datetime',
+        'total_score'           => 'float',
+        'calibrated_score'      => 'float',
+        'excluded_at'           => 'datetime',
+        'calibration_locked_at' => 'datetime',
     ];
+
+    /**
+     * The score aggregations should use: once a submission's calibration is
+     * locked, the recomputed calibrated score replaces the reviewer's original
+     * everywhere (Overall, radar, dashboard proportions, project cards).
+     */
+    public function aggregateScore(): float
+    {
+        return $this->calibration_locked_at !== null && $this->calibrated_score !== null
+            ? (float) $this->calibrated_score
+            : (float) $this->total_score;
+    }
+
+    public function calibrationLockedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'calibration_locked_by');
+    }
 
     /**
      * Only submissions that still count toward aggregations (Overall score,
@@ -27,6 +47,11 @@ class ProjectReview extends Model
     public function scopeCounted($query)
     {
         return $query->whereNull('excluded_at');
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class, 'project_id');
     }
 
     public function evaluation(): BelongsTo

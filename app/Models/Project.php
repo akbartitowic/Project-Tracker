@@ -10,6 +10,7 @@ class Project extends Model
     use HasFactory;
 
     protected $fillable = [
+        'company_id',
         'name',
         'status',
         'budget_status',
@@ -33,4 +34,9 @@ class Project extends Model
         'review_client_emails' => 'array',
         'review_enabled' => 'boolean',
     ];
+
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
+    }
 }

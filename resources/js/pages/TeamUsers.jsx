@@ -10,6 +10,54 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+
+function ClientAccountFields({ companies, projects, companyId, projectIds, onCompanyChange, onProjectIdsChange }) {
+    const companyProjects = projects.filter((p) => String(p.company_id) === String(companyId));
+
+    const toggleProject = (id, checked) => {
+        onProjectIdsChange(checked ? [...projectIds, id] : projectIds.filter((pid) => pid !== id));
+    };
+
+    return (
+        <>
+            <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Company</label>
+                <Select value={companyId?.toString() || ''} onValueChange={onCompanyChange} required>
+                    <SelectTrigger className="h-12">
+                        <SelectValue placeholder="Select company" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {companies.map((c) => (
+                            <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Restrict to specific projects</label>
+                <p className="text-xs text-slate-500">Leave all unchecked to allow every project under this company.</p>
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 p-2 space-y-1">
+                    {!companyId ? (
+                        <p className="text-xs text-slate-400 italic px-1 py-1">Select a company first.</p>
+                    ) : companyProjects.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic px-1 py-1">No projects linked to this company yet.</p>
+                    ) : (
+                        companyProjects.map((p) => (
+                            <label key={p.id} className="flex items-center gap-2 px-1 py-1 text-sm cursor-pointer">
+                                <Checkbox
+                                    checked={projectIds.includes(p.id)}
+                                    onCheckedChange={(checked) => toggleProject(p.id, checked)}
+                                />
+                                {p.name}
+                            </label>
+                        ))
+                    )}
+                </div>
+            </div>
+        </>
+    );
+}
 
 export default function TeamUsers() {
     const navigate = useNavigate();
@@ -26,6 +74,8 @@ export default function TeamUsers() {
     const [editingUserId, setEditingUserId] = useState(null);
 
     const [roles, setRoles] = useState([]);
+    const [companies, setCompanies] = useState([]);
+    const [projects, setProjects] = useState([]);
     const [newUser, setNewUser] = useState({
         name: '',
         nickname: '',
@@ -33,7 +83,10 @@ export default function TeamUsers() {
         role_id: '',
         phone_number: '',
         password: '',
-        status: 'Active'
+        status: 'Active',
+        user_type: 'internal',
+        company_id: '',
+        client_project_ids: [],
     });
     const [editingUser, setEditingUser] = useState(null);
 
@@ -68,6 +121,21 @@ export default function TeamUsers() {
             } catch (err) {
                 console.error("Failed to load user or role data", err);
             }
+            // Best-effort: only needed for the "Client Account" form fields. An actor
+            // without list_company.read/list_project.read can still manage internal
+            // users — they just won't be able to assign a Company to a Client account.
+            try {
+                const companyRes = await fetchAPI('/companies');
+                if (companyRes.data) setCompanies(companyRes.data);
+            } catch (err) {
+                console.error("Failed to load companies", err);
+            }
+            try {
+                const projectRes = await fetchAPI('/projects');
+                if (projectRes.data) setProjects(projectRes.data);
+            } catch (err) {
+                console.error("Failed to load projects", err);
+            }
         };
         loadData();
     }, []);
@@ -87,10 +155,15 @@ export default function TeamUsers() {
         try {
             await fetchAPI('/users', {
                 method: 'POST',
-                body: JSON.stringify({ ...newUser, status: 'Active' })
+                body: JSON.stringify({
+                    ...newUser,
+                    status: 'Active',
+                    company_id: newUser.user_type === 'client' ? (newUser.company_id || null) : null,
+                    client_project_ids: newUser.user_type === 'client' ? newUser.client_project_ids : [],
+                })
             });
             setIsModalOpen(false);
-            setNewUser({ name: '', nickname: '', email: '', phone_number: '', role_id: '', password: '', status: 'Active' });
+            setNewUser({ name: '', nickname: '', email: '', phone_number: '', role_id: '', password: '', status: 'Active', user_type: 'internal', company_id: '', client_project_ids: [] });
             const [userRes, roleRes] = await Promise.all([
                 fetchAPI('/users'),
                 fetchAPI('/roles')
@@ -115,6 +188,9 @@ export default function TeamUsers() {
             status: user.status,
             new_password: '',
             new_password_confirm: '',
+            user_type: user.user_type || 'internal',
+            company_id: user.company_id || '',
+            client_project_ids: (user.client_projects || []).map((p) => p.id),
         });
         setIsEditModalOpen(true);
     };
@@ -130,6 +206,9 @@ export default function TeamUsers() {
                 phone_number: editingUser.phone_number,
                 role_id: editingUser.role_id,
                 status: editingUser.status,
+                user_type: editingUser.user_type,
+                company_id: editingUser.user_type === 'client' ? (editingUser.company_id || null) : null,
+                client_project_ids: editingUser.user_type === 'client' ? editingUser.client_project_ids : [],
             };
             if (canResetPassword && editingUser.new_password) {
                 if (editingUser.new_password !== editingUser.new_password_confirm) {
@@ -365,6 +444,36 @@ export default function TeamUsers() {
                                 </SelectContent>
                             </Select>
                         </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Account Type</label>
+                            <Select
+                                value={newUser.user_type}
+                                onValueChange={(value) => setNewUser(prev => ({
+                                    ...prev,
+                                    user_type: value,
+                                    company_id: value === 'client' ? prev.company_id : '',
+                                    client_project_ids: value === 'client' ? prev.client_project_ids : [],
+                                }))}
+                            >
+                                <SelectTrigger className="h-12">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="internal">Internal Staff</SelectItem>
+                                    <SelectItem value="client">Client Account</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {newUser.user_type === 'client' && (
+                            <ClientAccountFields
+                                companies={companies}
+                                projects={projects}
+                                companyId={newUser.company_id}
+                                projectIds={newUser.client_project_ids}
+                                onCompanyChange={(value) => setNewUser(prev => ({ ...prev, company_id: value }))}
+                                onProjectIdsChange={(ids) => setNewUser(prev => ({ ...prev, client_project_ids: ids }))}
+                            />
+                        )}
                         <DialogFooter className="mt-4 border-t border-slate-200/50 dark:border-slate-700/50 pt-4">
                             <DialogClose asChild>
                                 <Button type="button" variant="ghost">Cancel</Button>
@@ -472,6 +581,36 @@ export default function TeamUsers() {
                                     </Select>
                                 </div>
                             </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Account Type</label>
+                                <Select
+                                    value={editingUser.user_type}
+                                    onValueChange={(value) => setEditingUser(prev => ({
+                                        ...prev,
+                                        user_type: value,
+                                        company_id: value === 'client' ? prev.company_id : '',
+                                        client_project_ids: value === 'client' ? prev.client_project_ids : [],
+                                    }))}
+                                >
+                                    <SelectTrigger className="h-12">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="internal">Internal Staff</SelectItem>
+                                        <SelectItem value="client">Client Account</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {editingUser.user_type === 'client' && (
+                                <ClientAccountFields
+                                    companies={companies}
+                                    projects={projects}
+                                    companyId={editingUser.company_id}
+                                    projectIds={editingUser.client_project_ids}
+                                    onCompanyChange={(value) => setEditingUser(prev => ({ ...prev, company_id: value }))}
+                                    onProjectIdsChange={(ids) => setEditingUser(prev => ({ ...prev, client_project_ids: ids }))}
+                                />
+                            )}
                             <DialogFooter className="mt-4 border-t border-slate-200/50 dark:border-slate-700/50 pt-4">
                                 <DialogClose asChild>
                                     <Button type="button" variant="ghost">Cancel</Button>

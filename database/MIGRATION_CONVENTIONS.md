@@ -48,6 +48,8 @@ Keep total length **&lt; 48 chars** when possible.
 | password_histories | `ph` |
 | announcements | `an` |
 | project_reviews | `prv` |
+| review_calibration_votes | `rcv` |
+| client_user_projects | `cup` |
 
 Add a new row here when you introduce a new table.
 

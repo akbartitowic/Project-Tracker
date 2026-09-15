@@ -76,9 +76,12 @@ class ReviewController extends Controller
     {
         $eval      = ReviewEvaluation::findOrFail($id);
         $hasWeight = $request->boolean('has_weight', true);
+        // Non-weighted questions always need a description; weighted questions only
+        // when the admin explicitly marks it mandatory (default optional).
+        $descriptionRequired = !$hasWeight || $request->boolean('description_required', false);
         $validated = $request->validate([
             'question'    => 'required|string|max:500',
-            'description' => ['nullable', 'string', Rule::requiredIf(!$hasWeight)],
+            'description' => ['nullable', 'string', Rule::requiredIf($descriptionRequired)],
             'weight'      => [Rule::requiredIf($hasWeight), 'nullable', 'numeric', 'min:0', 'max:100'],
         ]);
         $weight = $hasWeight ? $validated['weight'] : 0;
@@ -93,12 +96,13 @@ class ReviewController extends Controller
 
         $order    = $eval->questions()->max('order') + 1;
         $question = ReviewQuestion::create([
-            'evaluation_id' => $eval->id,
-            'question'      => $validated['question'],
-            'description'   => $validated['description'] ?? null,
-            'weight'        => $weight,
-            'has_weight'    => $hasWeight,
-            'order'         => $order,
+            'evaluation_id'        => $eval->id,
+            'question'             => $validated['question'],
+            'description'          => $validated['description'] ?? null,
+            'description_required' => $descriptionRequired,
+            'weight'               => $weight,
+            'has_weight'           => $hasWeight,
+            'order'                => $order,
         ]);
 
         return response()->json(['data' => $question], 201);
@@ -109,9 +113,12 @@ class ReviewController extends Controller
     {
         $question  = ReviewQuestion::findOrFail($id);
         $hasWeight = $request->has('has_weight') ? $request->boolean('has_weight') : $question->has_weight;
+        $descriptionRequired = !$hasWeight || ($request->has('description_required')
+            ? $request->boolean('description_required')
+            : (bool) $question->description_required);
         $validated = $request->validate([
             'question'    => 'sometimes|string|max:500',
-            'description' => ['nullable', 'string', Rule::requiredIf(!$hasWeight)],
+            'description' => ['nullable', 'string', Rule::requiredIf($descriptionRequired)],
             'weight'      => [Rule::requiredIf($hasWeight), 'nullable', 'numeric', 'min:0', 'max:100'],
             'order'       => 'sometimes|integer|min:0',
         ]);
@@ -132,8 +139,9 @@ class ReviewController extends Controller
 
         $question->update([
             ...$validated,
-            'weight'     => $weight,
-            'has_weight' => $hasWeight,
+            'weight'               => $weight,
+            'has_weight'           => $hasWeight,
+            'description_required' => $descriptionRequired,
         ]);
         return response()->json(['data' => $question]);
     }

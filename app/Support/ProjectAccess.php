@@ -153,6 +153,46 @@ class ProjectAccess
     }
 
     /**
+     * Client Monitoring: an external account tied to a company (users.user_type = 'client').
+     * Scoped to that company's projects, never to internal staff data.
+     */
+    public static function isClientUser(?User $user): bool
+    {
+        return (bool) ($user && $user->user_type === 'client');
+    }
+
+    /**
+     * Project IDs a client account may see. Explicit `client_user_projects` rows
+     * restrict to just those; with none, every project under the client's
+     * company is visible. Empty array = no access (not a client, or no company).
+     *
+     * @return array<int>
+     */
+    public static function clientVisibleProjectIds(?User $user): array
+    {
+        if (!self::isClientUser($user) || !$user->company_id) {
+            return [];
+        }
+
+        $restricted = DB::table('client_user_projects')
+            ->where('user_id', $user->id)
+            ->pluck('project_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($restricted->isNotEmpty()) {
+            return $restricted->all();
+        }
+
+        return DB::table('projects')
+            ->where('company_id', $user->company_id)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /**
      * Finance monitoring may operate on any project when the user has finance read permission.
      */
     public static function canAccessProjectFinance(?User $user, int $projectId): bool

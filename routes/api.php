@@ -38,9 +38,11 @@ use App\Http\Controllers\GlobalIntegrationController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\ProjectReviewController;
 use App\Http\Controllers\ReviewTokenController;
+use App\Http\Controllers\ReviewCalibrationController;
 use App\Http\Controllers\PublicReviewController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\ClientMonitoringController;
 
 // Public review submission — no auth required
 Route::middleware('throttle:30,1')->prefix('public')->group(function () {
@@ -225,6 +227,10 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::post('/projects/{id}/quota-transfer', [ProjectAllocationController::class, 'transferQuota'])->middleware('permission:finance_monitoring.update');
     Route::post('/projects/{id}/role-quotas/{quotaId}/deactivate', [ProjectAllocationController::class, 'deactivateRoleQuota'])->middleware('permission:finance_monitoring.update');
 
+    // 7.5 Client Monitoring — company/project-scoped MH quota view for client accounts
+    Route::get('/client-monitoring/summary', [ClientMonitoringController::class, 'summary'])->middleware('permission:client_monitoring.read');
+    Route::get('/client-monitoring/projects/{id}', [ClientMonitoringController::class, 'project'])->middleware('permission:client_monitoring.read');
+
     // 8. Analytics
     Route::get('/stats', [StatController::class, 'stats'])->middleware('permission:reports.read');
     Route::get('/dashboard/overview', [StatController::class, 'dashboardOverview'])->middleware('permission:dashboard.read');
@@ -306,6 +312,14 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     Route::get('/projects/{id}/reviews/{reviewId}', [ProjectReviewController::class, 'show'])->middleware('permission:review.read');
     Route::patch('/projects/{id}/reviews/{reviewId}/exclusion', [ProjectReviewController::class, 'updateExclusion'])->middleware('permission:review.update');
     Route::post('/projects/{id}/evaluations/{evalId}/reviews', [ProjectReviewController::class, 'store'])->middleware('permission:review.create');
+
+    // Review calibration — agree/disagree per question on submitted reviews.
+    // Informational only: never changes a score. Gated by `review.calibrate`.
+    Route::get('/review/calibration', [ReviewCalibrationController::class, 'index'])->middleware('permission:review.calibrate');
+    Route::get('/projects/{id}/reviews/{reviewId}/calibration', [ReviewCalibrationController::class, 'show'])->middleware('permission:review.calibrate');
+    Route::put('/projects/{id}/reviews/{reviewId}/calibration', [ReviewCalibrationController::class, 'update'])->middleware('permission:review.calibrate');
+    Route::post('/projects/{id}/reviews/{reviewId}/calibration/lock', [ReviewCalibrationController::class, 'lock'])->middleware('permission:review.calibrate');
+    Route::delete('/projects/{id}/reviews/{reviewId}/calibration/lock', [ReviewCalibrationController::class, 'unlock'])->middleware('permission:review.calibrate');
 
     // 16. Review Tokens (shareable links)
     Route::get('/projects/{projectId}/evaluations/{evalId}/tokens', [ReviewTokenController::class, 'index'])->middleware('permission:review.update');

@@ -10,6 +10,7 @@ import {
     Send, ArrowLeft, Info, MessageSquare, Plus, AlertCircle,
     Link as LinkIcon, User, CheckCircle2, ClipboardCheck, Clipboard, MailCheck, MailX,
     LayoutDashboard, Radar as RadarIcon, ChevronDown, EyeOff, RotateCcw,
+    Scale, ThumbsUp, ThumbsDown, Unlock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -123,25 +124,32 @@ function ReviewResultBar({ summary, overall, onClick }) {
     );
 }
 
-/* ── Score input (1-10) ── */
-function ScoreInput({ value, onChange }) {
+/* ── Score input (1-10, optionally capped to a [min, max] range — e.g.
+   calibration only allows ±2 of the original score) ── */
+function ScoreInput({ value, onChange, min = 1, max = 10 }) {
     return (
         <div className="flex flex-wrap items-center gap-1">
-            {Array.from({ length: 10 }, (_, i) => i + 1).map(s => (
-                <button
-                    key={s}
-                    type="button"
-                    onClick={() => onChange(s)}
-                    className={cn(
-                        'flex size-7 items-center justify-center rounded-md border text-xs font-semibold transition-colors',
-                        s === value
-                            ? 'border-primary bg-primary text-white'
-                            : 'border-slate-200 bg-white text-slate-500 hover:border-primary/50 hover:text-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
-                    )}
-                >
-                    {s}
-                </button>
-            ))}
+            {Array.from({ length: 10 }, (_, i) => i + 1).map(s => {
+                const disabled = s < min || s > max;
+                return (
+                    <button
+                        key={s}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => onChange(s)}
+                        className={cn(
+                            'flex size-7 items-center justify-center rounded-md border text-xs font-semibold transition-colors',
+                            disabled
+                                ? 'cursor-not-allowed opacity-30 border-slate-200 bg-white text-slate-400 dark:border-slate-700 dark:bg-slate-800'
+                                : s === value
+                                    ? 'border-primary bg-primary text-white'
+                                    : 'border-slate-200 bg-white text-slate-500 hover:border-primary/50 hover:text-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
+                        )}
+                    >
+                        {s}
+                    </button>
+                );
+            })}
             {value > 0 && (
                 <span className="ml-1 text-xs text-slate-500">{value}/10</span>
             )}
@@ -285,7 +293,9 @@ function EvaluationAggregateDetail({ evalSummary, evalDetail, reviews, canConfig
             qMap.set(a.question_id, { question: a.question, weight: a.weight, scores: [], comments: [] });
         }
         const q = qMap.get(a.question_id);
-        q.scores.push(a.score);
+        // Once a submission's calibration is locked, its calibrated per-question
+        // score replaces the reviewer's original in every aggregate.
+        q.scores.push(a.calibrated_score ?? a.score);
         if (a.comment) q.comments.push({ by: r.submitted_by, comment: a.comment });
     }));
 
@@ -329,8 +339,9 @@ function EvaluationAggregateDetail({ evalSummary, evalDetail, reviews, canConfig
                                 {new Date(r.submitted_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                             </p>
                         </button>
-                        <span className={cn('text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0', r.is_excluded && 'line-through')}>
-                            {r.total_score?.toFixed(1)}%
+                        <span className={cn('text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0 flex items-center gap-1', r.is_excluded && 'line-through')}>
+                            {r.is_calibration_locked && <Lock className="size-2.5 text-amber-500" title="Skor terkalibrasi" />}
+                            {(r.aggregate_score ?? r.total_score)?.toFixed(1)}%
                         </span>
                         {canConfig && onToggleExclude && (
                             <Button
@@ -409,11 +420,19 @@ function ReviewDetail({ review, canConfig, onToggleExclude, toggling }) {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <LevelBadge score={review.total_score} />
-                    <span className={cn(
-                        'text-sm font-bold text-slate-700 dark:text-slate-200',
-                        review.is_excluded && 'line-through text-slate-400 dark:text-slate-500',
-                    )}>{review.total_score?.toFixed(1)}%</span>
+                    <LevelBadge score={review.is_calibration_locked ? review.calibrated_score : review.total_score} />
+                    {review.is_calibration_locked ? (
+                        <span className="flex items-center gap-1 text-sm font-bold text-slate-700 dark:text-slate-200">
+                            <Lock className="size-3 text-amber-500" />
+                            <span className="text-slate-400 line-through font-medium">{review.total_score?.toFixed(1)}%</span>
+                            {review.calibrated_score?.toFixed(1)}%
+                        </span>
+                    ) : (
+                        <span className={cn(
+                            'text-sm font-bold text-slate-700 dark:text-slate-200',
+                            review.is_excluded && 'line-through text-slate-400 dark:text-slate-500',
+                        )}>{review.total_score?.toFixed(1)}%</span>
+                    )}
                 </div>
             </div>
 
@@ -456,7 +475,8 @@ function ReviewDetail({ review, canConfig, onToggleExclude, toggling }) {
 
             <div className="space-y-3">
                 {review.answers?.map((a, idx) => {
-                    const level = getLevel((a.score / 10) * 100);
+                    const effective = a.calibrated_score ?? a.score;
+                    const level = getLevel((effective / 10) * 100);
                     return (
                         <div key={a.question_id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
                             <div className="flex items-start gap-2">
@@ -466,7 +486,10 @@ function ReviewDetail({ review, canConfig, onToggleExclude, toggling }) {
                                     <p className="text-[10px] text-primary">Bobot {a.weight}%</p>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className={cn('text-sm font-bold', level?.color)}>{a.score}/10</span>
+                                    {a.calibrated_score != null && a.calibrated_score !== a.score && (
+                                        <span className="text-xs text-slate-400 line-through">{a.score}/10</span>
+                                    )}
+                                    <span className={cn('text-sm font-bold', level?.color)}>{effective}/10</span>
                                 </div>
                             </div>
                             {a.comment && (
@@ -2168,12 +2191,601 @@ function ProjectListRow({ project, onOpenSummary, summaryData }) {
     );
 }
 
+/* ══ Calibration tab ══════════════════════════════════════════════════════
+   Roles granted `review.calibrate` vote agree/disagree on each question of a
+   submitted review. A "disagree" vote must carry the calibrator's own 1–10
+   score + a reason. A question "passes" when >60% of votes agree; a submission
+   is "Valid" when >60% of its voted questions pass. The effective per-question
+   score = average across all calibrators (original per "agree", proposed per
+   "disagree"); the recomputed weighted total REPLACES the original in every
+   aggregation once the submission's calibration is LOCKED here.
+   All list state lives in the URL (calib_*).                                    */
+
+const CALIB_METHODS  = ['all', 'Waterfall', 'Agile Scrum'];
+const CALIB_STATUSES = ['all', 'pending', 'valid', 'invalid'];
+const CALIB_SORTS    = ['recent', 'oldest', 'score_desc', 'score_asc'];
+
+const CALIB_VERDICT = {
+    pending: { label: 'Belum dikalibrasi', cls: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' },
+    valid:   { label: 'Valid',             cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    invalid: { label: 'Tidak Valid',       cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+};
+const CALIB_SORT_LABEL = {
+    recent:     'Terbaru',
+    oldest:     'Terlama',
+    score_desc: 'Skor tertinggi',
+    score_asc:  'Skor terendah',
+};
+
+function VerdictBadge({ verdict }) {
+    const v = CALIB_VERDICT[verdict] ?? CALIB_VERDICT.pending;
+    return (
+        <span className={cn('inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border', v.cls)}>
+            {v.label}
+        </span>
+    );
+}
+
+// Score segments for a before/after calibration distribution bucket — same
+// good/fair/poor palette as the dashboard's "Distribusi Skor" chart, so the
+// two contexts read as the same kind of chart.
+const calibScoreSegments = (dist) => ([
+    { key: 'good', label: 'Baik',             value: dist?.good ?? 0, barColor: 'bg-emerald-500', dotColor: 'bg-emerald-500' },
+    { key: 'fair', label: 'Cukup',            value: dist?.fair ?? 0, barColor: 'bg-amber-500',   dotColor: 'bg-amber-500' },
+    { key: 'poor', label: 'Perlu Perbaikan',  value: dist?.poor ?? 0, barColor: 'bg-rose-500',    dotColor: 'bg-rose-500' },
+]);
+
+function CalibrationTab() {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const currentYear = new Date().getFullYear();
+
+    const rawMethod = searchParams.get('calib_method');
+    const rawStatus = searchParams.get('calib_status');
+    const rawYear   = searchParams.get('calib_year');
+    const rawSort   = searchParams.get('calib_sort');
+    const method = CALIB_METHODS.includes(rawMethod)  ? rawMethod : 'all';
+    const status = CALIB_STATUSES.includes(rawStatus) ? rawStatus : 'all';
+    // "Tahun" defaults to the current calendar year, same convention as the
+    // page-level year filter on the dashboard tab — not a fixed whitelist,
+    // since the set of valid years grows every year.
+    const year   = rawYear === 'all' ? 'all' : (rawYear ? Number(rawYear) || currentYear : currentYear);
+    const sort   = CALIB_SORTS.includes(rawSort)      ? rawSort   : 'recent';
+    const page   = Math.max(1, Number(searchParams.get('calib_page')) || 1);
+    const openId = searchParams.get('calibrate');
+    const [pageSize, setPageSize] = useState(20);
+
+    const setParam = (key, val, def) => setSearchParams(prev => {
+        if (val === def) prev.delete(key); else prev.set(key, String(val));
+        if (key !== 'calib_page') prev.delete('calib_page'); // any filter change → back to page 1
+        return prev;
+    }, key === 'calib_page' ? { replace: true } : undefined);
+
+    const openDialog  = (id) => setSearchParams(prev => { prev.set('calibrate', String(id)); return prev; });
+    const closeDialog = ()   => setSearchParams(prev => { prev.delete('calibrate'); return prev; });
+
+    const [rows,         setRows]         = useState([]);
+    const [meta,         setMeta]         = useState({ total: 0, last_page: 1, available_years: [] });
+    const [distribution, setDistribution] = useState(null);
+    const [loading,      setLoading]      = useState(true);
+    const [error,        setError]        = useState(null);
+
+    const load = useCallback(async () => {
+        setLoading(true); setError(null);
+        try {
+            const qs = new URLSearchParams({ sort, page: String(page), per_page: String(pageSize) });
+            if (method !== 'all') qs.set('methodology', method);
+            if (status !== 'all') qs.set('status', status);
+            if (year !== 'all') qs.set('year', String(year));
+            const res = await fetchAPI(`/review/calibration?${qs.toString()}`);
+            setRows(res.data ?? []);
+            setMeta(res.meta ?? { total: (res.data ?? []).length, last_page: 1, available_years: [] });
+            setDistribution(res.distribution ?? null);
+        } catch { setError('Gagal memuat daftar kalibrasi.'); }
+        finally { setLoading(false); }
+    }, [method, status, year, sort, page, pageSize]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const openRow = useMemo(() => rows.find(r => String(r.review_id) === String(openId)) ?? null, [rows, openId]);
+
+    // Year dropdown always offers at least the current year even before data loads.
+    const availableYears = useMemo(() => {
+        const years = new Set([currentYear, ...(meta.available_years ?? [])]);
+        return Array.from(years).sort((a, b) => b - a);
+    }, [meta.available_years, currentYear]);
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-start gap-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">
+                <Info className="size-3.5 shrink-0 mt-0.5" />
+                <p>
+                    Kalibrator memberi <span className="font-medium">Setuju / Tidak Setuju</span> per pertanyaan; kalau Tidak Setuju wajib mengisi skor usulan (1–10) + alasan.
+                    Skor efektif tiap pertanyaan = rata-rata semua kalibrator (skor reviewer untuk yang Setuju, skor usulan untuk yang Tidak Setuju).
+                    Selama <span className="font-medium">belum dikunci</span>, skor asli yang dipakai. Begitu <span className="font-medium text-amber-600 dark:text-amber-400">dikunci</span>,
+                    skor terkalibrasi menggantikan skor asli di Skor Overall, radar, proporsi dashboard, dan kartu project. Bisa dibuka kunci lagi.
+                </p>
+            </div>
+
+            {/* Distribusi Skor — sebelum vs. sesudah kalibrasi, dihitung PER PROJECT
+                (tiap project dirata-rata dulu dari submission-nya sendiri, baru
+                dirata-rata lagi lintas project) — cara yang sama persis dipakai
+                "Distribusi Skor"/"Skor Overall" di dashboard `/review`, supaya dua
+                angka ini benar-benar bisa dibandingkan apple-to-apple. "Setelah" cuma
+                beda dari "Sebelum" untuk submission yang sudah dikunci. */}
+            {distribution && distribution.before?.total > 0 && (
+                <div className="grid md:grid-cols-2 gap-3">
+                    <SegmentedBarChart
+                        title="Distribusi Skor — Sebelum Kalibrasi"
+                        headline={distribution.before.avg != null ? `${distribution.before.avg.toFixed(1)}%` : '—'}
+                        headlineSub={`rata-rata dari ${distribution.before.total} project`}
+                        segments={calibScoreSegments(distribution.before)}
+                        emptyLabel="Belum ada penilaian untuk filter ini."
+                    />
+                    <SegmentedBarChart
+                        title="Distribusi Skor — Setelah Kalibrasi"
+                        headline={distribution.after.avg != null ? `${distribution.after.avg.toFixed(1)}%` : '—'}
+                        headlineSub={`rata-rata dari ${distribution.after.total} project`}
+                        segments={calibScoreSegments(distribution.after)}
+                        emptyLabel="Belum ada penilaian untuk filter ini."
+                    />
+                </div>
+            )}
+
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-lg border border-slate-200 bg-white/70 p-0.5 dark:border-white/10 dark:bg-[#151b28]">
+                    {CALIB_METHODS.map(m => (
+                        <button
+                            key={m}
+                            onClick={() => setParam('calib_method', m, 'all')}
+                            className={cn(
+                                'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                                method === m ? 'bg-accent text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
+                            )}
+                        >
+                            {m === 'all' ? 'Semua' : m}
+                        </button>
+                    ))}
+                </div>
+
+                <Select value={status} onValueChange={(v) => setParam('calib_status', v, 'all')}>
+                    <SelectTrigger className="h-8 w-[150px] text-xs border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-[#151b28]">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Semua status</SelectItem>
+                        <SelectItem value="pending">Belum dikalibrasi</SelectItem>
+                        <SelectItem value="valid">Valid</SelectItem>
+                        <SelectItem value="invalid">Tidak Valid</SelectItem>
+                    </SelectContent>
+                </Select>
+
+                <Select value={String(year)} onValueChange={(v) => setParam('calib_year', v === 'all' ? 'all' : Number(v), currentYear)}>
+                    <SelectTrigger className="h-8 w-[130px] text-xs border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-[#151b28]">
+                        <SelectValue placeholder="Tahun" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Semua Tahun</SelectItem>
+                        {availableYears.map(y => (
+                            <SelectItem key={y} value={String(y)}>Tahun {y}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
+                <Select value={sort} onValueChange={(v) => setParam('calib_sort', v, 'recent')}>
+                    <SelectTrigger className="h-8 w-[150px] text-xs border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-[#151b28]">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {CALIB_SORTS.map(s => (
+                            <SelectItem key={s} value={s}>{CALIB_SORT_LABEL[s]}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* List */}
+            {loading ? (
+                <div className="flex items-center justify-center gap-2 py-16 text-slate-400 text-sm">
+                    <Loader2 className="size-5 animate-spin" /> Memuat…
+                </div>
+            ) : error ? (
+                <div className="flex items-center justify-center gap-2 py-16 text-rose-500 text-sm">
+                    <X className="size-4 shrink-0" /> {error}
+                    <Button variant="outline" size="sm" className="ml-2 h-7 text-xs" onClick={load}>Coba lagi</Button>
+                </div>
+            ) : rows.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-12 text-center">Tidak ada penilaian untuk filter ini.</p>
+            ) : (
+                <div className="space-y-2.5">
+                    {rows.map(r => {
+                        const c = r.calibration ?? {};
+                        const level = getLevel(r.total_score);
+                        return (
+                            <button
+                                key={r.review_id}
+                                onClick={() => openDialog(r.review_id)}
+                                className="w-full text-left rounded-xl border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-[#151b28] p-3.5 hover:border-accent/50 transition-colors"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-sm font-semibold text-slate-800 dark:text-white truncate">{r.project_name}</span>
+                                            <span className={cn('inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full border', METHODOLOGY_STYLE[r.methodology] ?? 'bg-slate-100 text-slate-400 border-slate-200')}>
+                                                {r.methodology ?? '—'}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                                            {r.evaluation_name} · oleh {r.reviewer_name}{r.reviewer_company ? ` (${r.reviewer_company})` : ''} · {fmtDateWIB(r.submitted_at)}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        {r.total_score != null && (
+                                            c.is_locked && c.calibrated_score != null && Number(c.calibrated_score) !== Number(r.total_score) ? (
+                                                <span className="flex items-center gap-1 leading-none">
+                                                    <span className="text-xs text-slate-400 line-through">{Number(r.total_score).toFixed(1)}</span>
+                                                    <span className={cn('text-sm font-bold', getLevel(Number(c.calibrated_score))?.color)}>{Number(c.calibrated_score).toFixed(1)}</span>
+                                                </span>
+                                            ) : (
+                                                <span className={cn('text-sm font-bold leading-none', level?.color)}>{Number(r.total_score).toFixed(1)}</span>
+                                            )
+                                        )}
+                                        <ChevronRight className="size-3.5 text-slate-400" />
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap mt-2.5">
+                                    <VerdictBadge verdict={c.verdict} />
+                                    {c.is_locked && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                                            <Lock className="size-2.5" /> Terkunci
+                                        </span>
+                                    )}
+                                    <span className="text-[10px] text-slate-400">
+                                        {(c.decided_count ?? 0)}/{(c.total_count ?? 0)} pertanyaan dinilai · {(c.passed_count ?? 0)} lolos · {(c.voter_count ?? 0)} kalibrator
+                                        {(c.calibrator_names ?? []).length > 0 && ` (${c.calibrator_names.join(', ')})`}
+                                    </span>
+                                    {r.is_excluded && (
+                                        <span className="text-[10px] text-slate-400 inline-flex items-center gap-1"><EyeOff className="size-2.5" /> tidak dihitung</span>
+                                    )}
+                                </div>
+                            </button>
+                        );
+                    })}
+                    <PaginationControls
+                        page={page} pageSize={pageSize} total={meta.total ?? rows.length}
+                        onPageChange={(n) => setParam('calib_page', n, 1)}
+                        onPageSizeChange={(s) => { setPageSize(s); setParam('calib_page', 1, 1); }}
+                        perPageLabel="Per halaman"
+                        formatShowing={(from, to, t) => `Menampilkan ${from}–${to} dari ${t}`}
+                    />
+                </div>
+            )}
+
+            <CalibrationDialog
+                key={openId ?? 'none'}
+                open={openRow !== null}
+                projectId={openRow?.project_id}
+                reviewId={openRow?.review_id}
+                onClose={closeDialog}
+                onSaved={load}
+            />
+        </div>
+    );
+}
+
+const calibStateFromDetail = (data) => {
+    const map = {};
+    (data?.questions ?? []).forEach(q => {
+        map[q.question_id] = {
+            agree:  q.my_vote,                                  // true | false | null
+            score:  q.my_proposed_score != null ? String(q.my_proposed_score) : '',
+            reason: q.my_reason ?? '',
+        };
+    });
+    return map;
+};
+
+function CalibrationDialog({ open, projectId, reviewId, onClose, onSaved }) {
+    const [detail,  setDetail]  = useState(null);
+    const [myVotes, setMyVotes] = useState({}); // question_id -> { agree, score, reason }
+    const [loading, setLoading] = useState(true);
+    const [saving,  setSaving]  = useState(false);
+    const [locking, setLocking] = useState(false);
+    const [error,   setError]   = useState(null);
+
+    const applyDetail = (data) => { setDetail(data); setMyVotes(calibStateFromDetail(data)); };
+
+    const load = useCallback(async () => {
+        if (!projectId || !reviewId) return;
+        setLoading(true); setError(null);
+        try {
+            const res = await fetchAPI(`/projects/${projectId}/reviews/${reviewId}/calibration`);
+            applyDetail(res.data);
+        } catch { setError('Gagal memuat detail kalibrasi.'); }
+        finally { setLoading(false); }
+    }, [projectId, reviewId]);
+
+    useEffect(() => { if (open) load(); }, [open, load]);
+
+    const locked = !!detail?.is_locked;
+
+    const setAgree = (qid, agree) => setMyVotes(prev => {
+        const cur = prev[qid] ?? { agree: null, score: '', reason: '' };
+        return { ...prev, [qid]: { ...cur, agree: cur.agree === agree ? null : agree } };
+    });
+    const setScore  = (qid, score)  => setMyVotes(prev => ({ ...prev, [qid]: { ...(prev[qid] ?? { agree: false, reason: '' }), score: String(score) } }));
+    const setReason = (qid, reason) => setMyVotes(prev => ({ ...prev, [qid]: { ...(prev[qid] ?? { agree: false, score: '' }), reason } }));
+
+    // A proposed score is capped to ±2 of the reviewer's original score for that question.
+    const scoreRange = (qid) => {
+        const original = detail?.questions?.find(q => q.question_id === qid)?.score ?? 0;
+        return { min: Math.max(1, original - 2), max: Math.min(10, original + 2) };
+    };
+
+    const disagreeIncomplete = useMemo(() => Object.entries(myVotes).some(([qid, v]) => {
+        if (v.agree !== false) return false;
+        if (!v.score || !v.reason.trim()) return true;
+        const { min, max } = scoreRange(Number(qid));
+        return Number(v.score) < min || Number(v.score) > max;
+    }), [myVotes, detail]);
+
+    const dirty = useMemo(() => {
+        if (!detail) return false;
+        return (detail.questions ?? []).some(q => {
+            const v = myVotes[q.question_id] ?? { agree: null, score: '', reason: '' };
+            const orig = { agree: q.my_vote ?? null, score: q.my_proposed_score != null ? String(q.my_proposed_score) : '', reason: q.my_reason ?? '' };
+            if ((v.agree ?? null) !== orig.agree) return true;
+            if (v.agree === false && (v.score !== orig.score || v.reason !== orig.reason)) return true;
+            return false;
+        });
+    }, [detail, myVotes]);
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            const votes = Object.entries(myVotes)
+                .filter(([, v]) => v.agree === true || v.agree === false)
+                .map(([qid, v]) => v.agree
+                    ? { question_id: Number(qid), agree: true }
+                    : { question_id: Number(qid), agree: false, proposed_score: Number(v.score), reason: v.reason.trim() });
+            const res = await fetchAPI(`/projects/${projectId}/reviews/${reviewId}/calibration`, {
+                method: 'PUT', body: JSON.stringify({ votes }),
+            });
+            applyDetail(res.data);
+            onSaved?.();
+        } catch (e) { alert(e.message || 'Gagal menyimpan kalibrasi.'); }
+        finally { setSaving(false); }
+    };
+
+    const toggleLock = async () => {
+        const isLock = !locked;
+        if (isLock && !window.confirm('Kunci kalibrasi? Skor terkalibrasi akan menggantikan skor asli di Skor Overall, radar, dan dashboard sampai dibuka kunci.')) return;
+        setLocking(true);
+        try {
+            const res = await fetchAPI(`/projects/${projectId}/reviews/${reviewId}/calibration/lock`, {
+                method: isLock ? 'POST' : 'DELETE',
+            });
+            applyDetail(res.data);
+            onSaved?.();
+        } catch (e) { alert(e.message || 'Gagal mengubah kunci kalibrasi.'); }
+        finally { setLocking(false); }
+    };
+
+    const origScore = detail?.total_score != null ? Number(detail.total_score) : null;
+    const calScore  = locked
+        ? (detail?.locked_score != null ? Number(detail.locked_score) : null)
+        : (detail?.calibrated_score != null ? Number(detail.calibrated_score) : null);
+
+    return (
+        <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+            <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-base">
+                        <Scale className="size-4 text-primary" /> Kalibrasi Penilaian
+                    </DialogTitle>
+                </DialogHeader>
+
+                {loading ? (
+                    <div className="flex items-center justify-center gap-2 py-12 text-slate-400 text-sm">
+                        <Loader2 className="size-5 animate-spin" /> Memuat…
+                    </div>
+                ) : error ? (
+                    <div className="flex items-center justify-center gap-2 py-12 text-rose-500 text-sm">
+                        <X className="size-4" /> {error}
+                        <Button variant="outline" size="sm" className="ml-2 h-7 text-xs" onClick={load}>Coba lagi</Button>
+                    </div>
+                ) : detail ? (
+                    <div className="space-y-4">
+                        <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-slate-800 dark:text-white">{detail.project_name}</p>
+                                <div className="flex items-center gap-1.5">
+                                    {locked && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                                            <Lock className="size-2.5" /> Terkunci
+                                        </span>
+                                    )}
+                                    <VerdictBadge verdict={detail.verdict} />
+                                </div>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                {detail.evaluation_name} · oleh {detail.reviewer_name}{detail.reviewer_company ? ` (${detail.reviewer_company})` : ''} · {fmtDateWIB(detail.submitted_at)}
+                            </p>
+                            <p className="text-[11px] text-slate-400 mt-1.5">
+                                {detail.decided_count}/{detail.total_count} pertanyaan dinilai · {detail.passed_count} lolos · {detail.voter_count} kalibrator
+                            </p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                                Dikalibrasi oleh:{' '}
+                                {(detail.calibrators ?? []).length === 0 ? (
+                                    <span className="italic">belum ada</span>
+                                ) : (
+                                    detail.calibrators.map((c, i) => (
+                                        <span key={c.user_id}>
+                                            {i > 0 && ', '}
+                                            <span className="font-medium text-slate-600 dark:text-slate-300">{c.name}</span>
+                                            {' '}({[
+                                                c.agree_count > 0 && `${c.agree_count} setuju`,
+                                                c.disagree_count > 0 && `${c.disagree_count} tidak setuju`,
+                                            ].filter(Boolean).join(', ')})
+                                        </span>
+                                    ))
+                                )}
+                            </p>
+                            <div className="flex items-center gap-2 mt-2 text-xs">
+                                <span className="text-slate-500 dark:text-slate-400">Skor:</span>
+                                <span className={cn('font-semibold', calScore != null && origScore != null && calScore !== origScore && 'line-through text-slate-400')}>
+                                    {origScore != null ? origScore.toFixed(1) : '—'}
+                                </span>
+                                {calScore != null && origScore != null && calScore !== origScore && (
+                                    <>
+                                        <ChevronRight className="size-3 text-slate-400" />
+                                        <span className={cn('font-bold', getLevel(calScore)?.color)}>{calScore.toFixed(1)}</span>
+                                        <span className="text-[10px] text-slate-400">{locked ? '(terkunci — dipakai di agregasi)' : '(pratinjau — belum dipakai)'}</span>
+                                    </>
+                                )}
+                            </div>
+                            {locked && detail.locked_by && (
+                                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">Dikunci oleh {detail.locked_by} · {fmtDateWIB(detail.locked_at)}</p>
+                            )}
+                        </div>
+
+                        {locked && (
+                            <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                                <Lock className="size-3 shrink-0" /> Suara dibekukan selama terkunci. Buka kunci untuk mengubah kalibrasi.
+                            </p>
+                        )}
+
+                        <div className="space-y-3">
+                            {(detail.questions ?? []).map((q, i) => {
+                                const v   = myVotes[q.question_id] ?? { agree: null, score: '', reason: '' };
+                                const eff = q.effective_score != null ? Number(q.effective_score) : null;
+                                return (
+                                    <div key={q.question_id} className="rounded-lg border border-slate-200 dark:border-white/10 p-3">
+                                        <p className="text-sm font-medium text-slate-800 dark:text-white">{i + 1}. {q.question}</p>
+                                        {q.description && <p className="text-[11px] text-slate-400 mt-0.5">{q.description}</p>}
+                                        <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
+                                            <span className="inline-flex items-center gap-1 font-medium text-slate-600 dark:text-slate-300">
+                                                Skor reviewer: {q.score}/10
+                                                {eff != null && eff !== Number(q.score) && (
+                                                    <><ChevronRight className="size-3" /> terkalibrasi {eff}/10</>
+                                                )}
+                                            </span>
+                                            {q.comment && <span className="italic truncate">“{q.comment}”</span>}
+                                        </div>
+
+                                        <div className="flex items-center justify-between gap-3 mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    disabled={locked}
+                                                    onClick={() => setAgree(q.question_id, true)}
+                                                    className={cn(
+                                                        'inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                                                        v.agree === true
+                                                            ? 'bg-emerald-500 text-white border-emerald-500'
+                                                            : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-emerald-400',
+                                                    )}
+                                                >
+                                                    <ThumbsUp className="size-3.5" /> Setuju
+                                                </button>
+                                                <button
+                                                    disabled={locked}
+                                                    onClick={() => setAgree(q.question_id, false)}
+                                                    className={cn(
+                                                        'inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                                                        v.agree === false
+                                                            ? 'bg-rose-500 text-white border-rose-500'
+                                                            : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-rose-400',
+                                                    )}
+                                                >
+                                                    <ThumbsDown className="size-3.5" /> Tidak Setuju
+                                                </button>
+                                            </div>
+                                            <span className={cn(
+                                                'text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0',
+                                                q.status === 'passed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                    : q.status === 'failed' ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                                    : 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-800 dark:border-slate-700',
+                                            )}>
+                                                {q.votes === 0 ? 'Belum ada suara' : `Setuju: ${q.agree} · Tidak Setuju: ${q.votes - q.agree} · Total kalibrator: ${q.votes}`}
+                                            </span>
+                                        </div>
+
+                                        {(q.voters ?? []).length > 0 && (
+                                            <p className="text-[10px] text-slate-400 mt-1.5" title={q.voters.map(voter => `${voter.name}: ${voter.agree ? 'Setuju' : `Tidak Setuju (usulan ${voter.proposed_score}/10${voter.reason ? ` — "${voter.reason}"` : ''})`}`).join(' · ')}>
+                                                Setuju: {q.voters.filter(voter => voter.agree).map(voter => voter.name).join(', ') || '—'}
+                                                {' · '}
+                                                Tidak Setuju: {q.voters.filter(voter => !voter.agree).map(voter => voter.name).join(', ') || '—'}
+                                            </p>
+                                        )}
+
+                                        {v.agree === false && !locked && (() => {
+                                            const { min: scoreMin, max: scoreMax } = scoreRange(q.question_id);
+                                            return (
+                                            <div className="mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                                                <div>
+                                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
+                                                        Skor usulan Anda <span className="text-rose-400">*</span>
+                                                        <span className="normal-case font-normal text-slate-400"> — rentang {scoreMin}–{scoreMax} (maks ±2 dari skor asli {q.score})</span>
+                                                    </p>
+                                                    <ScoreInput value={Number(v.score) || 0} onChange={(s) => setScore(q.question_id, s)} min={scoreMin} max={scoreMax} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Alasan <span className="text-rose-400">*</span></p>
+                                                    <Textarea
+                                                        rows={2}
+                                                        value={v.reason}
+                                                        onChange={(e) => setReason(q.question_id, e.target.value)}
+                                                        placeholder="Kenapa skor reviewer tidak sesuai?"
+                                                        className="text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                            );
+                                        })()}
+                                        {v.agree === false && locked && v.reason && (
+                                            <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                                Usulan Anda: <span className="font-medium">{v.score}/10</span> — “{v.reason}”
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ) : null}
+
+                {detail && (
+                    <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between gap-2">
+                        <Button
+                            variant="outline" size="sm"
+                            className={locked ? 'text-slate-600' : 'text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20'}
+                            disabled={locking || (!locked && detail.decided_count === 0)}
+                            onClick={toggleLock}
+                        >
+                            {locking ? <Loader2 className="size-3.5 animate-spin" />
+                                : locked ? <><Unlock className="size-3.5 mr-1.5" /> Buka Kunci</>
+                                : <><Lock className="size-3.5 mr-1.5" /> Kunci Kalibrasi</>}
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={onClose}>Tutup</Button>
+                            <Button size="sm" onClick={save} disabled={saving || locked || !dirty || disagreeIncomplete}>
+                                {saving ? <Loader2 className="size-3.5 animate-spin" /> : 'Simpan'}
+                            </Button>
+                        </div>
+                    </DialogFooter>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 /* ── Page ── */
 export default function Review() {
     const { user }  = useAuth();
-    const canRead   = hasPermission(user, 'review.read');
-    const canConfig = hasPermission(user, 'review.update');
-    const canSubmit = hasPermission(user, 'review.create');
+    const canRead      = hasPermission(user, 'review.read');
+    const canConfig    = hasPermission(user, 'review.update');
+    const canSubmit    = hasPermission(user, 'review.create');
+    const canCalibrate = hasPermission(user, 'review.calibrate');
 
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -2183,7 +2795,10 @@ export default function Review() {
     // View tab — "dashboard" (overview across all projects) / "Waterfall" / "Agile Scrum"
     // (project browsing filtered per methodology), synced to the URL (?methodology=...)
     // so it's linkable/bookmarkable, same pattern as the Aktif/Done/Favorit tabs on the Project Board.
-    const methodologyTab = searchParams.get('methodology') ?? 'dashboard';
+    const rawMethodologyTab = searchParams.get('methodology') ?? 'dashboard';
+    // "calibration" is a real tab too, but only for holders of review.calibrate —
+    // a hand-typed ?methodology=calibration falls back to the dashboard otherwise.
+    const methodologyTab = (rawMethodologyTab === 'calibration' && !canCalibrate) ? 'dashboard' : rawMethodologyTab;
     const setMethodologyTab = (m) => setSearchParams(prev => {
         if (m === 'dashboard') prev.delete('methodology'); else prev.set('methodology', m);
         prev.delete('project');
@@ -2332,7 +2947,7 @@ export default function Review() {
                             <Settings2 className="size-3.5" /> Konfigurasi
                         </Button>
                     )}
-                    {methodologyTab !== 'dashboard' && (
+                    {methodologyTab !== 'dashboard' && methodologyTab !== 'calibration' && (
                         <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
                         {['card', 'list'].map(v => (
                             <button key={v} onClick={() => setView(v)} className={cn(
@@ -2380,19 +2995,31 @@ export default function Review() {
                         Agile Scrum
                         <span className="text-xs opacity-80">({agileCount})</span>
                     </Button>
+                    {canCalibrate && (
+                        <Button
+                            type="button" variant="ghost" size="sm"
+                            className={cn('h-8 gap-1.5 px-3', methodologyTab === 'calibration' && 'bg-accent text-white hover:bg-accent hover:text-white')}
+                            onClick={() => setMethodologyTab('calibration')}
+                        >
+                            <Scale className="size-3.5" />
+                            Kalibrasi
+                        </Button>
+                    )}
                 </div>
 
-                <Select value={String(yearFilter)} onValueChange={(v) => setYearFilter(v === 'all' ? 'all' : Number(v))}>
-                    <SelectTrigger className="h-8 w-[130px] text-xs border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-[#151b28]">
-                        <SelectValue placeholder="Tahun" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">Semua Tahun</SelectItem>
-                        {availableYears.map(y => (
-                            <SelectItem key={y} value={String(y)}>Tahun {y}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                {methodologyTab !== 'calibration' && (
+                    <Select value={String(yearFilter)} onValueChange={(v) => setYearFilter(v === 'all' ? 'all' : Number(v))}>
+                        <SelectTrigger className="h-8 w-[130px] text-xs border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-[#151b28]">
+                            <SelectValue placeholder="Tahun" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Semua Tahun</SelectItem>
+                            {availableYears.map(y => (
+                                <SelectItem key={y} value={String(y)}>Tahun {y}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
                 </div>
             )}
 
@@ -2421,6 +3048,8 @@ export default function Review() {
                 ) : (
                     <ReviewDashboard summaries={summaries} projects={yearFilteredProjects} onOpenProject={openSummary} />
                 )
+            ) : methodologyTab === 'calibration' ? (
+                <CalibrationTab />
             ) : sortedProjects.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-300/70 dark:border-white/10 rounded-xl bg-white/50 backdrop-blur-sm dark:bg-white/5">
                     <Star className="size-12 mb-3 opacity-20" />

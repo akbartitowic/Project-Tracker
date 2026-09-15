@@ -30,6 +30,9 @@ class AuthController extends Controller
         $data['password_expired'] = $user->isPasswordExpired();
         $data['avatar_url'] = PublicStorageUrl::for($user->avatar_path);
         $data['role_name'] = $roleModel?->name ?? ($data['role'] ?? null);
+        $data['company'] = $user->company_id
+            ? optional($user->company()->first(['id', 'name']))->only(['id', 'name'])
+            : null;
         $data['role_permissions'] = $roleModel
             ? $roleModel->permissions->map(fn ($p) => [
                 'id' => $p->id,

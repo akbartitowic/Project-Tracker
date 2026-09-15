@@ -177,7 +177,9 @@ class ProjectReviewController extends Controller
                 }
             })
             ->groupBy('question_id')
-            ->selectRaw('question_id, AVG(score) as avg_score')
+            // calibrated_score is set only on answers of a locked submission, so
+            // COALESCE means "calibrated where locked, original everywhere else".
+            ->selectRaw('question_id, AVG(COALESCE(calibrated_score, score)) as avg_score')
             ->pluck('avg_score', 'question_id');
 
         // Axes/series text only account for cycles that actually have matching
@@ -246,7 +248,7 @@ class ProjectReviewController extends Controller
             ->whereIn('project_reviews.project_id', $projectIds)
             ->whereNull('project_reviews.excluded_at')
             ->groupBy('project_reviews.project_id', 'project_reviews.evaluation_id', 'project_review_answers.question_id')
-            ->selectRaw('project_reviews.project_id, project_reviews.evaluation_id, project_review_answers.question_id, AVG(project_review_answers.score) as avg_score')
+            ->selectRaw('project_reviews.project_id, project_reviews.evaluation_id, project_review_answers.question_id, AVG(COALESCE(project_review_answers.calibrated_score, project_review_answers.score)) as avg_score')
             ->get();
 
         $avgMap = []; // [project_id][evaluation_id][question_id] => avg
@@ -377,8 +379,10 @@ class ProjectReviewController extends Controller
                     'current'      => $trigger['current_value'],
                     'is_triggered' => $trigger['is_triggered'],
                 ],
-                // Average of every counted submission for this evaluation.
-                'total_score'      => $count ? round($evalReviews->avg('total_score'), 2) : null,
+                // Average of every counted submission for this evaluation. Uses
+                // each submission's aggregate score (calibrated score once its
+                // calibration is locked, otherwise the reviewer's original).
+                'total_score'      => $count ? round($evalReviews->avg(fn ($r) => $r->aggregateScore()), 2) : null,
                 // Latest submission's raw score + who/when, for context in the UI.
                 'latest_score'     => $latest?->total_score,
                 'submitted_at'     => $latest?->created_at?->toIso8601String(),
@@ -387,11 +391,13 @@ class ProjectReviewController extends Controller
                 // Everyone who submitted a counted review for this evaluation —
                 // the card lists all of them, not just the latest.
                 'reviewers'        => $evalReviews->map(fn ($r) => [
-                    'review_id'    => $r->id,
-                    'name'         => $r->submitter?->name ?? $r->reviewer_name ?? 'Anonim',
-                    'company'      => $r->reviewer_company,
-                    'total_score'  => $r->total_score,
-                    'submitted_at' => $r->created_at?->toIso8601String(),
+                    'review_id'       => $r->id,
+                    'name'            => $r->submitter?->name ?? $r->reviewer_name ?? 'Anonim',
+                    'company'         => $r->reviewer_company,
+                    'total_score'     => $r->aggregateScore(),
+                    'original_score'  => $r->total_score,
+                    'calibration_locked' => $r->calibration_locked_at !== null,
+                    'submitted_at'    => $r->created_at?->toIso8601String(),
                 ])->values(),
                 // `has_emails` lets the frontend treat a link that already has client
                 // emails saved as "terkirim" even before the send button is clicked.
@@ -408,9 +414,10 @@ class ProjectReviewController extends Controller
             ];
         });
 
-        // Overall: flat average of every counted submission across all evaluations.
+        // Overall: flat average of every counted submission across all
+        // evaluations, using each one's aggregate score (calibrated once locked).
         $overall = $allReviews->count()
-            ? round($allReviews->avg('total_score'), 2)
+            ? round($allReviews->avg(fn ($r) => $r->aggregateScore()), 2)
             : null;
 
         return response()->json([
@@ -651,6 +658,11 @@ class ProjectReviewController extends Controller
             'evaluation_name'   => $r->evaluation?->name,
             'trigger_label'     => $r->evaluation?->trigger_label,
             'total_score'       => $r->total_score,
+            // Calibrated score replaces the original once the submission's
+            // calibration is locked (Calibration tab); null / false otherwise.
+            'calibrated_score'      => $r->calibrated_score,
+            'is_calibration_locked' => $r->calibration_locked_at !== null,
+            'aggregate_score'       => $r->aggregateScore(),
             'notes'             => $r->notes,
             'is_excluded'       => $r->excluded_at !== null,
             'excluded_at'       => $r->excluded_at?->toIso8601String(),
@@ -662,12 +674,14 @@ class ProjectReviewController extends Controller
             'reviewer_position' => $r->reviewer_position,
             'is_public'         => $r->submitted_by === null,
             'answers'           => $r->answers->map(fn($a) => [
-                'question_id'   => $a->question_id,
-                'question'      => $a->question?->question,
-                'description'   => $a->question?->description,
-                'weight'        => $a->question?->weight,
-                'score'         => $a->score,
-                'comment'       => $a->comment,
+                'question_id'      => $a->question_id,
+                'question'         => $a->question?->question,
+                'description'      => $a->question?->description,
+                'weight'           => $a->question?->weight,
+                'score'            => $a->score,
+                // Effective per-question score, set only while calibration is locked.
+                'calibrated_score' => $a->calibrated_score,
+                'comment'          => $a->comment,
             ])->values(),
         ];
     }

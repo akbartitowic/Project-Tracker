@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
-const ACTIONS = ['create', 'read', 'update', 'delete', 'edit_last_update', 'view_all'];
+const ACTIONS = ['create', 'read', 'update', 'delete', 'edit_last_update', 'view_all', 'calibrate'];
 
 const ACTION_LABELS = {
     create: 'Create',
@@ -30,6 +30,7 @@ const ACTION_LABELS = {
     delete: 'Delete',
     edit_last_update: 'Update Date Task Manual',
     view_all: 'View All Projects',
+    calibrate: 'Kalibrasi Penilaian',
 };
 
 const ACTION_HINTS = {
@@ -39,11 +40,13 @@ const ACTION_HINTS = {
     delete: 'Hapus data',
     edit_last_update: 'Override tanggal "Diperbarui" pada task secara manual',
     view_all: 'Lihat data seluruh project, bukan hanya yang di-assign (halaman Review)',
+    calibrate: 'Akses tab Kalibrasi di halaman Review — beri suara setuju/tidak setuju per pertanyaan. Informasional, tidak mengubah skor.',
 };
 
 const ACTION_BADGE_LABELS = {
     edit_last_update: 'manual',
     view_all: 'all',
+    calibrate: 'calib',
 };
 
 /* Per-module, per-action extra notes — used to clarify integration impact */

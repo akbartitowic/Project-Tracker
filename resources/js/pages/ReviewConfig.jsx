@@ -307,12 +307,15 @@ function QuestionForm({ initial, onSave, onCancel, saving, maxWeight }) {
     const [description, setDescription] = useState(initial?.description ?? '');
     const [weight,      setWeight]      = useState(initial?.weight      ?? '');
     const [hasWeight,   setHasWeight]   = useState(initial ? initial.has_weight !== false : true);
+    // Weighted questions: admin decides whether the description is mandatory (default optional).
+    const [descriptionRequired, setDescriptionRequired] = useState(initial?.description_required ?? false);
 
     const limit = maxWeight ?? 100;
     const weightNum = weight !== '' ? Number(weight) : null;
     const overLimit = hasWeight && weightNum !== null && weightNum > limit;
     const valid = hasWeight
         ? question.trim() && weightNum !== null && weightNum >= 0 && !overLimit
+            && (!descriptionRequired || description.trim())
         : question.trim() && description.trim();
 
     return (
@@ -364,8 +367,10 @@ function QuestionForm({ initial, onSave, onCancel, saving, maxWeight }) {
 
             <div className="space-y-1">
                 <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    {hasWeight ? 'Deskripsi / Panduan (opsional)' : 'Deskripsi'}
-                    {!hasWeight && <span className="text-rose-400"> *</span>}
+                    {hasWeight
+                        ? (descriptionRequired ? 'Deskripsi / Panduan' : 'Deskripsi / Panduan (opsional)')
+                        : 'Deskripsi'}
+                    {(descriptionRequired || !hasWeight) && <span className="text-rose-400"> *</span>}
                 </label>
                 <textarea
                     value={description}
@@ -376,6 +381,15 @@ function QuestionForm({ initial, onSave, onCancel, saving, maxWeight }) {
                     rows={2}
                     className="w-full text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
                 />
+                {hasWeight && (
+                    <div className="flex items-center justify-between gap-3 pt-1.5">
+                        <div>
+                            <p className="text-xs font-medium text-slate-600 dark:text-slate-300">Deskripsi wajib diisi</p>
+                            <p className="text-[10px] text-slate-400">Default: opsional. Aktifkan untuk mewajibkan deskripsi pada pertanyaan ini.</p>
+                        </div>
+                        <Switch checked={descriptionRequired} onCheckedChange={setDescriptionRequired} />
+                    </div>
+                )}
             </div>
 
             {hasWeight && (
@@ -413,6 +427,7 @@ function QuestionForm({ initial, onSave, onCancel, saving, maxWeight }) {
                     onClick={() => onSave({
                         question: question.trim(),
                         description: description.trim() || null,
+                        description_required: hasWeight ? descriptionRequired : true,
                         has_weight: hasWeight,
                         weight: hasWeight ? Number(weight) : 0,
                     })}
@@ -456,6 +471,9 @@ function QuestionRow({ question, index, canConfig, onEdit, onDelete }) {
                             <Info className="size-3 shrink-0 mt-0.5" />
                             {question.description}
                         </p>
+                    )}
+                    {question.has_weight !== false && question.description_required && (
+                        <p className="text-[10px] font-medium text-slate-400 mt-1">Deskripsi: wajib diisi</p>
                     )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
