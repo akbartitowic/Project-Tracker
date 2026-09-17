@@ -40,6 +40,11 @@ class ReportController extends Controller
         return (float) ($task->estimated_hours ?? 0);
     }
 
+    private function excludeBacklog($query)
+    {
+        return $query->where(fn ($q) => $q->whereNull('is_backlog')->orWhere('is_backlog', false));
+    }
+
     private function sumEstimatedHoursByStatuses($tasks, array $statuses): float
     {
         return (float) $tasks->sum(function ($task) use ($statuses) {
@@ -154,14 +159,14 @@ class ReportController extends Controller
             };
         }
 
-        $tasksInRange = Task::where('project_id', $project->id)
+        $tasksInRange = $this->excludeBacklog(Task::where('project_id', $project->id))
             ->whereBetween('updated_at', [$startDate, $endDate])
             ->get();
         $tasksInRange->each(function ($task) {
             $task->normalized_status = $this->normalizeTaskStatus($task->status);
         });
 
-        $inProgressTasks = Task::where('project_id', $project->id)->get();
+        $inProgressTasks = $this->excludeBacklog(Task::where('project_id', $project->id))->get();
         $inProgressTasks = $inProgressTasks
             ->filter(function ($task) {
                 $normalized = $this->normalizeTaskStatus($task->status);
@@ -170,7 +175,7 @@ class ReportController extends Controller
             })
             ->values();
 
-        $projectTasksForStats = Task::where('project_id', $project->id)->get();
+        $projectTasksForStats = $this->excludeBacklog(Task::where('project_id', $project->id))->get();
         $usedInRange = (float) $tasksInRange->sum(fn ($task) => $this->taskEstimatedHoursForStats($task));
         $totalUsed = (float) $projectTasksForStats->sum(fn ($task) => $this->taskEstimatedHoursForStats($task));
         $doneHours = $this->sumEstimatedHoursByStatuses($projectTasksForStats, ['Done']);
@@ -206,7 +211,7 @@ class ReportController extends Controller
             'Done' => 100,
         ];
         $categoryProgress = [];
-        $projectTasks = Task::where('project_id', $project->id)->get();
+        $projectTasks = $this->excludeBacklog(Task::where('project_id', $project->id))->get();
         $categories = $projectTasks
             ->map(fn ($task) => trim((string) ($task->category ?? '')))
             ->map(fn ($category) => $category === '' ? 'Uncategorized' : $category)
