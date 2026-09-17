@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, UserPlus, CalendarClock, AtSign, TrendingUp, ShieldAlert } from 'lucide-react';
+import { Bell, UserPlus, CalendarClock, AtSign, TrendingUp, ShieldAlert, ClipboardCheck } from 'lucide-react';
 import { fetchAPI } from '../services/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -34,6 +34,18 @@ const NOTIFICATION_TYPES = [
         Icon: ShieldAlert,
         title: 'Login alerts',
         description: 'Email me a security alert (device, location, IP) every time my account logs in.',
+    },
+    {
+        key: 'weekly_report_assigned',
+        Icon: ClipboardCheck,
+        title: 'Weekly report item assigned',
+        description: 'Email me when I\'m assigned to a Weekly Report checklist item.',
+    },
+    {
+        key: 'weekly_report_due',
+        Icon: CalendarClock,
+        title: 'Weekly report item due',
+        description: 'Daily reminder email while a Weekly Report item I\'m assigned to is due and not yet done.',
     },
 ];
 

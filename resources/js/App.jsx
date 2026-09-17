@@ -15,6 +15,7 @@ import SystemSettings from './pages/SystemSettings';
 import Profile from './pages/Profile';
 import NotificationCenter from './pages/NotificationCenter';
 import ClientMonitoring from './pages/ClientMonitoring';
+import WeeklyReport from './pages/WeeklyReport';
 import Announcements from './pages/Announcements';
 
 import Reports from './pages/Reports';
@@ -130,6 +131,7 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="notification-center" element={<NotificationCenter />} />
           <Route path="client-monitoring/:projectId?" element={<ClientMonitoring />} />
+          <Route path="weekly-report/:boardId?/:periodId?" element={<WeeklyReport />} />
 
           <Route path="reports" element={<Reports />} />
           <Route path="generate-report" element={<GenerateReport />} />

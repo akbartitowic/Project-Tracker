@@ -43,6 +43,9 @@ use App\Http\Controllers\PublicReviewController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\ClientMonitoringController;
+use App\Http\Controllers\WeeklyReportBoardController;
+use App\Http\Controllers\WeeklyReportPeriodController;
+use App\Http\Controllers\WeeklyReportItemController;
 
 // Public review submission — no auth required
 Route::middleware('throttle:30,1')->prefix('public')->group(function () {
@@ -230,6 +233,28 @@ Route::middleware(['auth:sanctum', 'token.lifetime', 'throttle:api'])->group(fun
     // 7.5 Client Monitoring — company/project-scoped MH quota view for client accounts
     Route::get('/client-monitoring/summary', [ClientMonitoringController::class, 'summary'])->middleware('permission:client_monitoring.read');
     Route::get('/client-monitoring/projects/{id}', [ClientMonitoringController::class, 'project'])->middleware('permission:client_monitoring.read');
+
+    // 7.6 Weekly Report — board-scoped checklist (Operation). Access to a specific
+    // board/period/item is additionally gated by board membership, see WeeklyReportAccess.
+    Route::get('/weekly-report/users', [WeeklyReportBoardController::class, 'users'])->middleware('permission:weekly_report.create');
+    Route::get('/weekly-report/projects', [WeeklyReportBoardController::class, 'projects'])->middleware('permission:weekly_report.create');
+    Route::get('/weekly-report/boards', [WeeklyReportBoardController::class, 'index'])->middleware('permission:weekly_report.read');
+    Route::post('/weekly-report/boards', [WeeklyReportBoardController::class, 'store'])->middleware('permission:weekly_report.create');
+    Route::get('/weekly-report/boards/{id}', [WeeklyReportBoardController::class, 'show'])->middleware('permission:weekly_report.read');
+    Route::put('/weekly-report/boards/{id}', [WeeklyReportBoardController::class, 'update'])->middleware('permission:weekly_report.update');
+    Route::delete('/weekly-report/boards/{id}', [WeeklyReportBoardController::class, 'destroy'])->middleware('permission:weekly_report.delete');
+
+    Route::get('/weekly-report/boards/{boardId}/periods', [WeeklyReportPeriodController::class, 'index'])->middleware('permission:weekly_report.read');
+    Route::post('/weekly-report/boards/{boardId}/periods', [WeeklyReportPeriodController::class, 'store'])->middleware('permission:weekly_report.create');
+    Route::get('/weekly-report/periods/{id}', [WeeklyReportPeriodController::class, 'show'])->middleware('permission:weekly_report.read');
+    Route::put('/weekly-report/periods/{id}', [WeeklyReportPeriodController::class, 'update'])->middleware('permission:weekly_report.update');
+    Route::delete('/weekly-report/periods/{id}', [WeeklyReportPeriodController::class, 'destroy'])->middleware('permission:weekly_report.delete');
+    Route::post('/weekly-report/periods/{id}/duplicate', [WeeklyReportPeriodController::class, 'duplicate'])->middleware('permission:weekly_report.create');
+
+    Route::post('/weekly-report/periods/{periodId}/items', [WeeklyReportItemController::class, 'store'])->middleware('permission:weekly_report.create');
+    Route::put('/weekly-report/items/{id}', [WeeklyReportItemController::class, 'update'])->middleware('permission:weekly_report.update');
+    Route::patch('/weekly-report/items/{id}/status', [WeeklyReportItemController::class, 'updateStatus'])->middleware('permission:weekly_report.update');
+    Route::delete('/weekly-report/items/{id}', [WeeklyReportItemController::class, 'destroy'])->middleware('permission:weekly_report.delete');
 
     // 8. Analytics
     Route::get('/stats', [StatController::class, 'stats'])->middleware('permission:reports.read');

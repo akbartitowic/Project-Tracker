@@ -23,6 +23,7 @@ const ROUTE_PERMISSION_MAP = [
     { path: '/profile', permission: 'profile.read' },
     { path: '/notification-center', permission: 'notification_center.read' },
     { path: '/client-monitoring', permission: 'client_monitoring.read' },
+    { path: '/weekly-report', permission: 'weekly_report.read' },
     { path: '/', permission: 'dashboard.read' },
 ];
 

@@ -272,6 +272,8 @@ class AuthController extends Controller
         'task_mention',
         'mh_topup_threshold',
         'login_alert',
+        'weekly_report_assigned',
+        'weekly_report_due',
     ];
 
     /** @return array<string, bool> */
@@ -283,6 +285,8 @@ class AuthController extends Controller
             'task_mention' => (bool) $user->notify_task_mention,
             'mh_topup_threshold' => (bool) $user->notify_mh_threshold,
             'login_alert' => (bool) $user->notify_login_alert,
+            'weekly_report_assigned' => (bool) $user->notify_weekly_report_assigned,
+            'weekly_report_due' => (bool) $user->notify_weekly_report_due,
         ];
     }
 
@@ -310,6 +314,8 @@ class AuthController extends Controller
             'notify_task_mention' => $validated['task_mention'],
             'notify_mh_threshold' => $validated['mh_topup_threshold'],
             'notify_login_alert' => $validated['login_alert'],
+            'notify_weekly_report_assigned' => $validated['weekly_report_assigned'],
+            'notify_weekly_report_due' => $validated['weekly_report_due'],
         ]);
 
         $this->log('Auth', 'Updated Notification Preferences', "User: {$user->name}");

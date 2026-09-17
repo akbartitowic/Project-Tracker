@@ -44,6 +44,7 @@ class PermissionCatalog
             'Notification Center' => ['read', 'update'],
             'Modules Management' => ['create', 'read', 'update', 'delete'],
             'Client Monitoring' => ['read'],
+            'Weekly Report' => ['create', 'read', 'update', 'delete'],
         ];
     }
 

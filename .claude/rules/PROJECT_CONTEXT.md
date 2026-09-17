@@ -53,6 +53,7 @@
 - [x] Team Load Monitoring
 - [x] Project Roles
 - [x] Project Board — filter task per project role (dropdown "Semua Role", kombinasi dengan filter member/My Task) + tab list project (Aktif/Done/Favorit) sync ke query param URL (`?tab=done`/`?tab=favorite`), jadi bisa di-refresh/bookmark/share tetap di tab yang sama.
+- [x] **Weekly Report** (`/weekly-report`) — checklist mingguan per "Board" (mis. "Weekly Report Project", "Weekly Report Management"), tiap Board punya member list eksplisit (akses & kandidat assignee dibatasi ke member board itu). Board → Period (1 minggu) → Item (Reporter, Deskripsi, Issue Level Low/Medium/High, Project opsional, Due Date, multi-assignee). Duplicate period ke minggu berikutnya dengan pilihan bawa item Done atau tidak (item belum-Done selalu ikut). Notifikasi assign + due-reminder harian, toggle terpisah di Notification Center.
 
 ### Sales & Presales
 - [x] Sales Pipeline (Sales Pitch)

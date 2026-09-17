@@ -1,4 +1,4 @@
-import { UserPlus, CalendarClock, AtSign, TrendingUp } from "lucide-react";
+import { UserPlus, CalendarClock, AtSign, TrendingUp, ClipboardCheck } from "lucide-react";
 
 export function formatNotificationTime(iso) {
     if (!iso) return "";
@@ -49,6 +49,31 @@ export function describeNotification(data) {
                 </>
             ),
             subtitle: data.project_name || null,
+        };
+    }
+    if (data.type === "weekly_report_assigned") {
+        return {
+            Icon: ClipboardCheck,
+            iconClass: "bg-primary/10 text-primary",
+            title: (
+                <>
+                    You were assigned to a Weekly Report item in{" "}
+                    <span className="font-semibold">{data.board_name || "Weekly Report"}</span>
+                </>
+            ),
+            subtitle: data.description_excerpt || null,
+        };
+    }
+    if (data.type === "weekly_report_due") {
+        return {
+            Icon: CalendarClock,
+            iconClass: "bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
+            title: (
+                <>
+                    Weekly Report item in <span className="font-semibold">{data.board_name || "Weekly Report"}</span> is due
+                </>
+            ),
+            subtitle: data.description_excerpt || null,
         };
     }
     // task_mention (default)

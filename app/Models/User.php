@@ -36,6 +36,8 @@ class User extends Authenticatable
         'notify_task_mention',
         'notify_mh_threshold',
         'notify_login_alert',
+        'notify_weekly_report_assigned',
+        'notify_weekly_report_due',
         'timezone',
     ];
 
@@ -65,6 +67,8 @@ class User extends Authenticatable
             'notify_task_mention' => 'boolean',
             'notify_mh_threshold' => 'boolean',
             'notify_login_alert' => 'boolean',
+            'notify_weekly_report_assigned' => 'boolean',
+            'notify_weekly_report_due' => 'boolean',
         ];
     }
 
@@ -121,6 +125,8 @@ class User extends Authenticatable
             'task_mention' => (bool) $this->notify_task_mention,
             'mh_topup_threshold' => (bool) $this->notify_mh_threshold,
             'login_alert' => (bool) $this->notify_login_alert,
+            'weekly_report_assigned' => (bool) $this->notify_weekly_report_assigned,
+            'weekly_report_due' => (bool) $this->notify_weekly_report_due,
             default => true,
         };
     }

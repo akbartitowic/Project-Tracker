@@ -50,6 +50,11 @@ Keep total length **&lt; 48 chars** when possible.
 | project_reviews | `prv` |
 | review_calibration_votes | `rcv` |
 | client_user_projects | `cup` |
+| weekly_report_boards | `wrb` |
+| weekly_report_board_members | `wrbm` |
+| weekly_report_periods | `wrp` |
+| weekly_report_items | `wri` |
+| weekly_report_item_assignees | `wria` |
 
 Add a new row here when you introduce a new table.
 

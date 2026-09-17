@@ -24,11 +24,15 @@ export default function LoginNotificationsModal() {
             // Silent — navigation still proceeds, bell count self-corrects on next poll.
         }
         dismissLoginNotifications();
-        const { project_id, task_id } = notification.data || {};
+        const { project_id, task_id, board_id, period_id } = notification.data || {};
         if (project_id && task_id) {
             navigate(`/board/${project_id}/task/${task_id}`);
         } else if (project_id) {
             navigate(`/board/${project_id}/dashboard`);
+        } else if (board_id && period_id) {
+            navigate(`/weekly-report/${board_id}/${period_id}`);
+        } else if (board_id) {
+            navigate(`/weekly-report/${board_id}`);
         }
     };
 
