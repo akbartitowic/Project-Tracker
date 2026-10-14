@@ -431,6 +431,7 @@ export default function ProjectBoard() {
     const [isDeleting, setIsDeleting] = useState(false);
 
     const [roleQuotas, setRoleQuotas] = useState([]);
+    const [backlogSummary, setBacklogSummary] = useState({ hours: 0, count: 0 });
     const [stats, setStats] = useState({
         total_manhours: null,
         allocated_hours: 0,
@@ -449,6 +450,7 @@ export default function ProjectBoard() {
     const [tasks, setTasks] = useState([]);
     const [activeDragTask, setActiveDragTask] = useState(null);
     const [viewMode, setViewMode] = useState('kanban');
+    const [expandedQuotaKey, setExpandedQuotaKey] = useState(null);
     const [filterMemberId, setFilterMemberId] = useState(null);
     const [filterProjectRoleId, setFilterProjectRoleId] = useState(null);
     const [filterEpic, setFilterEpic] = useState(null);
@@ -721,6 +723,7 @@ export default function ProjectBoard() {
                     perc: 0,
                 });
                 setRoleQuotas([]);
+                setBacklogSummary({ hours: 0, count: 0 });
             }
 
             // Members & tasks require project_board.read only — load before optional /users
@@ -742,6 +745,18 @@ export default function ProjectBoard() {
                     }
                 } catch (quotasErr) {
                     console.warn('Project board: could not load quotas.', quotasErr);
+                }
+
+                try {
+                    const backlogRes = await fetchAPI(`/tasks/backlog?project_id=${projectId}`);
+                    const items = backlogRes.data || [];
+                    setBacklogSummary({
+                        hours: items.reduce((sum, t) => sum + (Number(t.estimated_hours) || 0), 0),
+                        count: items.length,
+                    });
+                } catch (backlogErr) {
+                    console.warn('Project board: could not load backlog summary.', backlogErr);
+                    setBacklogSummary({ hours: 0, count: 0 });
                 }
             }
 
@@ -992,7 +1007,7 @@ export default function ProjectBoard() {
     }, 0);
     const generalQuotaRemaining = Math.max(0, generalQuotaFromPresales - generalAllocatedHours);
     const showGeneralQuotaCard = generalQuotaFromPresales > 0;
-    const hasQuotaSummary = visibleRoleQuotas.length > 0 || showGeneralQuotaCard;
+    const hasQuotaSummary = visibleRoleQuotas.length > 0 || showGeneralQuotaCard || backlogSummary.count > 0;
     const headerTotalManhours = stats.total_manhours ?? selectedProject?.total_manhours;
     const headerUsedManhours = useMemo(() => {
         const fromTasks = tasks.reduce((sum, task) => {
@@ -2087,13 +2102,65 @@ export default function ProjectBoard() {
         );
     }
 
-    const renderQuotaMiniCard = (key, roleName, alloc, qh, realP) => {
+    /** MH breakdown by status bucket for a given role (null = General/no role), mirroring the
+     *  same quota-eligible-task logic used elsewhere (subtasks when present, else the task itself). */
+    const getRoleStatusBreakdown = (roleId) => {
+        const breakdown = { 'To Do': 0, 'In Progress / Done': 0 };
+        const bucketFor = (status) => {
+            const norm = normalizeBoardTaskStatus(status);
+            return norm === 'To Do' ? 'To Do' : 'In Progress / Done';
+        };
+        const roleKey = roleId ? String(roleId) : null;
+        const matchesRole = (t) => (t.project_role_id ? String(t.project_role_id) : null) === roleKey;
+        tasks.forEach((task) => {
+            if (Array.isArray(task.subtasks) && task.subtasks.length > 0) {
+                task.subtasks.forEach((st) => {
+                    if (st.is_billable === false || !matchesRole(st)) return;
+                    breakdown[bucketFor(st.status)] += Number(st.estimated_hours) || 0;
+                });
+                return;
+            }
+            if (task.is_billable === false || !matchesRole(task)) return;
+            breakdown[bucketFor(task.status)] += Number(task.estimated_hours) || 0;
+        });
+        return breakdown;
+    };
+
+    /** Informational only — backlog items aren't on the board yet, so this isn't part of the quota bar above. */
+    const renderBacklogInfoCard = () => (
+        <div
+            key="backlog-info"
+            className="w-[148px] shrink-0 snap-start rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 dark:border-slate-600 dark:bg-slate-800/30"
+        >
+            <p className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Backlog
+            </p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">
+                {formatHours(backlogSummary.hours)}
+                <span className="text-[10px] font-normal text-slate-400"> h</span>
+            </p>
+            <p className="mt-1.5 text-[9px] text-slate-400">
+                {backlogSummary.count} task{backlogSummary.count === 1 ? '' : 's'} not on board yet
+            </p>
+        </div>
+    );
+
+    const renderQuotaMiniCard = (key, roleName, alloc, qh, realP, roleId) => {
         const p = Math.min(100, realP);
         const isOver = alloc > qh;
+        const isExpanded = expandedQuotaKey === key;
+        const breakdown = isExpanded ? getRoleStatusBreakdown(roleId) : null;
         return (
-            <div
+            <button
+                type="button"
                 key={key}
-                className="w-[148px] shrink-0 snap-start rounded-lg border border-slate-200/80 bg-white px-3 py-2 dark:border-slate-700/80 dark:bg-slate-900/40"
+                onClick={() => setExpandedQuotaKey((prev) => (prev === key ? null : key))}
+                className={cn(
+                    'w-[148px] shrink-0 snap-start rounded-lg border px-3 py-2 text-left transition-colors',
+                    isExpanded
+                        ? 'border-primary/60 bg-primary/5 dark:bg-primary/10'
+                        : 'border-slate-200/80 bg-white hover:border-primary/30 dark:border-slate-700/80 dark:bg-slate-900/40',
+                )}
             >
                 <div className="mb-1 flex items-center justify-between gap-2">
                     <p className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-500" title={roleName}>
@@ -2119,7 +2186,17 @@ export default function ProjectBoard() {
                 {isOver && (
                     <p className="mt-0.5 text-[9px] font-bold text-rose-500">+{(alloc - qh).toFixed(1)}h</p>
                 )}
-            </div>
+                {isExpanded && breakdown && (
+                    <div className="mt-2 space-y-1 border-t border-slate-200 pt-1.5 dark:border-slate-700">
+                        {Object.entries(breakdown).map(([label, hours]) => (
+                            <div key={label} className="flex items-center justify-between text-[9px]">
+                                <span className="text-slate-500">{label}</span>
+                                <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-300">{formatHours(hours)}h</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </button>
         );
     };
 
@@ -2503,7 +2580,7 @@ export default function ProjectBoard() {
                                                     const alloc = Number(quota.allocated_hours) || 0;
                                                     const qh = Number(quota.quota_hours) || 0;
                                                     const realP = qh > 0 ? Math.round((alloc / qh) * 100) : 0;
-                                                    return renderQuotaMiniCard(quota.id, quota.role_name, alloc, qh, realP);
+                                                    return renderQuotaMiniCard(quota.id, quota.role_name, alloc, qh, realP, quota.project_role_id);
                                                 })}
                                                 {showGeneralQuotaCard && renderQuotaMiniCard(
                                                     'general-quota',
@@ -2511,7 +2588,9 @@ export default function ProjectBoard() {
                                                     generalAllocatedHours,
                                                     generalQuotaFromPresales,
                                                     Math.round((generalAllocatedHours / generalQuotaFromPresales) * 100),
+                                                    null,
                                                 )}
+                                                {backlogSummary.count > 0 && renderBacklogInfoCard()}
                                             </div>
                                         </div>
                                     )}

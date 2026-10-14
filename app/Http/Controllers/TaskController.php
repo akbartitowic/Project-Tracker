@@ -1274,7 +1274,7 @@ class TaskController extends Controller
         $items = Task::where('project_id', $projectId)
             ->where('is_backlog', true)
             ->orderBy('created_at', 'desc')
-            ->get(['id', 'title', 'feature_title', 'description', 'priority', 'estimated_hours', 'created_at']);
+            ->get(['id', 'title', 'feature_title', 'description', 'priority', 'estimated_hours', 'project_role_id', 'is_billable', 'created_at']);
         return response()->json(['data' => $items]);
     }
 

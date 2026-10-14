@@ -20,6 +20,7 @@ import {
     CircleDollarSign,
     X,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import ManhourBucketBreakdown from '@/components/ManhourBucketBreakdown';
 import { Button } from '@/components/ui/button';
@@ -288,6 +289,8 @@ export default function FinanceMonitoring() {
     const [isQuotaDetailsOpen, setIsQuotaDetailsOpen] = useState(false);
     const [quotaBreakdown, setQuotaBreakdown] = useState([]);
     const [quotaMeta, setQuotaMeta] = useState(null);
+    const [backlogItems, setBacklogItems] = useState([]);
+    const [boardTasks, setBoardTasks] = useState([]);
     const [loadingQuotas, setLoadingQuotas] = useState(false);
     const [isRealizationModalOpen, setIsRealizationModalOpen] = useState(false);
     const [selectedAllocationForRealization, setSelectedAllocationForRealization] = useState(null);
@@ -352,6 +355,8 @@ export default function FinanceMonitoring() {
             const qRes = await fetchAPI(`/projects/${id}/quotas`);
             setQuotaBreakdown(qRes.data || []);
             setQuotaMeta(qRes.meta || null);
+            await loadBacklogItems(id);
+            await loadBoardTasks(id);
         } catch (error) {
             alert('Failed to load project finance details');
         } finally {
@@ -374,6 +379,8 @@ export default function FinanceMonitoring() {
             setQuotaBreakdown([]);
             setQuotaMeta(null);
             setProjectMemberOptions([]);
+            setBacklogItems([]);
+            setBoardTasks([]);
             return;
         }
 
@@ -614,6 +621,26 @@ export default function FinanceMonitoring() {
         }
     };
 
+    const loadBacklogItems = async (projectId) => {
+        try {
+            const res = await fetchAPI(`/tasks/backlog?project_id=${projectId}`);
+            setBacklogItems(res.data || []);
+        } catch (error) {
+            console.warn('Finance monitoring: could not load backlog items.', error);
+            setBacklogItems([]);
+        }
+    };
+
+    const loadBoardTasks = async (projectId) => {
+        try {
+            const res = await fetchAPI(`/tasks?project_id=${projectId}`);
+            setBoardTasks(res.data || []);
+        } catch (error) {
+            console.warn('Finance monitoring: could not load board tasks (requires project_board.read).', error);
+            setBoardTasks([]);
+        }
+    };
+
     const loadQuotaBreakdown = async () => {
         if (!selectedProject) return;
         setLoadingQuotas(true);
@@ -623,6 +650,8 @@ export default function FinanceMonitoring() {
             const res = await fetchAPI(`/projects/${selectedProject}/quotas`);
             setQuotaBreakdown(res.data || []);
             setQuotaMeta(res.meta || null);
+            await loadBacklogItems(selectedProject);
+            await loadBoardTasks(selectedProject);
         } catch (error) {
             console.error('Failed to load quota breakdown:', error);
         } finally {
@@ -641,6 +670,8 @@ export default function FinanceMonitoring() {
             const res = await fetchAPI(`/projects/${selectedProject}/quotas`);
             setQuotaBreakdown(res.data || []);
             setQuotaMeta(res.meta || null);
+            await loadBacklogItems(selectedProject);
+            await loadBoardTasks(selectedProject);
         } catch (error) {
             console.error('Failed to refresh quotas:', error);
         }
@@ -654,6 +685,43 @@ export default function FinanceMonitoring() {
         actual_hours: 0,
         remaining_hours: 0,
     };
+
+    // Backlog hours are already folded into each `allocated_hours` figure above (backend
+    // doesn't exclude is_backlog) — this just breaks out how much of that total is still
+    // backlog (not yet on the board), grouped by role (null = General).
+    const backlogHoursByRole = useMemo(() => {
+        const map = {};
+        backlogItems.forEach((item) => {
+            if (item.is_billable === false) return;
+            const key = item.project_role_id ? String(item.project_role_id) : 'general';
+            map[key] = (map[key] || 0) + (Number(item.estimated_hours) || 0);
+        });
+        return map;
+    }, [backlogItems]);
+    const generalBacklogHours = backlogHoursByRole.general || 0;
+    const totalBacklogHours = useMemo(
+        () => Object.values(backlogHoursByRole).reduce((sum, h) => sum + h, 0),
+        [backlogHoursByRole],
+    );
+
+    // On-board tasks still sitting in "To Do" (not started) vs everything past that — same
+    // quota-eligible rule as elsewhere (subtasks when present, else the task itself; billable only).
+    const totalOnBoardToDoHours = useMemo(() => {
+        let hours = 0;
+        const isToDo = (status) => String(status || '').trim().toLowerCase() === 'to do';
+        boardTasks.forEach((task) => {
+            if (Array.isArray(task.subtasks) && task.subtasks.length > 0) {
+                task.subtasks.forEach((st) => {
+                    if (st.is_billable === false || !isToDo(st.status)) return;
+                    hours += Number(st.estimated_hours) || 0;
+                });
+                return;
+            }
+            if (task.is_billable === false || !isToDo(task.status)) return;
+            hours += Number(task.estimated_hours) || 0;
+        });
+        return hours;
+    }, [boardTasks]);
 
     const parseSwitchKey = (key) => {
         if (!key || key === 'general') {
@@ -1055,9 +1123,20 @@ export default function FinanceMonitoring() {
                                         </CardHeader>
                                     </Card>
                                 ) : (() => {
-                                    const usedPct = (Number(summary.allocated_hours || 0) / (Number(summary.total_manhours) || 1)) * 100;
+                                    const totalQuotaForBar = Number(summary.total_manhours) || 0;
+                                    const hourPct = (h) => totalQuotaForBar > 0 ? Math.min(100, (Number(h) / totalQuotaForBar) * 100) : 0;
                                     const remaining = Number(summary.fifo_remaining_hours ?? summary.remaining_hours ?? 0);
                                     const isOverQuota = remaining < 0;
+                                    // "Allocated" from the backend already includes backlog hours — split them apart here
+                                    // so the headline number isn't mistaken for work actually sitting on the board.
+                                    const onBoardAllocatedHours = Math.max(0, Number(summary.allocated_hours || 0) - totalBacklogHours);
+                                    // Remaining shifts by exactly the backlog amount if it weren't counted as consumed yet.
+                                    const remainingExclBacklog = remaining + totalBacklogHours;
+                                    const isOverQuotaExclBacklog = remainingExclBacklog < 0;
+                                    // Same idea, but for on-board tasks still sitting in "To Do" (not started yet).
+                                    const remainingExclToDo = remaining + totalOnBoardToDoHours;
+                                    const isOverQuotaExclToDo = remainingExclToDo < 0;
+                                    const onBoardExclToDoHours = Math.max(0, onBoardAllocatedHours - totalOnBoardToDoHours);
                                     return (
                                         <Card
                                             className="border-blue-200 dark:border-blue-500/20 cursor-pointer hover:shadow-md hover:border-blue-400 dark:hover:border-blue-400/60 active:scale-[0.99] transition-all group"
@@ -1080,39 +1159,98 @@ export default function FinanceMonitoring() {
                                                     </span>
                                                 </div>
 
-                                                {/* Stats grid */}
-                                                <div className="mt-4 grid grid-cols-3 gap-2">
-                                                    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3">
-                                                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Total Quota</p>
-                                                        <p className="text-base font-bold text-slate-900 dark:text-white">{formatHours(summary.total_manhours)}h</p>
+                                                {/* Headline: total quota vs. how it's spoken for */}
+                                                <div className="mt-4 flex items-baseline justify-between flex-wrap gap-x-3 gap-y-1">
+                                                    <div className="flex items-baseline gap-2">
+                                                        <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">
+                                                            {formatHours(summary.total_manhours)}h
+                                                        </span>
+                                                        <span className="text-xs text-slate-400">total quota</span>
                                                         {summary.has_topup_manhours && (
-                                                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                                                            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                                                                 +{formatHours(summary.topup_hours_total)}h top up
-                                                            </p>
+                                                            </span>
                                                         )}
                                                     </div>
-                                                    <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 p-3">
-                                                        <p className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400 mb-1">Allocated</p>
-                                                        <p className="text-base font-bold text-amber-700 dark:text-amber-300">{formatHours(summary.allocated_hours)}h</p>
-                                                        <p className="text-[10px] text-amber-500 dark:text-amber-400 mt-0.5">{usedPct.toFixed(1)}% used</p>
-                                                    </div>
-                                                    <div className={`rounded-lg p-3 border ${isOverQuota ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-900/40' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-900/40'}`}>
-                                                        <p className={`text-[10px] font-bold uppercase mb-1 ${isOverQuota ? 'text-rose-600 dark:text-rose-400' : 'text-blue-600 dark:text-blue-400'}`}>Remaining</p>
-                                                        <p className={`text-base font-bold ${isOverQuota ? 'text-rose-700 dark:text-rose-300' : 'text-blue-700 dark:text-blue-300'}`}>
-                                                            {formatHours(Math.abs(remaining))}h
-                                                        </p>
-                                                        <p className={`text-[10px] mt-0.5 ${isOverQuota ? 'text-rose-500 dark:text-rose-400' : 'text-blue-400'}`}>
-                                                            {isOverQuota ? 'over quota' : 'FIFO'}
-                                                        </p>
-                                                    </div>
+                                                    {isOverQuota ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 dark:bg-rose-900/40 px-2 py-0.5 text-[11px] font-bold text-rose-600 dark:text-rose-300">
+                                                            Over by {formatHours(Math.abs(remaining))}h
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-[11px] font-bold text-blue-600 dark:text-blue-300">
+                                                            {formatHours(remaining)}h remaining
+                                                        </span>
+                                                    )}
                                                 </div>
 
-                                                {/* Progress bar */}
-                                                <div className="mt-3">
-                                                    <Progress
-                                                        value={Math.min(100, usedPct)}
-                                                        className={`h-2 ${isOverQuota ? '[&>div]:bg-rose-500' : '[&>div]:bg-blue-500'}`}
-                                                    />
+                                                {/* Stacked breakdown bar: Done/In Progress -> To Do -> Backlog -> (empty space = remaining) */}
+                                                <div className={cn(
+                                                    'mt-3 flex h-3 w-full overflow-hidden rounded-full',
+                                                    isOverQuota ? 'bg-rose-100 dark:bg-rose-950/40 ring-1 ring-rose-300 dark:ring-rose-800' : 'bg-slate-100 dark:bg-slate-800',
+                                                )}>
+                                                    {onBoardExclToDoHours > 0 && (
+                                                        <div
+                                                            className="bg-emerald-500"
+                                                            style={{ width: `${hourPct(onBoardExclToDoHours)}%` }}
+                                                            title={`Done / In Progress: ${formatHours(onBoardExclToDoHours)}h`}
+                                                        />
+                                                    )}
+                                                    {totalOnBoardToDoHours > 0 && (
+                                                        <div
+                                                            className="bg-amber-400"
+                                                            style={{ width: `${hourPct(totalOnBoardToDoHours)}%` }}
+                                                            title={`To Do: ${formatHours(totalOnBoardToDoHours)}h`}
+                                                        />
+                                                    )}
+                                                    {totalBacklogHours > 0 && (
+                                                        <div
+                                                            className="bg-slate-400 dark:bg-slate-500"
+                                                            style={{ width: `${hourPct(totalBacklogHours)}%` }}
+                                                            title={`Backlog: ${formatHours(totalBacklogHours)}h`}
+                                                        />
+                                                    )}
+                                                </div>
+
+                                                {/* Legend — one line per segment, always in the same order as the bar */}
+                                                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
+                                                    <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                                        <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+                                                        Done / In Progress <span className="font-bold text-slate-900 dark:text-white tabular-nums">{formatHours(onBoardExclToDoHours)}h</span>
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                                        <span className="size-2 rounded-full bg-amber-400 shrink-0" />
+                                                        To Do <span className="font-bold text-slate-900 dark:text-white tabular-nums">{formatHours(totalOnBoardToDoHours)}h</span>
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                                                        <span className="size-2 rounded-full bg-slate-400 dark:bg-slate-500 shrink-0" />
+                                                        Backlog <span className="font-bold text-slate-900 dark:text-white tabular-nums">{formatHours(totalBacklogHours)}h</span>
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+                                                        <span className="size-2 rounded-full border border-slate-300 dark:border-slate-600 shrink-0" />
+                                                        Remaining <span className={cn('font-bold tabular-nums', isOverQuota ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white')}>
+                                                            {isOverQuota ? `-${formatHours(Math.abs(remaining))}` : formatHours(remaining)}h
+                                                        </span>
+                                                    </span>
+                                                </div>
+
+                                                {/* Fine print: what each figure would look like if backlog / To Do weren't counted yet */}
+                                                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 space-y-0.5">
+                                                    {totalBacklogHours > 0 && (
+                                                        <p>
+                                                            Excluding backlog: <span className="font-semibold text-slate-600 dark:text-slate-300">{formatHours(onBoardAllocatedHours)}h allocated</span>,{' '}
+                                                            <span className={cn('font-semibold', isOverQuotaExclBacklog ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300')}>
+                                                                {formatHours(Math.abs(remainingExclBacklog))}h {isOverQuotaExclBacklog ? 'over' : 'remaining'}
+                                                            </span>
+                                                        </p>
+                                                    )}
+                                                    {totalOnBoardToDoHours > 0 && (
+                                                        <p>
+                                                            Excluding To Do: <span className="font-semibold text-slate-600 dark:text-slate-300">{formatHours(onBoardExclToDoHours)}h allocated</span>,{' '}
+                                                            <span className={cn('font-semibold', isOverQuotaExclToDo ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300')}>
+                                                                {formatHours(Math.abs(remainingExclToDo))}h {isOverQuotaExclToDo ? 'over' : 'remaining'}
+                                                            </span>
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </CardHeader>
                                         </Card>
@@ -1692,8 +1830,8 @@ export default function FinanceMonitoring() {
             {/* Quota Details Modal */}
             {isQuotaDetailsOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={closeQuotaDetails}>
-                    <Card className="w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-                        <CardHeader className="pb-4 border-b">
+                    <Card className="flex w-full max-w-5xl max-h-[90vh] flex-col shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+                        <CardHeader className="pb-4 border-b shrink-0">
                             <CardTitle className="flex items-center gap-2">
                                 <Clock className="size-5 text-primary" /> Manhour Quota Breakdown
                             </CardTitle>
@@ -1701,7 +1839,7 @@ export default function FinanceMonitoring() {
                                 FIFO: Initial dipakai dulu, lalu setiap Top Up berurutan. Detail per role di bawah.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="pt-6">
+                        <CardContent className="min-h-0 flex-1 overflow-y-auto pt-6">
                             {loadingQuotas ? (
                                 <div className="py-20 text-center text-slate-500">Loading breakdown...</div>
                             ) : (
@@ -1745,6 +1883,9 @@ export default function FinanceMonitoring() {
                                             <div className="rounded-md bg-white dark:bg-slate-950 p-3 border border-slate-200 dark:border-slate-800">
                                                 <div className="text-[10px] font-bold uppercase text-slate-500">Allocated</div>
                                                 <div className="text-base font-bold text-slate-900 dark:text-white">{formatHours(generalQuota.allocated_hours)}h</div>
+                                                {generalBacklogHours > 0 && (
+                                                    <div className="mt-0.5 text-[10px] text-slate-400">incl. {formatHours(generalBacklogHours)}h backlog</div>
+                                                )}
                                             </div>
                                             <div className="rounded-md bg-white dark:bg-slate-950 p-3 border border-slate-200 dark:border-slate-800">
                                                 <div className="text-[10px] font-bold uppercase text-slate-500">Remaining</div>
@@ -1781,6 +1922,7 @@ export default function FinanceMonitoring() {
                                                     const consumed = Number(item.fifo_consumed_hours ?? item.allocated_hours ?? 0);
                                                     const percentUsed = (consumed / (item.quota_hours || 1)) * 100;
                                                     const isInactive = item.is_active === false;
+                                                    const roleBacklogHours = backlogHoursByRole[String(item.project_role_id)] || 0;
                                                     const canDeactivate = !isInactive
                                                         && Number(item.quota_hours || 0) <= 0
                                                         && Number(item.task_count || 0) === 0;
@@ -1810,6 +1952,9 @@ export default function FinanceMonitoring() {
                                                             <td className="py-4 px-2 text-right font-medium text-slate-600 dark:text-slate-400">{formatHours(item.quota_hours)} <span className="text-[10px]">HRS</span></td>
                                                             <td className="py-4 px-2 text-right font-bold text-slate-900 dark:text-white">
                                                                 {formatHours(item.allocated_hours)} <span className="text-[10px]">HRS</span>
+                                                                {roleBacklogHours > 0 && (
+                                                                    <div className="mt-0.5 text-[10px] font-normal text-slate-400">incl. {formatHours(roleBacklogHours)}h backlog</div>
+                                                                )}
                                                             </td>
                                                             <td className="py-4 px-2 text-right font-medium text-slate-600 dark:text-slate-400">{formatHours(item.actual_hours)} <span className="text-[10px]">HRS</span></td>
                                                             <td className={`py-4 px-2 text-right font-bold ${remaining <= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
@@ -1846,7 +1991,7 @@ export default function FinanceMonitoring() {
                                 </div>
                             )}
                         </CardContent>
-                        <div className="p-6 pt-2 flex items-center justify-end border-t mt-4">
+                        <div className="p-6 pt-2 flex items-center justify-end border-t shrink-0">
                             <Button variant="outline" onClick={closeQuotaDetails}>Close Details</Button>
                         </div>
                     </Card>
