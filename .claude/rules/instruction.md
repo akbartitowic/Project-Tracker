@@ -2,7 +2,7 @@
 
 ## Sebelum mengerjakan task
 - Cek file REQUIREMENTS.md untuk melihat ringkasan project jika kamu belum memiliki memory tentang project ini.
-- Cek file CONTEXT.md untuk melihat konteks dan progress pada project ini. Pelajari konteks hanya bagian yang belum diketahui, tidak perlu secara keseluruhan.
+- Cek file PROJECT_CONTEXT.md untuk melihat konteks dan progress pada project ini. Pelajari konteks hanya bagian yang belum diketahui, tidak perlu secara keseluruhan.
 - Pelajari dengan baik instruksi yang diberikan, jangan ragu untuk challenge kembali ketika instruksi yang diberikan kurang jelas atau memiliki banyak celah.
 - Ketika skala pengerjaan besar, pecah menjadi micro task, lakukan bertahap dan buat checklist progressnya.
 - Ketika fitur yang kamu kerjakan membutuhkan tambahan library, jangan pernah upgrade baseline framework untuk mengikuti versi librarynya, harus dilakukan sebaliknya, library yang ingin diinstall seharusnya yang harus mengikuti versi baseline framework yang digunakan.
@@ -16,3 +16,12 @@
 - Update checklist progress dan informasi yang dibutuhkan pada PROJECT_CONTEXT.md.
 - Jangan pernah lakukan proses git kecuali diperintahkan.
 - Update file HANDOVER.md sesuai data terbaru.
+
+## Must Have (standar Noohtify — Vibe Coding SOP)
+- Fitur yang melibatkan multi-user/akses berbeda per role wajib punya RBAC (modules/permissions/roles) — bukan hardcode email/ID.
+- List/tabel dengan data berpotensi banyak wajib ada pagination.
+- Fitur yang berpotensi butuh integrasi ke sistem luar dipertimbangkan titik integrasinya sejak desain, bukan ditempel belakangan.
+- Dokumentasi deployment (DEPLOY-PRODUCTION.md) di-update kalau ada migration baru, env var baru, atau langkah manual tambahan saat rilis.
+
+## Sebelum rilis/deploy
+- Jalankan audit kode: baca `.claude/rules/AUDIT_GUIDELINE.md`, lalu minta audit bagian yang baru dikerjakan sebelum dinyatakan selesai/siap rilis.
