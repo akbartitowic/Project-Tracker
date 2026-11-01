@@ -492,6 +492,8 @@ export default function ProjectBoard() {
     const [newTaskStartDate, setNewTaskStartDate] = useState('');
     const [newTaskDueDate, setNewTaskDueDate] = useState('');
     const [newTaskUpdatedAt, setNewTaskUpdatedAt] = useState('');
+    // Value the field was seeded with, so Save only overrides "last update" when the user changed it.
+    const initialTaskUpdatedAtRef = useRef('');
     const [newTaskBillable, setNewTaskBillable] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -813,7 +815,8 @@ export default function ProjectBoard() {
             setNewTaskRoleFilter(taskToEdit.project_role_id ? taskToEdit.project_role_id.toString() : 'All');
             setNewTaskStartDate(toDateInputValue(taskToEdit.start_date));
             setNewTaskDueDate(toDateInputValue(taskToEdit.due_date));
-            setNewTaskUpdatedAt(toDateInputValue(taskToEdit.updated_at));
+            initialTaskUpdatedAtRef.current = toDateInputValue(taskToEdit.updated_at);
+            setNewTaskUpdatedAt(initialTaskUpdatedAtRef.current);
             setNewTaskBillable(taskToEdit.is_billable !== false);
         } else {
             setEditingTaskId(null);
@@ -906,6 +909,9 @@ export default function ProjectBoard() {
 
     useEffect(() => {
         if (!taskRouteId || !selectedProject || tasks.length === 0) return;
+        // Already editing this task: a later `tasks` refresh (e.g. the assignee section
+        // patching it in place) must not re-seed the form and wipe unsaved edits.
+        if (isModalOpen && editingTaskId != null && String(editingTaskId) === taskRouteId) return;
         const task = tasks.find(t => String(t.id) === taskRouteId);
         if (task) {
             applyTaskFormState(task.status, task);
@@ -913,7 +919,7 @@ export default function ProjectBoard() {
         } else {
             navigate(`/board/${projectId}`, { replace: true });
         }
-    }, [taskRouteId, selectedProject, tasks, projectId]);
+    }, [taskRouteId, selectedProject, tasks, projectId, isModalOpen, editingTaskId]);
 
     useEffect(() => {
         if (!projectId && taskParam) {
@@ -1081,7 +1087,7 @@ export default function ProjectBoard() {
             if (!hasSubtasks) {
                 payload.is_billable = isBillable;
             }
-            if (editingTaskId && canEditLastUpdate && newTaskUpdatedAt) {
+            if (editingTaskId && canEditLastUpdate && newTaskUpdatedAt && newTaskUpdatedAt !== initialTaskUpdatedAtRef.current) {
                 payload.updated_at = newTaskUpdatedAt;
             }
 
