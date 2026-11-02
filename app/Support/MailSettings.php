@@ -43,7 +43,7 @@ class MailSettings
                 }
             }
 
-            Config::set('mail.default', 'smtp');
+            Config::set('mail.default', 'log');
             Config::set('mail.mailers.smtp.transport', 'smtp');
             Config::set('mail.mailers.smtp.host', $settings['mail_host']);
             Config::set('mail.mailers.smtp.port', $settings['mail_port']);
